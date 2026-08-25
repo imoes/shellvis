@@ -1,0 +1,88 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- windows-targeted: UI Automation, Win32 interop and Office COM are the whole
+         point of this assembly. It stays free of any UI framework, though (no WinUI
+         reference), so the shell can be swapped without touching the agent. -->
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Shellvis.Core</RootNamespace>
+    <Platforms>x64;ARM64</Platforms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>latest</LangVersion>
+    <!-- Not for UI: this pulls in System.Drawing and SystemInformation.VirtualScreen,
+         which is how multi-monitor bounds and PNG encoding are reached. No window
+         is ever created from this assembly. -->
+    <UseWindowsForms>true</UseWindowsForms>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The IPC data types, shared verbatim with the broker. Both sides deserialising
+         the same declarations is what stops a wire-format drift from surfacing as
+         "the service is not running". -->
+    <ProjectReference Include="..\Shellvis.Contracts\Shellvis.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- UI Automation wrapper. Hand-rolling UIA against the COM interfaces is
+         possible but miserable. FlaUI already solves pattern discovery, tree
+         walking and the stale-element retries. -->
+    <!-- Supplies AIFunctionFactory, which derives a tool JSON Schema from a method
+         signature. This is the one place Shellvis is structurally better off than
+         Hermes, which hand-writes every schema as a dict and then has to coerce the
+         arguments back to their real types afterwards. -->
+    <!-- MCP client. Its tools surface as AIFunction, which is the same abstraction
+         the built-in tools use, so they merge into one catalog with no conversion
+         layer. Hermes needs a whole schema-translation step here. -->
+    <!-- YAML rather than JSON for the config file: it takes comments, and a config
+         a human is expected to edit by hand needs them. -->
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
+    <!-- The in-box SAPI recognizer, for push-to-talk dictation. Chosen over the WinRT
+         SpeechRecognizer because it is provably on-device: the requirement was local
+         recognition with no cloud path, and WinRT free-form dictation has depended on
+         the "Online speech recognition" privacy setting. -->
+    <!-- Pinned to what the PowerShell SDK already resolves: it depends on System.Speech
+         transitively, so this reference documents the intent rather than adding a
+         dependency. Asking for anything lower is a downgrade error. -->
+    <PackageReference Include="System.Speech" Version="10.0.5" />
+    <!-- Audio capture with a choice of device. System.Speech can only ever open the
+         Windows DEFAULT recording device, and this machine has three active ones: if the
+         default is the laptop mic array while the user speaks into a headset, dictation
+         hears nothing and cannot say why. NAudio supplies the device list and the
+         capture; the plan called for it from the start. -->
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <!-- SQLite with FTS5 for session history. A file per session would be simpler
+         but makes "find the conversation where I fixed the printer" impossible. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.0" />
+    <!-- Pulled in transitively by Microsoft.Data.Sqlite, pinned forward on purpose:
+         the version it asks for carries a high-severity advisory in the bundled
+         SQLite build. This is the native engine that parses the session database, so
+         a known hole in it is not acceptable background noise. -->
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.13" />
+    <PackageReference Include="ModelContextProtocol" Version="2.2.0" />
+    <PackageReference Include="Microsoft.Extensions.AI" Version="10.9.0" />
+    <!-- Hosts PowerShell 7 in-process. This machine only has Windows PowerShell 5.1
+         and no pwsh, so without this the agent would be stuck shelling out to the
+         old engine. In-process also keeps a runspace alive across turns, which is
+         what lets an imported module stay imported. -->
+    <PackageReference Include="Microsoft.PowerShell.SDK" Version="7.6.5" />
+    <!-- Headless Office. This is the path that needs no installed Office, cannot
+         deadlock on a modal dialog, and is therefore the only one usable from a
+         service (see KB 257757). ClosedXML and ShapeCrawler sit on top of the
+         OpenXML SDK because hand-rolling spreadsheet and slide XML is a large amount
+         of error-prone work for no benefit. -->
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
+    <PackageReference Include="ClosedXML" Version="0.104.2" />
+    <PackageReference Include="ShapeCrawler" Version="0.80.0" />
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
+    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" Version="10.9.0" />
+    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.183">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>
+

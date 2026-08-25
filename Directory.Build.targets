@@ -1,0 +1,54 @@
+<Project>
+
+  <!--
+    Put PowerShell's bundled modules where the engine expects them.
+
+    Microsoft.PowerShell.SDK ships its built-in modules under
+    runtimes/<rid>/lib/<tfm>/Modules, and the engine locates them relative to
+    System.Management.Automation.dll, expecting a sibling "Modules" directory.
+
+    In a RID-less build that happens to line up, because the assembly stays down in
+    runtimes/ beside them. Any build with a RuntimeIdentifier - which includes every
+    WinUI app - flattens the assemblies to the output root and leaves Modules behind,
+    so the two halves end up in different places.
+
+    The symptom is specific and misleading: Get-Module works (it lives in
+    Microsoft.PowerShell.Core, compiled into the engine), while Out-String and
+    Get-CimInstance fail with "the command was found in module X, but the module could
+    not be loaded". It reads like a broken installation rather than a layout problem.
+
+    Copying the directory to the output root restores the layout the engine assumes,
+    which fixes every bundled module at once instead of importing them one by one.
+  -->
+  <Target Name="CopyPowerShellBundledModules" AfterTargets="Build">
+
+    <!--
+      The runtimes path uses the bare TFM (net10.0) while TargetFramework carries the
+      platform suffix (net10.0-windows10.0.26100.0), so the suffix has to come off.
+      Globbing the TFM segment instead would make MSBuild fold it into
+      %(RecursiveDir), which nests the whole tree one level too deep - the first
+      version of this target produced Modules/net10.0/Modules/... for exactly that
+      reason.
+    -->
+    <PropertyGroup>
+      <_ShellvisRuntimeTfm>$(TargetFramework)</_ShellvisRuntimeTfm>
+      <_ShellvisRuntimeTfm Condition="$(_ShellvisRuntimeTfm.Contains('-'))"
+        >$(_ShellvisRuntimeTfm.Substring(0, $(_ShellvisRuntimeTfm.IndexOf('-'))))</_ShellvisRuntimeTfm>
+      <_ShellvisModuleSource>$(OutDir)runtimes\win\lib\$(_ShellvisRuntimeTfm)\Modules</_ShellvisModuleSource>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <ShellvisPowerShellModules Include="$(_ShellvisModuleSource)\**\*.*" />
+    </ItemGroup>
+
+    <Copy SourceFiles="@(ShellvisPowerShellModules)"
+          DestinationFiles="@(ShellvisPowerShellModules->'$(OutDir)Modules\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true"
+          Condition="'@(ShellvisPowerShellModules)' != ''" />
+
+    <Message Importance="high"
+             Condition="'@(ShellvisPowerShellModules)' != ''"
+             Text="Shellvis: staged PowerShell modules into $(OutDir)Modules" />
+  </Target>
+
+</Project>

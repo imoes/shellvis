@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <AssemblyName>Shellvis.Thunderbird.Host</AssemblyName>
+    <!-- No console window: Thunderbird launches this and a flashing window on every mail
+         operation would be unacceptable. WinExe keeps stdin/stdout usable, which is what
+         native messaging needs, while suppressing the window. -->
+    <OutputType>WinExe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Contracts only. The host relays framed messages and understands none of them, so
+         it has no business referencing Core. -->
+    <ProjectReference Include="..\Shellvis.Contracts\Shellvis.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

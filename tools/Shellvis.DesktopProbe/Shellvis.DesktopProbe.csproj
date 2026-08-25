@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Must match Shellvis.Core: UI Automation and Win32 interop pin the TFM. -->
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <RootNamespace>Shellvis.DesktopProbe</RootNamespace>
+    <Platforms>x64;ARM64</Platforms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <!-- Deliberately NOT invariant. The template sets InvariantGlobalization=true, and
+         under it System.Speech.InstalledRecognizers() returns an EMPTY list: it cannot
+         build a CultureInfo for a recognizer token, so it silently skips every one. The
+         symptom is "no speech recognizer is installed" on a machine that has one. The
+         probe has to match the app's globalization, or it tests a different runtime. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Shellvis.Core\Shellvis.Core.csproj" />
+  </ItemGroup>
+
+</Project>

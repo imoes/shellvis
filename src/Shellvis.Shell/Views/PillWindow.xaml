@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Shellvis.Shell.Views.PillWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Shellvis.Shell.Views"
+    Title="Shellvis">
+
+    <!-- No Window.SystemBackdrop here on purpose. A window-level backdrop paints the
+         full rectangle; the pill needs the backdrop confined to its own rounded
+         bounds, which is what SystemBackdropElement does (Windows App SDK 2.0+). -->
+
+    <!-- Row order is deliberate: the console sits ABOVE the pill and grows upward.
+         The pill is anchored near the bottom of the screen, so a console that grew
+         downward would expand straight off the edge of the display. -->
+    <Grid x:Name="RootHost" Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition x:Name="ConsoleAreaRow" Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- ============================ THE PILL ============================ -->
+        <Grid x:Name="PillHost" Grid.Row="2">
+            <SystemBackdropElement x:Name="PillBackdrop" CornerRadius="32">
+                <SystemBackdropElement.SystemBackdrop>
+                    <DesktopAcrylicBackdrop />
+                </SystemBackdropElement.SystemBackdrop>
+            </SystemBackdropElement>
+
+            <Border x:Name="PillTint" CornerRadius="32"
+                    Background="{ThemeResource PillTintBrush}" />
+
+            <!-- Inner ring, not an outer glow: SetWindowRgn clips the window to the
+                 pill silhouette, so nothing outside this shape would ever be drawn.
+
+                 Inset by one pixel on purpose. The clipping region is a GDI region with
+                 hard, aliased edges; an anti-aliased 1.5px stroke laid exactly on top of
+                 it has half its coverage clipped away, and not evenly. Measured: the top
+                 stroke landed a row inside the silhouette while the bottom one ended up
+                 flush against it and a pixel thinner. One pixel of fill between the two
+                 edges lets each rasterise on its own terms, and the ring reads as an even
+                 ring instead of a rim that changes weight around the curve. The radius
+                 follows the inset so the arc stays concentric with the silhouette.
+
+                 The margin is asymmetric because WinUI rasterises this rounded stroke one
+                 device pixel below its layout box: with an even inset the gap measured two
+                 pixels at the top and none at the bottom. Nought at the top and two at the
+                 bottom put a single pixel of fill on all four sides. -->
+            <Border x:Name="PillRing"
+                    Margin="1,0,1,2"
+                    CornerRadius="31"
+                    BorderThickness="1.5"
+                    BorderBrush="{ThemeResource PillRingBrush}" />
+
+            <Grid Padding="16,0,14,0" ColumnSpacing="6">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <Button x:Name="AttachButton"
+                        Grid.Column="0"
+                        Style="{StaticResource PillIconButtonStyle}"
+                        Content="&#xE710;"
+                        ToolTipService.ToolTip="Attach a file or image" />
+
+                <TextBox x:Name="PromptBox"
+                         Grid.Column="1"
+                         VerticalAlignment="Center"
+                         Background="Transparent"
+                         BorderThickness="0"
+                         FontSize="15"
+                         Foreground="{ThemeResource PillTextBrush}"
+                         PlaceholderForeground="{ThemeResource PillHintBrush}"
+                         PlaceholderText="Ask Shellvis"
+                         AcceptsReturn="False">
+                    <!-- Background="Transparent" is NOT enough. WinUI's TextBox template
+                         overrides the background in its PointerOver, Focused and Disabled
+                         states, so the moment the pointer crosses it the control paints a
+                         near-white rounded rectangle of its own. Against the pill's light
+                         tint that is barely visible; on the taskbar it showed as a second,
+                         whiter box nested inside the bar, starting exactly at the text and
+                         ending before the microphone. The state brushes have to be
+                         overridden individually.
+
+                         The focus underline goes too: it is a two-pixel accent line at the
+                         bottom edge, which inside a stadium-shaped bar reads as damage
+                         rather than as focus. -->
+                    <TextBox.Resources>
+                        <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
+
+                        <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                        <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent" />
+
+                        <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                        <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                    </TextBox.Resources>
+                </TextBox>
+
+                <Button x:Name="HistoryButton"
+                        Grid.Column="3"
+                        Style="{StaticResource PillIconButtonStyle}"
+                        Content="&#xE81C;"
+                        ToolTipService.ToolTip="Session history" />
+
+                <!-- The permission mode, always visible on the always-visible surface.
+                     It belongs here and not in the console header for the same reason
+                     minimise does: the console is collapsed most of the time, and how
+                     much this agent may do unasked is not something the user should have
+                     to open a panel to find out. Text rather than an icon because there
+                     is no glyph for "auto" that anyone would read correctly. -->
+                <Button x:Name="ModeButton"
+                        Grid.Column="2"
+                        Margin="0,0,2,0"
+                        Padding="8,3,8,3"
+                        MinWidth="0"
+                        Background="Transparent"
+                        BorderThickness="1"
+                        BorderBrush="{ThemeResource PillHintBrush}"
+                        CornerRadius="10"
+                        FontSize="11"
+                        Foreground="{ThemeResource PillHintBrush}"
+                        Content="auto"
+                        ToolTipService.ToolTip="How much Shellvis may do without asking" />
+
+                <Button x:Name="ConsoleToggleButton"
+                        Grid.Column="4"
+                        Style="{StaticResource PillIconButtonStyle}"
+                        Content="&#xE70D;"
+                        ToolTipService.ToolTip="Show console" />
+
+                <!-- The circular accent button around the mic mirrors the reference. It
+                     is dropped while docked: at 26px on a taskbar it reads as a stray
+                     coloured blob rather than an accent. -->
+                <Border x:Name="MicBackdrop"
+                        Grid.Column="5"
+                        Width="38"
+                        Height="38"
+                        CornerRadius="19"
+                        Background="{ThemeResource MicButtonBrush}">
+                    <Button x:Name="MicButton"
+                            Style="{StaticResource PillIconButtonStyle}"
+                            Content="&#xE720;"
+                            ToolTipService.ToolTip="Dictate (push to talk)" />
+                </Border>
+
+                <!-- Minimise, in the slot the decorative sparkle used to occupy.
+                     It belongs on the pill because the pill is the only surface that is
+                     always visible: in the console header it was unreachable whenever the
+                     console was collapsed, which is most of the time. The glyph is the
+                     standard minimise chevron rather than the old star, because a star
+                     that minimises is a worse button than an unlabelled one. -->
+                <Button x:Name="SparkleButton"
+                        Grid.Column="6"
+                        Style="{StaticResource PillIconButtonStyle}"
+                        Content="&#xE921;"
+                        ToolTipService.ToolTip="Minimise to the taskbar" />
+
+                <!-- Only visible while docked to the taskbar: the arrow that brings the
+                     full pill back. Shares the last column with the sparkle button,
+                     which is hidden in that mode. -->
+                <Button x:Name="ExpandButton"
+                        Grid.Column="6"
+                        Visibility="Collapsed"
+                        Style="{StaticResource PillIconButtonStyle}"
+                        Content="&#xE70E;"
+                        ToolTipService.ToolTip="Open Shellvis" />
+            </Grid>
+        </Grid>
+
+        <!-- Gap between the two floating surfaces. Height is set from PillMetrics. -->
+        <Border x:Name="GapSpacer" Grid.Row="1" Background="Transparent" />
+
+        <!-- ========================== THE CONSOLE ===========================
+             Bottom-aligned inside a fixed-height row: the row reserves the full
+             expanded space up front (so the window never resizes), while the panel
+             itself grows from zero upward until it meets the pill. -->
+        <Grid x:Name="ConsoleHost"
+              Grid.Row="0"
+              VerticalAlignment="Bottom"
+              Height="0">
+            <SystemBackdropElement CornerRadius="18">
+                <SystemBackdropElement.SystemBackdrop>
+                    <DesktopAcrylicBackdrop />
+                </SystemBackdropElement.SystemBackdrop>
+            </SystemBackdropElement>
+
+            <Border x:Name="ConsoleTint" CornerRadius="18"
+                    Background="{ThemeResource ConsoleTintBrush}" />
+            <Border CornerRadius="18"
+                    BorderThickness="1"
+                    BorderBrush="{ThemeResource SeparatorBrush}" />
+
+            <Grid Padding="16,10,10,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- The header carries the window controls. There is deliberately no
+                     title bar, so without these the window can only be closed with
+                     Alt+F4 or through the tray menu, which is not discoverable. -->
+                <Grid Grid.Row="0" Margin="0,0,0,6" ColumnSpacing="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- The model, in the slot the word "Console" used to occupy.
+                         A panel labelled with what it obviously is tells the reader
+                         nothing; which model is answering is the thing worth knowing and
+                         the thing that had no way to be changed. Kept off the pill on
+                         purpose: at 460 DIP another chip would leave the input field too
+                         narrow to type in, and changing model is a rare act while the
+                         permission mode has to be legible at all times. -->
+                    <Button x:Name="ModelButton"
+                            Grid.Column="0"
+                            Padding="0"
+                            MinWidth="0"
+                            MinHeight="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource ConsoleMutedBrush}"
+                            Content="Console"
+                            ToolTipService.ToolTip="Change the model" />
+
+                    <TextBlock x:Name="StatusText"
+                               Grid.Column="1"
+                               HorizontalAlignment="Right"
+                               Margin="0,0,6,0"
+                               FontSize="11"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource ConsoleMutedBrush}" />
+
+                    <!-- Two buttons, because one X was doing two jobs and losing.
+
+                         An X on a panel header means "close this panel" to everyone who
+                         has ever used a window, and this one quit the whole application.
+                         So clicking the obvious thing made Shellvis disappear, and the
+                         console looked like something that could not be closed at all,
+                         which is exactly how it was reported.
+
+                         The chevron collapses the console; the power symbol quits. The
+                         glyphs are deliberately not both close-shaped: two X-like icons
+                         side by side would just move the mistake one pixel to the left. -->
+                    <Button x:Name="CollapseButton"
+                            Grid.Column="2"
+                            Width="26"
+                            Height="22"
+                            Padding="0"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="11"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Content="&#xE70D;"
+                            ToolTipService.ToolTip="Hide the console" />
+
+                    <Button x:Name="CloseButton"
+                            Grid.Column="3"
+                            Width="26"
+                            Height="22"
+                            Padding="0"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="11"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Content="&#xE7E8;"
+                            ToolTipService.ToolTip="Quit Shellvis" />
+                </Grid>
+
+                <!-- Two views share this area. Reusing the console panel rather than
+                     adding a second floating surface keeps the clipping region and the
+                     expand animation exactly as they are. -->
+                <ScrollViewer Grid.Row="1"
+                              x:Name="TranscriptScroller"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl x:Name="Transcript" />
+                </ScrollViewer>
+
+                <Grid Grid.Row="1" x:Name="HistoryView" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBox x:Name="HistorySearch"
+                             Grid.Row="0"
+                             Margin="0,0,6,6"
+                             FontSize="12"
+                             PlaceholderText="Search past conversations" />
+
+                    <ScrollViewer Grid.Row="1"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="SessionList" />
+                    </ScrollViewer>
+
+                    <Button x:Name="NewSessionButton"
+                            Grid.Row="2"
+                            Margin="0,8,6,0"
+                            HorizontalAlignment="Stretch"
+                            FontSize="12"
+                            Content="Start a new conversation" />
+                </Grid>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

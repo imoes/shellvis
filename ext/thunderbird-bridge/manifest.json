@@ -1,0 +1,21 @@
+{
+  "manifest_version": 2,
+  "name": "Shellvis Bridge",
+  "version": "1.0",
+  "description": "Lets Shellvis read and draft mail in Thunderbird. It never sends.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "shellvis-bridge@ippen.media",
+      "strict_min_version": "115.0"
+    }
+  },
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "permissions": [
+    "accountsRead",
+    "messagesRead",
+    "compose",
+    "nativeMessaging"
+  ]
+}

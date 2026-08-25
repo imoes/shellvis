@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <!-- No UI framework and no WindowsAppSDK: this process may run in session 0, where
+         nothing can be displayed and Office COM is unsupported (KB 257757). Keeping the
+         dependency list this short is what makes that guarantee checkable. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shellvis.Contracts\Shellvis.Contracts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ServiceController, for start/stop/status of other services. -->
+    <PackageReference Include="System.ServiceProcess.ServiceController" Version="10.0.0" />
+    <!-- No System.IO.Pipes.AccessControl package: NamedPipeServerStreamAcl is part of
+         the Windows-targeting shared framework from .NET 5 onwards. The package still
+         exists on nuget.org but stops at 5.0.0, so asking for a current version fails
+         the restore rather than telling you it is unnecessary. -->
+  </ItemGroup>
+
+</Project>

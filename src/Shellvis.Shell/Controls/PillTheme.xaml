@@ -1,0 +1,101 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Light">
+            <!-- The pill sits on an acrylic backdrop, so these are tints layered over
+                 whatever is behind the window rather than solid fills. -->
+            <SolidColorBrush x:Key="PillTintBrush" Color="#F2FFFFFF" />
+            <SolidColorBrush x:Key="PillTextBrush" Color="#FF1B1B1F" />
+            <SolidColorBrush x:Key="PillHintBrush" Color="#FF5E5E6B" />
+            <SolidColorBrush x:Key="PillGlyphBrush" Color="#FF44464F" />
+            <SolidColorBrush x:Key="ConsoleTintBrush" Color="#F7FBFBFE" />
+            <SolidColorBrush x:Key="ConsoleTextBrush" Color="#FF25252B" />
+            <SolidColorBrush x:Key="ConsoleMutedBrush" Color="#FF6B6B78" />
+            <SolidColorBrush x:Key="MicButtonBrush" Color="#FFE6E1F6" />
+            <SolidColorBrush x:Key="SeparatorBrush" Color="#22000000" />
+
+            <!-- The "glow" from the reference image. It has to be an INNER ring:
+                 the window is clipped to the pill silhouette by SetWindowRgn, so
+                 anything painted outside that shape is never composited. -->
+            <LinearGradientBrush x:Key="PillRingBrush" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Offset="0.00" Color="#FF7C6BF5" />
+                <GradientStop Offset="0.35" Color="#FF4A9BF5" />
+                <GradientStop Offset="0.70" Color="#FFD46BC8" />
+                <GradientStop Offset="1.00" Color="#FF7C6BF5" />
+            </LinearGradientBrush>
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+            <SolidColorBrush x:Key="PillTintBrush" Color="#D92A2A32" />
+            <SolidColorBrush x:Key="PillTextBrush" Color="#FFF2F2F7" />
+            <SolidColorBrush x:Key="PillHintBrush" Color="#FFA0A0AE" />
+            <SolidColorBrush x:Key="PillGlyphBrush" Color="#FFD6D6E0" />
+            <SolidColorBrush x:Key="ConsoleTintBrush" Color="#E01C1C22" />
+            <SolidColorBrush x:Key="ConsoleTextBrush" Color="#FFE8E8F0" />
+            <SolidColorBrush x:Key="ConsoleMutedBrush" Color="#FF9A9AA8" />
+            <SolidColorBrush x:Key="MicButtonBrush" Color="#FF3A3550" />
+            <SolidColorBrush x:Key="SeparatorBrush" Color="#22FFFFFF" />
+
+            <LinearGradientBrush x:Key="PillRingBrush" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Offset="0.00" Color="#FF9A8BFF" />
+                <GradientStop Offset="0.35" Color="#FF62AEFF" />
+                <GradientStop Offset="0.70" Color="#FFE585DA" />
+                <GradientStop Offset="1.00" Color="#FF9A8BFF" />
+            </LinearGradientBrush>
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+
+    <!-- ================= docked to the taskbar =================
+         The pill's own look is wrong down here: a light acrylic panel with a coloured
+         gradient ring reads as something pasted ON the taskbar rather than a control
+         sitting IN it. Windows' own search field is a flat, near-neutral surface with a
+         hairline border and no accent, so these match that.
+
+         Kept OUT of ThemeDictionaries deliberately. Those switch on the app's theme,
+         while the taskbar has an independent setting (SystemUsesLightTheme in the
+         registry). A light app on a dark taskbar is an ordinary configuration, so the
+         pair is chosen in code from the taskbar's own setting. -->
+    <!-- Translucent, not opaque. The acrylic behind samples the TASKBAR, so letting it
+         through is what makes the field take on the taskbar's tint instead of sitting on
+         it as a white box, which is how Windows' own fields down there behave. Not so
+         thin that the text loses contrast. -->
+    <!-- The unattended mode has to look different from the other two, in both themes.
+         A control that says "nothing will ask" and looks exactly like the safe default is
+         a control the user will leave switched on by accident. Top-level rather than in a
+         theme dictionary because both variants are needed at once: the chip is picked by
+         mode, not by theme. -->
+    <SolidColorBrush x:Key="ModeWarnBrush" Color="#FFB3261E" />
+    <SolidColorBrush x:Key="ModeWarnBrushDark" Color="#FFFFB4AB" />
+
+    <SolidColorBrush x:Key="DockedTintLight" Color="#BFFFFFFF" />
+    <SolidColorBrush x:Key="DockedBorderLight" Color="#33000000" />
+    <SolidColorBrush x:Key="DockedTextLight" Color="#FF1B1B1F" />
+    <SolidColorBrush x:Key="DockedHintLight" Color="#FF63636E" />
+    <SolidColorBrush x:Key="DockedGlyphLight" Color="#FF44464F" />
+
+    <SolidColorBrush x:Key="DockedTintDark" Color="#A62B2B2F" />
+    <SolidColorBrush x:Key="DockedBorderDark" Color="#2EFFFFFF" />
+    <SolidColorBrush x:Key="DockedTextDark" Color="#FFF2F2F5" />
+    <SolidColorBrush x:Key="DockedHintDark" Color="#FF9C9CA6" />
+    <SolidColorBrush x:Key="DockedGlyphDark" Color="#FFD6D6E0" />
+
+    <!-- Transparent, borderless icon button sized for the pill's 64px height. -->
+    <Style x:Key="PillIconButtonStyle" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="CornerRadius" Value="18" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="FontFamily" Value="{StaticResource SymbolThemeFontFamily}" />
+        <Setter Property="FontSize" Value="17" />
+        <Setter Property="Foreground" Value="{ThemeResource PillGlyphBrush}" />
+    </Style>
+
+</ResourceDictionary>

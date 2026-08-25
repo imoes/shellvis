@@ -1,0 +1,106 @@
+# ---------------------------------------------------------------------------
+# Build output
+# ---------------------------------------------------------------------------
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+publish/
+artifacts/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ---------------------------------------------------------------------------
+# WinUI / Windows App SDK generated sources
+#
+# The XAML compiler and CsWin32 both generate C# into obj/, which the rules
+# above already cover. These are the ones that land elsewhere.
+# ---------------------------------------------------------------------------
+*.g.cs
+*.g.i.cs
+Generated Files/
+AppPackages/
+BundleArtifacts/
+*.appx
+*.appxbundle
+*.msix
+*.msixbundle
+*.pfx
+*.snk
+
+# ---------------------------------------------------------------------------
+# Secrets and personal state.
+#
+# None of this normally lives in the tree -- Shellvis keeps its configuration,
+# secret store, sessions, memory and skills under %USERPROFILE%\.shellvis. The
+# patterns are here anyway, because SHELLVIS_HOME can point at a working copy
+# and one accidental commit of an API key cannot be taken back: rewriting the
+# history does not remove it from forks, mirrors or anyone's clone.
+# ---------------------------------------------------------------------------
+.shellvis/
+secrets/
+*.key
+*.pem
+.env
+.env.*
+config.local.yaml
+appsettings.*.local.json
+
+# Session and memory stores, wherever they end up.
+sessions.db
+sessions.db-*
+jobs.json
+MEMORY.md
+USER.md
+
+# ---------------------------------------------------------------------------
+# Test and diagnostic leftovers
+# ---------------------------------------------------------------------------
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+shellvis-spike.log
+shellvis-*.png
+BrowserProfile/
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+# Claude Code's per-session scratch state: a session id, a pid, a lock. Local by
+# nature, and it went out in the first push before this line existed.
+.claude/
+
+.vs/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.swp
+*~
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# ---------------------------------------------------------------------------
+# NuGet
+# ---------------------------------------------------------------------------
+*.nupkg
+*.snupkg
+packages/
+!packages/build/
+.nuget/
+project.lock.json
+project.fragment.lock.json
+
+# The lock file IS committed on purpose when one exists: a restore that
+# resolves different versions than the one the build was verified against is
+# the "stale binary" class of problem with extra steps.
+!packages.lock.json

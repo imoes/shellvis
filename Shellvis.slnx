@@ -1,0 +1,23 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Shellvis.Contracts/Shellvis.Contracts.csproj" />
+    <Project Path="src/Shellvis.Core/Shellvis.Core.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/Shellvis.Shell/Shellvis.Shell.csproj" />
+    <Project Path="src/Shellvis.Broker/Shellvis.Broker.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/Shellvis.Thunderbird.Host/Shellvis.Thunderbird.Host.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/Shellvis.Setup/Shellvis.Setup.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Shellvis.DesktopProbe/Shellvis.DesktopProbe.csproj">
+      <Platform Project="x64" />
+    </Project>
+  </Folder>
+</Solution>

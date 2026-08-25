@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "Shellvis.Shell (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "Shellvis.Shell (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

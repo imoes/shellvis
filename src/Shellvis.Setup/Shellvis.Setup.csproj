@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Platforms>x64</Platforms>
+    <AssemblyName>Shellvis.Setup</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Only the contracts: the installer needs the service and pipe NAMES so that a
+         rename cannot leave it registering a service the shell never looks for. It
+         deliberately does not reference Core, which would drag PowerShell, Office and
+         the browser stack into an installer. -->
+    <ProjectReference Include="..\Shellvis.Contracts\Shellvis.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

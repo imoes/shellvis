@@ -363,11 +363,23 @@ internal sealed partial class AgentSession : IDisposable
                     + "provider that is not built in needs a base URL before it can be used.";
             }
 
-            string applied = Provider.Id.Equals(id, StringComparison.OrdinalIgnoreCase)
-                ? " " + SetModel(resolved, ModelName)
-                : string.Empty;
+            // Always switch to what was just configured, and to the model that was typed.
+            //
+            // Two defects lived in the line this replaces. It only applied anything when the
+            // edited provider was already the current one, so configuring a different
+            // provider wrote the file and changed nothing -- which is exactly what "I still
+            // cannot configure the model" describes. And when it did apply, it passed the
+            // CURRENT model rather than the one in the dialog, so typing a model name saved
+            // it and then ignored it.
+            //
+            // Configuring a provider is a statement of intent to use it. Saving settings for
+            // an endpoint and then continuing to talk to a different one is not a defensible
+            // reading of that gesture.
+            string wanted = string.IsNullOrWhiteSpace(defaultModel)
+                ? resolved.DefaultModel
+                : defaultModel.Trim();
 
-            return $"saved settings for {resolved.DisplayName}." + applied;
+            return $"saved settings for {resolved.DisplayName}. " + SetModel(resolved, wanted);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
             or CryptographicException or ArgumentException)

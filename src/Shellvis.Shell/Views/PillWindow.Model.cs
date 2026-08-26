@@ -47,9 +47,14 @@ public sealed partial class PillWindow
             {
                 if (sender is MenuFlyoutItem { Tag: ProviderProfile chosen })
                 {
-                    // Not awaited: the flyout must close now, and the second stage opens
-                    // its own menu when the listing comes back.
-                    _ = ShowModelsForAsync(chosen);
+                    // Straight to the settings page, not to a model list.
+                    //
+                    // Choosing a provider is the beginning of configuring one: it needs an
+                    // endpoint, usually a key and a model before it can answer anything.
+                    // Answering that gesture with a list of models asked the questions in
+                    // the wrong order, and the settings page was two levels down where it
+                    // was not found at all.
+                    _ = ConfigureProviderAsync(chosen.Id);
                 }
             };
 
@@ -58,11 +63,17 @@ public sealed partial class PillWindow
 
         flyout.Items.Add(new MenuFlyoutSeparator());
 
-        // Settings for the provider in use, and a way to add one that is not listed. Both
-        // at the bottom, because picking is the common act and configuring is the rare one.
-        var configure = new MenuFlyoutItem { Text = $"Settings for {_session.Provider.DisplayName}..." };
-        configure.Click += (_, args) => _ = ConfigureProviderAsync(_session.Provider.Id);
-        flyout.Items.Add(configure);
+        // For the case the provider list no longer covers: the endpoint is already set up
+        // and only the model changes.
+        var models = new MenuFlyoutItem { Text = $"Models on {_session.Provider.DisplayName}..." };
+
+        models.Click += (_, args) =>
+        {
+            if (_session is not null)
+                _ = ShowModelsForAsync(_session.Provider);
+        };
+
+        flyout.Items.Add(models);
 
         var add = new MenuFlyoutItem { Text = "Add a provider..." };
         add.Click += (_, args) => _ = ConfigureProviderAsync(null);

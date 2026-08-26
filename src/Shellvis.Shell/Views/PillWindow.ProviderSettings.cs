@@ -5,24 +5,22 @@ using Shellvis.Core.Providers;
 namespace Shellvis.Shell.Views;
 
 /// <summary>
-/// The provider settings dialog: base URL, default model, key.
+/// The provider settings page: endpoint, model, key, on one screen.
 ///
-/// Picking a provider and configuring one are different acts and this is the second. The
-/// picker answers "which of these do I want", and until now that was all there was -- which
-/// left every provider stuck with the endpoint and key variable compiled into the catalog.
-/// A company gateway in front of OpenAI, a second llama.cpp on another port, a colleague's
-/// vLLM: all configuration, none of it worth a build.
+/// <b>One page, deliberately.</b> The first version stacked six fields in a ScrollViewer and
+/// the fields below the fold were simply not seen -- reported as "I still cannot configure
+/// the model", which is what a settings page you have to scroll actually means. A
+/// configuration form that does not fit is a form whose lower half does not exist. So: two
+/// columns, no scrolling, and the note trimmed to one line.
 ///
-/// The same dialog adds a provider that is not listed at all, because the fields are
-/// identical and a separate "new provider" form would differ only in which of them start
-/// empty.
+/// <b>Picking a provider comes here, not to a model list.</b> Choosing a provider is the
+/// start of configuring it -- it needs an endpoint, usually a key, and a model before it can
+/// answer anything. Sending that gesture to a list of models first asked the question in the
+/// wrong order. The model list is still one menu item away for the case where the provider is
+/// already set up and only the model changes.
 /// </summary>
 public sealed partial class PillWindow
 {
-    /// <summary>
-    /// Show the dialog for an existing provider, or with <paramref name="id"/> null to add
-    /// one.
-    /// </summary>
     private async Task ConfigureProviderAsync(string? id)
     {
         if (_session is null)
@@ -35,80 +33,63 @@ public sealed partial class PillWindow
             : Agent.AgentSession.AvailableProviders()
                 .FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
-        var idBox = new TextBox
-        {
-            Header = "Id",
-            PlaceholderText = "for example: work-gateway",
-            Text = existing?.Id ?? string.Empty,
-            IsEnabled = adding,
-        };
+        var idBox = Field("Id", "work-gateway", existing?.Id ?? string.Empty, enabled: adding);
+        var nameBox = Field("Name", "shown in the picker", existing?.DisplayName ?? string.Empty);
 
-        var nameBox = new TextBox
-        {
-            Header = "Name",
-            PlaceholderText = "shown in the picker",
-            Text = existing?.DisplayName ?? string.Empty,
-        };
+        // No "/v1" in the placeholder any more. It was there because the first request
+        // without it returns 404, which reads like an outage rather than like a text box
+        // filled in slightly wrong -- but the honest fix was to stop needing it, not to
+        // teach the user someone else's URL convention. EndpointUrl adds the scheme and the
+        // version segment.
+        var urlBox = Field("Endpoint", "host/path -- https and /v1 are added", existing?.BaseUrl ?? string.Empty);
 
-        var urlBox = new TextBox
-        {
-            Header = "Base URL",
-            // The /v1 is spelled out because leaving it off is the mistake everyone makes,
-            // and it produces a 404 on the first request that reads like an outage.
-            PlaceholderText = "https://host/v1  (include the version path)",
-            Text = existing?.BaseUrl ?? string.Empty,
-        };
-
-        var modelBox = new TextBox
-        {
-            Header = "Default model",
-            PlaceholderText = "used when none is picked",
-            Text = existing?.DefaultModel ?? string.Empty,
-        };
-
-        var envBox = new TextBox
-        {
-            Header = "API key environment variable",
-            PlaceholderText = "optional, for example OPENAI_API_KEY",
-            Text = existing?.ApiKeyEnvVar ?? string.Empty,
-        };
+        var modelBox = Field("Model", "name to use", existing?.DefaultModel ?? string.Empty);
+        var envBox = Field("Key from variable", "optional, e.g. OPENAI_API_KEY", existing?.ApiKeyEnvVar ?? string.Empty);
 
         bool stored = existing is not null && Agent.AgentSession.HasStoredKey(existing.Id);
 
         var keyBox = new PasswordBox
         {
             Header = "API key",
-            PlaceholderText = stored
-                ? "a key is stored; leave blank to keep it"
-                : "optional, stored encrypted for this Windows account",
+            PlaceholderText = stored ? "stored; blank keeps it" : "optional, encrypted for this account",
         };
 
-        var panel = new StackPanel { Spacing = 10, Width = 380 };
-        panel.Children.Add(idBox);
-        panel.Children.Add(nameBox);
-        panel.Children.Add(urlBox);
-        panel.Children.Add(modelBox);
-        panel.Children.Add(envBox);
-        panel.Children.Add(keyBox);
+        // A grid rather than a StackPanel: paired fields sit side by side, which is what
+        // makes six of them fit without scrolling.
+        var grid = new Grid { ColumnSpacing = 10, RowSpacing = 8, Width = 460 };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        panel.Children.Add(new TextBlock
+        for (int i = 0; i < 5; i++)
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        Place(grid, idBox, row: 0, column: 0);
+        Place(grid, nameBox, row: 0, column: 1);
+        Place(grid, urlBox, row: 1, column: 0, span: 2);
+        Place(grid, modelBox, row: 2, column: 0);
+        Place(grid, envBox, row: 2, column: 1);
+        Place(grid, keyBox, row: 3, column: 0, span: 2);
+
+        var note = new TextBlock
         {
-            // Said in the dialog, not only in a comment: a user typing a key into a box
-            // is owed a straight answer about where it goes.
-            Text = "The environment variable wins if it is set. A key typed here is "
-                + "encrypted to this Windows account under .shellvis\\secrets and is never "
-                + "written to config.yaml.",
+            // Said in the dialog rather than only in a comment: someone typing a key into a
+            // box is owed a straight answer about where it goes.
+            Text = "The variable wins when set. A key typed here is encrypted to this "
+                + "Windows account and never written to config.yaml.",
             TextWrapping = TextWrapping.Wrap,
             FontSize = 11,
-            Opacity = 0.75,
-        });
+            Opacity = 0.7,
+        };
+
+        Place(grid, note, row: 4, column: 0, span: 2);
 
         var dialog = new ContentDialog
         {
             XamlRoot = RootHost.XamlRoot,
-            Title = adding ? "Add a provider" : $"Settings for {existing?.DisplayName}",
-            Content = new ScrollViewer { Content = panel, MaxHeight = 420 },
-            PrimaryButtonText = "Save",
+            Title = adding ? "Add a provider" : existing?.DisplayName ?? "Provider",
+            Content = grid,
+            PrimaryButtonText = "Use this",
+            SecondaryButtonText = "List models",
             CloseButtonText = "Cancel",
             DefaultButton = ContentDialogButton.Primary,
         };
@@ -121,14 +102,14 @@ public sealed partial class PillWindow
         }
         catch (Exception)
         {
-            // WinUI allows exactly one ContentDialog at a time, and an approval prompt may
-            // hold it. Reported rather than swallowed, because a settings dialog that
-            // simply does not appear looks like a dead menu item.
+            // WinUI allows exactly one ContentDialog at a time and an approval prompt may
+            // hold it. Reported, because a settings page that simply does not appear looks
+            // like a dead menu item.
             AddRow(GlyphWarning, "another dialog is open; close it and try again.", "model");
             return;
         }
 
-        if (result != ContentDialogResult.Primary)
+        if (result == ContentDialogResult.None)
             return;
 
         string chosenId = adding ? idBox.Text.Trim() : existing!.Id;
@@ -147,12 +128,40 @@ public sealed partial class PillWindow
                 urlBox.Text,
                 modelBox.Text,
                 envBox.Text,
-                // Null, not empty: an empty box means "keep the stored key", and passing
-                // empty through would delete it. Only a typed value changes anything.
+                // Null, not empty: an empty box means "keep the stored key". Passing empty
+                // through would delete it, so editing an endpoint would silently drop the
+                // key that made it work.
                 keyBox.Password.Length > 0 ? keyBox.Password : null),
             "model",
             isAnnouncement: true);
 
         RefreshModelLabel();
+
+        // "List models" saves first and then asks the endpoint what it serves, because
+        // asking is only possible once the endpoint and key are in place.
+        if (result == ContentDialogResult.Secondary
+            && Agent.AgentSession.AvailableProviders()
+                .FirstOrDefault(p => p.Id.Equals(chosenId, StringComparison.OrdinalIgnoreCase))
+                is { } saved)
+        {
+            await ShowModelsForAsync(saved).ConfigureAwait(true);
+        }
+    }
+
+    private static TextBox Field(string header, string placeholder, string text, bool enabled = true) =>
+        new()
+        {
+            Header = header,
+            PlaceholderText = placeholder,
+            Text = text,
+            IsEnabled = enabled,
+        };
+
+    private static void Place(Grid grid, FrameworkElement element, int row, int column, int span = 1)
+    {
+        Grid.SetRow(element, row);
+        Grid.SetColumn(element, column);
+        Grid.SetColumnSpan(element, span);
+        grid.Children.Add(element);
     }
 }

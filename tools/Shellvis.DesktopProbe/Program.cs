@@ -35,6 +35,7 @@ internal static class Program
                 "launch" => await LaunchProbe.RunAsync().ConfigureAwait(false),
                 "reflect" => await ReflectProbe.RunAsync().ConfigureAwait(false),
                 "remote" => await RemoteProbe.RunAsync().ConfigureAwait(false),
+                "endpoint" => EndpointProbe.Run(),
                 "tools" => await ToolProbe.RunAsync().ConfigureAwait(false),
                 "classify" => ClassifierProbe.Run(),
                 "config" => ConfigProbe.Run(),
@@ -74,7 +75,7 @@ internal static class Program
     private static int Usage()
     {
         Console.WriteLine(
-            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | stream | officelive]");
+            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | stream | officelive]");
         return 2;
     }
 

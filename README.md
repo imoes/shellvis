@@ -228,7 +228,7 @@ approvals:
 providers:
   work-gateway:
     name: Company Gateway
-    baseUrl: https://gateway.example.com/v1   # include the version path
+    baseUrl: gateway.example.com              # https:// and /v1 are added for you
     apiKeyEnvVar: WORK_LLM_KEY
     defaultModel: gpt-4o
 
@@ -266,7 +266,7 @@ src/
   Shellvis.Thunderbird.Host/   native messaging relay
 ext/thunderbird-bridge/        the MailExtension
 tools/
-  Shellvis.DesktopProbe/       18 verification harnesses
+  Shellvis.DesktopProbe/       19 verification harnesses
   Shellvis.TestMcpServer/      a deliberately hostile MCP server
 ```
 
@@ -289,6 +289,7 @@ $probe = ".\tools\Shellvis.DesktopProbe\bin\Debug\net10.0-windows10.0.26100.0\Sh
 & $probe compaction    # never orphans a tool call
 & $probe reflect       # the post-turn reflection, without a model
 & $probe launch        # unusable URIs refused before the shell
+& $probe endpoint      # a bare host becomes a working API root
 & $probe remote        # PowerShell Remoting against a real listener
 & $probe browser       # a real Chromium against a real page
 & $probe broker        # the pipe protocol and every guard

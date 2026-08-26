@@ -106,7 +106,9 @@ public static class ProviderResolver
         return profile with
         {
             DisplayName = Or(section.Name, profile.DisplayName),
-            BaseUrl = Or(section.BaseUrl, profile.BaseUrl),
+            // Normalised on read, so a bare host written into config.yaml by hand works
+            // exactly as one typed into the dialog. The file keeps what the user wrote.
+            BaseUrl = EndpointUrl.Normalise(section.BaseUrl) ?? profile.BaseUrl,
             ApiKeyEnvVar = Or(section.ApiKeyEnvVar, profile.ApiKeyEnvVar),
             DefaultModel = Or(section.DefaultModel, profile.DefaultModel),
             Transport = ParseTransport(section.Transport) ?? profile.Transport,
@@ -124,7 +126,10 @@ public static class ProviderResolver
     /// </summary>
     private static ProviderProfile? Define(string id, ProviderSection section)
     {
-        if (section.BaseUrl is not { Length: > 0 } baseUrl)
+        // Normalised here too, so a bare host is enough for a provider that exists only in
+        // the config file. Unparseable input yields null and the entry is skipped rather
+        // than offered in the picker and failing on first use.
+        if (EndpointUrl.Normalise(section.BaseUrl) is not { Length: > 0 } baseUrl)
             return null;
 
         // Keyless by default. A self-hosted endpoint is the overwhelmingly common reason to

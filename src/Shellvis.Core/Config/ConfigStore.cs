@@ -371,6 +371,19 @@ public static class ConfigStore
         voice:
           deviceIndex: -1
           # language: de-DE     # empty follows the Windows display language
+          #
+          # Which recogniser dictation uses. Whisper runs locally and is markedly better
+          # than the recogniser built into Windows, whose German dictation turned "Welche
+          # Termine liegen diese Woche an" into "Dänische Termine legen diese Woche an".
+          # The model is downloaded once, on first use, to
+          # %LOCALAPPDATA%\Shellvis\Models -- nothing is ever sent anywhere.
+          #
+          #   engine: auto        # auto = whisper when its model is here, else Windows
+          #                       # whisper = insist on whisper; sapi = the Windows engine
+          #   whisperModel: small # tiny 74 MB | base 141 MB | small 465 MB | medium 1.5 GB
+          #
+          # Unset, whisperModel follows what was chosen during setup. Set it here to
+          # override that.
 
         # Hooks: external commands given a say at points in the turn. Each is confirmed
         # once, interactively, before it ever runs -- a hook is an arbitrary command

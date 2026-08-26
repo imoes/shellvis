@@ -10,6 +10,15 @@ public enum DictationState
 
     Listening,
 
+    /// <summary>
+    /// The microphone is closed and a Whisper model is working on the recording.
+    ///
+    /// A state of its own because it is the one moment the user waits with nothing to look
+    /// at: the recording indicator is gone and the text has not arrived. Batch recognition
+    /// buys the quality, and the price is this gap, so it has to be visible.
+    /// </summary>
+    Transcribing,
+
     /// <summary>Stopped because nothing usable was heard.</summary>
     Silent,
 
@@ -187,6 +196,35 @@ public sealed class DictationEngine : IDisposable
     private CaptureGain _gain = new();
     private BlockingAudioStream? _capture;
 
+    /// <summary>The Whisper model in use this session, or null for the Windows engine.</summary>
+    private WhisperRecognizer? _whisper;
+
+    /// <summary>
+    /// The utterance being collected for Whisper.
+    ///
+    /// Whisper needs the whole recording before it starts, so unlike the Windows engine --
+    /// which consumes the stream as it arrives -- the audio has to be held. Held in memory
+    /// rather than in a file: at 32 kB per second a long dictation is a few megabytes, and
+    /// writing a recording of someone's voice to disk is a decision that should be asked
+    /// for rather than made as an implementation detail.
+    /// </summary>
+    private MemoryStream? _utterance;
+
+    /// <summary>
+    /// How much audio is kept, at 16 kHz 16-bit mono: three minutes.
+    ///
+    /// A bound rather than trust, because the microphone stays open until the user closes
+    /// it and a forgotten dictation would otherwise grow without limit. Three minutes is
+    /// far past any dictated instruction and still only about 5 MB.
+    /// </summary>
+    private const int UtteranceLimit = 16000 * 2 * 180;
+
+    /// <summary>Whether the recording was cut short by that limit.</summary>
+    private bool _utteranceFull;
+
+    /// <summary>Why the last session produced nothing, when the cause was not silence.</summary>
+    public string? LastProblem { get; private set; }
+
     /// <summary>
     /// Open a recording device and pipe it into a blocking stream.
     /// </summary>
@@ -240,6 +278,29 @@ public sealed class DictationEngine : IDisposable
 
                 _capture?.Push(e.Buffer.AsSpan(0, e.BytesRecorded));
 
+                // Collected for Whisper, which cannot start until the utterance ends. Both
+                // sinks are fed from the same amplified buffer rather than one path being
+                // "the real one": the whole reason the default device was quiet for a
+                // release was a second path that skipped this stage.
+                MemoryStream? held = _utterance;
+
+                if (held is not null)
+                {
+                    lock (held)
+                    {
+                        if (held.Length + e.BytesRecorded <= UtteranceLimit)
+                        {
+                            held.Write(e.Buffer, 0, e.BytesRecorded);
+                        }
+                        else
+                        {
+                            // Stated, not silently dropped: a transcript that ends mid
+                            // sentence with no explanation reads as a recognition failure.
+                            _utteranceFull = true;
+                        }
+                    }
+                }
+
                 // The level is computed here rather than taken from the engine: with a
                 // stream input, SpeechRecognitionEngine reports no audio level at all,
                 // so the meter and the "was the microphone silent" diagnosis would both
@@ -276,8 +337,17 @@ public sealed class DictationEngine : IDisposable
     /// <param name="deviceIndex">
     /// Recording device to open, or -1 for the Windows default.
     /// </param>
-    public string? Start(string? language = null, int deviceIndex = -1)
+    /// <param name="whisper">
+    /// A loaded Whisper model to recognise with, or null to use the Windows engine. When one
+    /// is supplied the Windows recognizer is not involved at all -- which also means
+    /// dictation works on a machine that has no Windows speech language installed, the case
+    /// the old path had to refuse outright.
+    /// </param>
+    public string? Start(string? language = null, int deviceIndex = -1, WhisperRecognizer? whisper = null)
     {
+        if (whisper is { IsLoaded: true })
+            return StartWithWhisper(language, deviceIndex, whisper);
+
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
@@ -414,12 +484,87 @@ public sealed class DictationEngine : IDisposable
     }
 
     /// <summary>
+    /// Start listening with a Whisper model instead of the Windows engine.
+    ///
+    /// Nothing is recognised while this runs -- the microphone is recorded, and the whole
+    /// recording is transcribed on <see cref="Stop"/>. That is the shape of the model, and
+    /// for push-to-talk it is the better one: the model reads the end of the sentence
+    /// before deciding what its beginning was, which is precisely what the Windows engine
+    /// could not do and why it turned "Welche Termine liegen diese Woche an" into
+    /// something else.
+    /// </summary>
+    private string? StartWithWhisper(string? language, int deviceIndex, WhisperRecognizer whisper)
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (State == DictationState.Listening)
+                return "already listening.";
+
+            if (State == DictationState.Transcribing)
+                return "still transcribing the last recording.";
+
+            Stop(quiet: true);
+
+            _utterance = new MemoryStream();
+            _utteranceFull = false;
+            _whisper = whisper;
+            LastProblem = null;
+
+            string? captureProblem = StartCapture(deviceIndex);
+
+            if (captureProblem is not null)
+            {
+                // No fallback to the Windows engine here, unlike the default-device case.
+                // Falling back would silently swap the recogniser the user chose for the one
+                // they chose it to get away from, and the text would come back worse with
+                // nothing saying why.
+                _utterance?.Dispose();
+                _utterance = null;
+                _whisper = null;
+                State = DictationState.Failed;
+                StopCapture();
+
+                return captureProblem;
+            }
+
+            // Whisper is told the language rather than detecting it. Detection on a short
+            // German utterance lands on Dutch often enough to matter, and the user's
+            // configured language is a better answer than a guess from two seconds of audio.
+            _culture = language is { Length: > 0 }
+                ? CultureInfo.GetCultureInfo(language)
+                : CultureInfo.CurrentUICulture;
+
+            DeviceName = deviceIndex >= 0
+                ? InputDevices().ElementAtOrDefault(deviceIndex) ?? $"device {deviceIndex}"
+                : "the Windows default recording device";
+
+            _phrases.Clear();
+            _rejected = 0;
+            PeakLevel = 0;
+            State = DictationState.Listening;
+
+            return null;
+        }
+    }
+
+    /// <summary>Which recogniser this session is using, for the transcript.</summary>
+    public string RecognizerName =>
+        _whisper?.LoadedModel is { Length: > 0 } model
+            ? $"Whisper ({model})"
+            : "the Windows speech recognizer";
+
+    /// <summary>
     /// Stop listening and report what was heard.
     /// </summary>
     /// <param name="quiet">Tear down without raising <see cref="Finished"/>.</param>
     public string Stop(bool quiet = false)
     {
         SpeechRecognitionEngine? engine;
+        WhisperRecognizer? whisper;
+        MemoryStream? utterance;
+        bool wasListening;
         string text;
         DictationState outcome;
 
@@ -427,6 +572,14 @@ public sealed class DictationEngine : IDisposable
         {
             engine = _engine;
             _engine = null;
+
+            whisper = _whisper;
+            _whisper = null;
+
+            utterance = _utterance;
+            _utterance = null;
+
+            wasListening = State == DictationState.Listening;
 
             text = string.Join(" ", _phrases).Trim();
 
@@ -437,9 +590,19 @@ public sealed class DictationEngine : IDisposable
                 _ => DictationState.Idle,
             };
 
-            if (State != DictationState.Failed)
+            // Whisper has not run yet at this point, so the session is not over: it moves to
+            // Transcribing and reaches Idle when the model comes back. Reporting Silent here
+            // would tell the user nothing was heard while the recording is still being read.
+            if (whisper is not null && wasListening && !quiet)
+                State = DictationState.Transcribing;
+            else if (State != DictationState.Failed)
                 State = DictationState.Idle;
         }
+
+        // Unconditionally, and before the engine: with a Whisper session there is no engine
+        // to hang the teardown off, and with a Windows one the engine's reader thread has to
+        // see end-of-stream rather than block on a device that is gone.
+        StopCapture();
 
         if (engine is not null)
         {
@@ -447,10 +610,6 @@ public sealed class DictationEngine : IDisposable
             engine.AudioLevelUpdated -= OnLevel;
             engine.RecognizeCompleted -= OnCompleted;
             engine.SpeechRecognitionRejected -= OnRejected;
-
-            // Capture is torn down BEFORE the engine, so the engine's reader thread sees
-            // end-of-stream and returns instead of blocking on a device that is gone.
-            StopCapture();
 
             try
             {
@@ -473,10 +632,89 @@ public sealed class DictationEngine : IDisposable
             }
         }
 
+        if (whisper is not null)
+        {
+            if (quiet || !wasListening)
+            {
+                // Cancelled, or torn down before anything was recorded. The recording is
+                // dropped rather than transcribed: Cancel means the user does not want the
+                // text, and spending two seconds of CPU to produce it anyway would be work
+                // nobody asked for.
+                utterance?.Dispose();
+
+                if (!quiet)
+                    Finished?.Invoke(string.Empty, DictationState.Silent);
+
+                return string.Empty;
+            }
+
+            // Deliberately not awaited. Stop is called from a UI event handler and from the
+            // hotkey path, and blocking either for the length of a transcription would
+            // freeze the pill. The result arrives through the same events as before, so the
+            // caller does not need to know which recogniser produced it.
+            _ = TranscribeAsync(whisper, utterance);
+
+            return string.Empty;
+        }
+
         if (!quiet)
             Finished?.Invoke(text, outcome);
 
         return text;
+    }
+
+    /// <summary>
+    /// Hand the recording to Whisper and report the result through the usual events.
+    /// </summary>
+    private async Task TranscribeAsync(WhisperRecognizer whisper, MemoryStream? utterance)
+    {
+        byte[] pcm;
+
+        if (utterance is null)
+        {
+            pcm = [];
+        }
+        else
+        {
+            lock (utterance)
+                pcm = utterance.ToArray();
+
+            utterance.Dispose();
+        }
+
+        WhisperResult result = await whisper
+            .TranscribeAsync(pcm, _culture?.Name)
+            .ConfigureAwait(false);
+
+        lock (_gate)
+        {
+            LastProblem = result.Problem;
+
+            State = result.Problem is not null
+                ? DictationState.Failed
+                : DictationState.Idle;
+
+            if (result.Text.Length > 0)
+                _phrases.Add(result.Text);
+        }
+
+        // The text goes out as a partial first, because that is what puts it in the input
+        // box -- the same route the Windows engine's phrases take. Keeping one route means
+        // the box is filled by one piece of code rather than two that can disagree.
+        if (result.Text.Length > 0)
+        {
+            PartialText?.Invoke(_utteranceFull
+                ? result.Text + " [recording reached the three-minute limit]"
+                : result.Text);
+        }
+
+        Finished?.Invoke(
+            result.Text,
+            result.Problem is not null
+                ? DictationState.Failed
+                : result.Text.Length > 0
+                    ? DictationState.Idle
+                    : DictationState.Silent);
     }
 
     /// <summary>Discard whatever was heard, for an explicit cancel.</summary>

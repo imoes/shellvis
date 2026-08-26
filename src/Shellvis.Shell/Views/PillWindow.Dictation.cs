@@ -24,9 +24,22 @@ public sealed partial class PillWindow
 
     private void ToggleDictation()
     {
+        if (_dictation?.State == DictationState.Transcribing)
+            return;
+
         if (_dictation?.State == DictationState.Listening)
         {
             _dictation.Stop();
+
+            // Whisper reads the recording after the microphone closes, so there is a gap
+            // between releasing and seeing text. Left unsaid it reads as nothing happening,
+            // which is how a user concludes dictation is broken and stops using it.
+            if (_dictation.State == DictationState.Transcribing)
+            {
+                ShowListening(false);
+                StatusText.Text = "Transcribing...";
+            }
+
             return;
         }
 
@@ -50,6 +63,12 @@ public sealed partial class PillWindow
 
         _beforeDictation = PromptBox.Text;
 
+        // Started before the microphone opens, and deliberately not waited for. The first
+        // run has a model to fetch, and holding the button press for a 465 MB download would
+        // look like the application had hung. Until it arrives the Windows engine answers,
+        // which is worse but immediate -- a degraded feature rather than a missing one.
+        EnsureWhisper();
+
         // Listed once, the first time dictation is used. With three active microphones on
         // this machine, "which one is it listening to" is the first question when nothing
         // is recognised -- so the answer is in the transcript before it is asked.
@@ -68,7 +87,7 @@ public sealed partial class PillWindow
             }
         }
 
-        string? problem = _dictation.Start(DictationLanguage(), DictationDevice());
+        string? problem = _dictation.Start(DictationLanguage(), DictationDevice(), _whisper);
 
         if (problem is not null)
         {
@@ -85,7 +104,8 @@ public sealed partial class PillWindow
         StatusText.Text = "Listening... Ctrl+Alt+D or Escape to stop.";
 
         AddRow(GlyphMic,
-            $"Listening ({_dictation.Language}) on {_dictation.DeviceName}. "
+            $"Listening ({_dictation.Language}) on {_dictation.DeviceName} with "
+            + $"{_dictation.RecognizerName}. "
             + "Nothing is sent anywhere; recognition runs on this machine.",
             "voice");
 
@@ -187,7 +207,14 @@ public sealed partial class PillWindow
                 break;
 
             case DictationState.Failed:
-                AddRow(GlyphWarning, "Dictation stopped unexpectedly. Check the microphone.", "voice");
+                // The engine's own reason when it has one. "Check the microphone" was the
+                // only message here, and it points at the wrong thing when what actually
+                // failed was the model rather than the device.
+                AddRow(GlyphWarning,
+                    _dictation?.LastProblem
+                    ?? "Dictation stopped unexpectedly. Check the microphone.",
+                    "voice");
+
                 break;
 
             default:

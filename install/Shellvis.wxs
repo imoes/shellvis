@@ -66,6 +66,80 @@
     <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
     <ui:WixUI Id="WixUI_FeatureTree" />
 
+    <!--
+      Which speech model dictation should use.
+
+      Asked here rather than decided, because the answer costs the user a download between
+      74 MB and 1.5 GB and some seconds of CPU per dictation, and because the right answer
+      differs by machine: a laptop on a metered connection and a desktop on ethernet do not
+      want the same one. Secure="yes" so it also works from the command line for an
+      unattended install: msiexec /i Shellvis.msi WHISPERMODEL=medium
+
+      The model is NOT shipped inside the MSI. At 465 MB it would be paid for by every user
+      including those who never dictate, and GitHub refuses release assets over 100 MB, so
+      the package could not carry it even if that were wanted. Shellvis fetches the chosen
+      model on first use and says so in its console while it does.
+    -->
+    <Property Id="WHISPERMODEL" Value="small" Secure="yes" />
+
+    <UI>
+      <Dialog Id="WhisperDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="200" Height="15" Transparent="yes"
+                 NoPrefix="yes" Text="{\WixUI_Font_Title}Speech recognition" />
+
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="330" Height="15"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="Choose the model dictation recognises with. Everything runs on this machine." />
+
+        <Control Id="Explanation" Type="Text" X="20" Y="55" Width="330" Height="24" Text="Windows' own recogniser is available without a download, but its German dictation is poor. A Whisper model is markedly better and is downloaded once, on first use." />
+
+        <Control Id="ModelGroup" Type="RadioButtonGroup" X="20" Y="85" Width="330" Height="120"
+                 Property="WHISPERMODEL" />
+
+        <Control Id="Footnote" Type="Text" X="20" Y="208" Width="330" Height="24" Text="Nothing is sent anywhere at any point. You can change this later under voice.whisperModel in config.yaml." />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)" />
+
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Default="yes" Text="!(loc.WixUINext)" />
+
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
+      <RadioButtonGroup Property="WHISPERMODEL">
+        <RadioButton Value="small" X="0" Y="0" Width="320" Height="16"
+                     Text="Whisper small - 465 MB. Recommended: the sweet spot for German." />
+        <RadioButton Value="medium" X="0" Y="20" Width="320" Height="16"
+                     Text="Whisper medium - 1.5 GB. Most accurate, about three times the CPU time." />
+        <RadioButton Value="base" X="0" Y="40" Width="320" Height="16"
+                     Text="Whisper base - 141 MB. Fast and small, stumbles on names." />
+        <RadioButton Value="tiny" X="0" Y="60" Width="320" Height="16"
+                     Text="Whisper tiny - 74 MB. Fastest, about as good as Windows' own." />
+        <RadioButton Value="none" X="0" Y="80" Width="320" Height="16"
+                     Text="None - use the Windows recogniser, download nothing." />
+      </RadioButtonGroup>
+
+      <!--
+        Inserted between the feature tree and the confirmation page. The two overrides on
+        the surrounding dialogs carry a higher Order than the ones WixUI_FeatureTree
+        publishes, which is how a built-in dialog set is extended without forking it.
+      -->
+      <Publish Dialog="CustomizeDlg" Control="Next" Event="NewDialog" Value="WhisperDlg" Order="10" />
+      <Publish Dialog="WhisperDlg" Control="Back" Event="NewDialog" Value="CustomizeDlg" />
+      <Publish Dialog="WhisperDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
+      <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WhisperDlg" Order="10" />
+    </UI>
+
+
     <?ifdef PerUser ?>
       <StandardDirectory Id="LocalAppDataFolder">
         <Directory Id="ProgramsFolder" Name="Programs">
@@ -97,6 +171,7 @@
 
       <ComponentGroupRef Id="ShortcutComponents" />
       <ComponentGroupRef Id="AutostartComponents" />
+      <ComponentGroupRef Id="SetupChoiceComponents" />
     </Feature>
 
     <?ifndef PerUser ?>
@@ -125,6 +200,25 @@
           package is allowed to write in both scopes.
         -->
         <RegistryValue Root="HKCU" Key="Software\Shellvis" Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="SetupChoiceComponents" Directory="INSTALLFOLDER">
+      <Component Id="SpeechModelChoice" Guid="*">
+        <!--
+          The setup answer, recorded where the application looks for it.
+
+          HKCU, so it needs no privilege and is written identically in both installation
+          modes. Read by Shellvis as a FALLBACK, not an override: once voice.whisperModel
+          appears in config.yaml, that wins; a choice made during setup months ago must
+          not quietly overrule the file the user has since edited.
+        -->
+        <RegistryValue Root="HKCU"
+                       Key="Software\Shellvis"
+                       Name="WhisperModel"
+                       Type="string"
+                       Value="[WHISPERMODEL]"
+                       KeyPath="yes" />
       </Component>
     </ComponentGroup>
 

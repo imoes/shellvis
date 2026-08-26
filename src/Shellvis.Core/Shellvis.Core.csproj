@@ -38,6 +38,8 @@
          layer. Hermes needs a whole schema-translation step here. -->
     <!-- YAML rather than JSON for the config file: it takes comments, and a config
          a human is expected to edit by hand needs them. -->
+    <PackageReference Include="Whisper.net" Version="1.9.1" />
+    <PackageReference Include="Whisper.net.Runtime" Version="1.9.1" />
     <PackageReference Include="YamlDotNet" Version="16.3.0" />
     <!-- The in-box SAPI recognizer, for push-to-talk dictation. Chosen over the WinRT
          SpeechRecognizer because it is provably on-device: the requirement was local

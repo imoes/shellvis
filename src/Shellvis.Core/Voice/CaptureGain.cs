@@ -15,11 +15,23 @@ namespace Shellvis.Core.Voice;
 /// multiplier that suits a quiet one clips a loud one, and clipped speech recognises worse
 /// than quiet speech.
 ///
-/// <b>What keeps it from making things worse.</b> Two things. The gain only moves while
-/// there is something above the noise floor, so a silent room is not amplified into hiss
-/// that the recogniser tries to turn into words; and it rises slowly while falling fast, so
-/// a sudden loud syllable is backed away from immediately while a quiet passage is
-/// approached gradually rather than pumping.
+/// <b>What keeps it from making things worse.</b> The gain is derived from the loudest
+/// thing heard SO FAR in this utterance, which makes it monotonically non-increasing: it
+/// settles within the first syllables and then holds. Two properties fall out of that, and
+/// both matter to a recogniser rather than to a listener:
+///
+/// <list type="bullet">
+/// <item>It cannot clip. The multiplier is computed from a peak that already includes the
+/// buffer it is about to scale, so that buffer's own loudest sample lands on the target.</item>
+/// <item>It cannot modulate. An acoustic model is trained on speech whose loudness moves
+/// the way a voice moves; a gain stage that chases the level between syllables changes the
+/// envelope of every word, which is a distortion the model has never seen.</item>
+/// </list>
+///
+/// The first revision did chase it, with a fast-down/slow-up smoothing borrowed from audio
+/// levelling. That is right for something a person listens to and wrong here -- pleasant
+/// loudness and recognisable speech are not the same goal. A silent room is still not
+/// amplified, because a buffer below the noise floor does not move the estimate at all.
 /// </summary>
 internal sealed class CaptureGain
 {
@@ -48,6 +60,9 @@ internal sealed class CaptureGain
     private const double NoiseFloor = 0.005;
 
     private double _gain = 1.0;
+
+    /// <summary>The loudest fraction of full scale seen this session.</summary>
+    private double _loudest;
 
     /// <summary>The multiplier currently in use, for the diagnostic line.</summary>
     public double Current => _gain;
@@ -87,14 +102,12 @@ internal sealed class CaptureGain
 
         if (fraction > NoiseFloor)
         {
-            double wanted = Math.Clamp(Target / fraction, 1.0, MaxGain);
-
-            // Down fast, up slowly. The asymmetry is the whole point: reacting slowly to
-            // something too loud means clipping for a while, and reacting quickly to
-            // something too quiet means the level pumping between words.
-            _gain = wanted < _gain
-                ? (_gain * 0.5) + (wanted * 0.5)
-                : (_gain * 0.9) + (wanted * 0.1);
+            // The loudest thing heard so far, this buffer included. Taking the maximum
+            // rather than smoothing towards it is what makes the multiplier settle and stay
+            // settled: it can only ever be revised downwards, and only when the user turns
+            // out to be louder than they have been.
+            _loudest = Math.Max(_loudest, fraction);
+            _gain = Math.Clamp(Target / _loudest, 1.0, MaxGain);
         }
 
         if (_gain <= 1.001)

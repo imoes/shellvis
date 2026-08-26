@@ -37,6 +37,12 @@ internal static class Program
                 "remote" => await RemoteProbe.RunAsync().ConfigureAwait(false),
                 "endpoint" => EndpointProbe.Run(),
                 "audiobridge" => StreamedAudioProbe.Run(),
+
+                // --fetch downloads the model. Off by default: a harness that pulls half a
+                // gigabyte because someone ran the suite is a harness people stop running.
+                "whisper" => WhisperProbe.RunAsync(
+                    args.Any(a => a.Equals("--fetch", StringComparison.OrdinalIgnoreCase)))
+                    .GetAwaiter().GetResult(),
                 "tools" => await ToolProbe.RunAsync().ConfigureAwait(false),
                 "classify" => ClassifierProbe.Run(),
                 "config" => ConfigProbe.Run(),
@@ -76,7 +82,7 @@ internal static class Program
     private static int Usage()
     {
         Console.WriteLine(
-            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | stream | officelive]");
+            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | whisper [--fetch] | stream | officelive]");
         return 2;
     }
 

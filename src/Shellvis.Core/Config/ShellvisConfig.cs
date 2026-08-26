@@ -214,6 +214,31 @@ public sealed class VoiceSection
 
     /// <summary>Recognition language, or empty for the machine's UI language.</summary>
     public string? Language { get; set; }
+
+    /// <summary>
+    /// Which recogniser to dictate with: whisper, sapi, or auto.
+    ///
+    /// <c>auto</c> means Whisper when its model is on disk and the Windows engine otherwise,
+    /// which is what makes the first run work before anything is downloaded. <c>sapi</c> is
+    /// kept reachable on purpose: the Windows engine is worse but instant, and on a machine
+    /// where the model cannot be fetched it is the difference between poor dictation and
+    /// none.
+    /// </summary>
+    public string Engine { get; set; } = "auto";
+
+    /// <summary>
+    /// Which Whisper model to use: tiny, base, small or medium.
+    ///
+    /// Chosen at install time and changeable here. Not downloaded automatically on a whim --
+    /// the smallest is 74 MB and the largest 1.5 GB, and fetching that much without being
+    /// asked is not something an agent should decide.
+    /// </summary>
+    /// <remarks>
+    /// Null means "not stated here", which is not the same as the default: the installer
+    /// records what the user picked during setup, and an unset value in the config has to
+    /// defer to that rather than overrule it with a built-in guess.
+    /// </remarks>
+    public string? WhisperModel { get; set; }
 }
 
 /// <summary>

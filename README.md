@@ -1,6 +1,6 @@
-# Shellvis
+﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.2.1-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 
 A native Windows AI agent: a floating command bar with a console beneath it, wired to
@@ -9,7 +9,7 @@ PowerShell, the desktop, Office, Outlook, a browser and anything else on the mac
 Shellvis does not wrap a terminal. It hosts PowerShell 7 in-process, drives the desktop
 through UI Automation, talks to Office over COM, and shows every command and tool call it
 makes while it makes them. The point is an agent that can actually operate a Windows
-machine — and one you can watch doing it.
+machine â€” and one you can watch doing it.
 
 *Shellvis has entered the building.*
 
@@ -20,7 +20,7 @@ machine — and one you can watch doing it.
 **Runs the shell.** PowerShell 7 in one persistent runspace per session, so a variable set
 in one turn is still there in the next. Modules can be searched, installed from the
 PowerShell Gallery and imported, and the newly available cmdlets come back in the tool
-result — so the model can use a module it installed a second ago without ten thousand
+result â€” so the model can use a module it installed a second ago without ten thousand
 cmdlet names sitting in its prompt. WSL is reachable the same way.
 
 **Drives the desktop.** Not screenshots and coordinates: `desktop_analyze` returns the UI
@@ -31,13 +31,13 @@ over synthetic input, so an invoke does not need the window in the foreground an
 intercepted by whatever is under the cursor.
 
 **Administers other machines.** PowerShell Remoting over WinRM (Kerberos, no file copy) or
-over SSH, with persistent sessions — the supported replacement for PsExec, which worked by
+over SSH, with persistent sessions â€” the supported replacement for PsExec, which worked by
 dropping a service binary on the target's ADMIN$ share and is now treated as an attack by
 every endpoint protection product for exactly that reason.
 
 **Reads and writes documents.** Word, Excel and PowerPoint headless through OpenXML, and the
 running instances through COM: read the document that is open, export to PDF, list what is
-loaded. Outlook for mail, calendar, contacts and tasks — and Thunderbird through a native
+loaded. Outlook for mail, calendar, contacts and tasks â€” and Thunderbird through a native
 messaging bridge for the same mail operations.
 
 **Browses.** Chrome DevTools Protocol directly, no Node.js and no driver process. Pages come
@@ -54,7 +54,7 @@ agent itself: after a turn that used tools, one extra tool-less model call asks 
 anything was learned worth keeping, and Shellvis writes it. Sessions persist to SQLite with
 full-text search and survive being killed.
 
-**Speaks and listens.** Push-to-talk dictation with on-device recognition — no cloud path
+**Speaks and listens.** Push-to-talk dictation with on-device recognition â€” no cloud path
 exists in the code.
 
 ### 76 tools
@@ -93,14 +93,14 @@ Four things decide whether an action asks first.
 |---|---|
 | `ask` | everything that is not provably a read asks, shell queries included |
 | `auto-read` | **default.** Provable reads run silently, changes ask |
-| `yolo` | nothing asks — except always-ask tools |
+| `yolo` | nothing asks â€” except always-ask tools |
 
 **The classifier** may lower a specific call. `powershell_run` has to be declared mutating
 because it can do anything, but most real calls are queries; prompting for every
 `Get-CimInstance` teaches people to click Allow without reading, which is worse than not
-asking. Three independent signals must agree — verb taxonomy with a noun exception table
+asking. Three independent signals must agree â€” verb taxonomy with a noun exception table
 (`Format-Table` reads, `Format-Volume` destroys a disk), AST analysis for redirection,
-provider-path assignment and dynamic invocation, and command shape — and NFKC normalisation
+provider-path assignment and dynamic invocation, and command shape â€” and NFKC normalisation
 runs first against homoglyph evasion. The burden of proof is on "read": there is no
 "probably harmless".
 
@@ -120,7 +120,7 @@ because a model decided to.
 |---|---|
 | Windows | 10 build 17763 or newer; developed on 11 25H2 (26200) |
 | .NET SDK | 10.0.400 |
-| Windows App Runtime | 2.4.0 — install from Microsoft if absent |
+| Windows App Runtime | 2.4.0 â€” install from Microsoft if absent |
 | A model endpoint | any OpenAI-compatible URL, or one of 19 catalogued providers |
 
 No Node.js, no Python, no external browser driver. Office and Outlook features need Office
@@ -150,7 +150,7 @@ rights; unpackaged also matches the per-user install below.
 
 `Microsoft.PowerShell.SDK` ships its modules under `runtimes/<rid>/lib/<tfm>/Modules`, and
 the engine looks for them next to `System.Management.Automation.dll`. Any build with a
-`RuntimeIdentifier` — which every WinUI build has — flattens the assemblies into the output
+`RuntimeIdentifier` â€” which every WinUI build has â€” flattens the assemblies into the output
 root and leaves `Modules` behind, so the two halves end up in different places.
 `Directory.Build.targets` copies the folder into place. Without it `Get-Module` works while
 `Out-String` and `Get-CimInstance` fail, which reads like a broken installation rather than a
@@ -178,8 +178,8 @@ it can be changed while it runs. So the choice cannot be a checkbox inside one `
 are built from the same `install/Shellvis.wxs` with one preprocessor switch, so they cannot
 drift apart.
 
-Inside the machine-wide package the broker genuinely *is* optional — the application works
-without it and says so — which is what a Windows Installer feature is for. Pick it in the
+Inside the machine-wide package the broker genuinely *is* optional â€” the application works
+without it and says so â€” which is what a Windows Installer feature is for. Pick it in the
 feature tree, or from the command line:
 
 ```powershell
@@ -224,7 +224,7 @@ EULA before the toolset will build anything. WiX 5 produces the same packages un
 MS-RL and needs no such acceptance, so that is what the workflow pins.
 
 Each package is about 105 MB, nearly all of it the PowerShell SDK. That is over GitHub's
-100 MB per-file limit, so the installers are never committed — `.github/workflows/release.yml`
+100 MB per-file limit, so the installers are never committed â€” `.github/workflows/release.yml`
 builds them on a `v*` tag and attaches them to the release.
 
 ### Without an installer
@@ -239,7 +239,7 @@ without an MSI:
 .\Shellvis.Setup.exe --uninstall user
 ```
 
-Uninstalling by either route leaves configuration and history in place — reinstalling is the
+Uninstalling by either route leaves configuration and history in place â€” reinstalling is the
 commonest reason to uninstall.
 
 The broker's named pipe grants exactly two identities, the installing user and the local
@@ -305,7 +305,7 @@ escape, so `"C:\Users\..."` fails to parse on `\U` and takes the whole file down
 
 **`${VAR}` references stay literal when Shellvis rewrites the file.** Interpolation happens
 on read so a key never sits in the file, and the file is rewritten whenever a setting
-changes. A naive round-trip would write the resolved value — one such write would copy every
+changes. A naive round-trip would write the resolved value â€” one such write would copy every
 referenced secret in clear text into a file people treat as harmless.
 
 API keys can also be entered in the provider dialog, where they are stored DPAPI-encrypted
@@ -327,7 +327,7 @@ src/
   Shellvis.Thunderbird.Host/   native messaging relay
 ext/thunderbird-bridge/        the MailExtension
 tools/
-  Shellvis.DesktopProbe/       19 verification harnesses
+  Shellvis.DesktopProbe/       20 verification harnesses
   Shellvis.TestMcpServer/      a deliberately hostile MCP server
 ```
 
@@ -352,6 +352,7 @@ $probe = ".\tools\Shellvis.DesktopProbe\bin\Debug\net10.0-windows10.0.26100.0\Sh
 & $probe launch        # unusable URIs refused before the shell
 & $probe endpoint      # a bare host becomes a working API root
 & $probe remote        # PowerShell Remoting against a real listener
+& $probe audiobridge  # the dictation audio bridge, compared against a wave file
 & $probe browser       # a real Chromium against a real page
 & $probe broker        # the pipe protocol and every guard
 & $probe hooks $probe cron $probe mcp $probe hass $probe providers
@@ -359,8 +360,8 @@ $probe = ".\tools\Shellvis.DesktopProbe\bin\Debug\net10.0-windows10.0.26100.0\Sh
 ```
 
 They test properties rather than implementations. `compaction` does not check indices, it
-checks the invariant the provider enforces — every tool call has its result and every result
-its call — and walks a tool exchange across the boundary where a naive "keep the last N
+checks the invariant the provider enforces â€” every tool call has its result and every result
+its call â€” and walks a tool exchange across the boundary where a naive "keep the last N
 messages" breaks. `config` writes a real secret-shaped value and asserts it is absent from
 the file. `mcp` runs against an MCP server built to violate all three trust boundaries.
 
@@ -384,7 +385,7 @@ Stated rather than discovered later.
 - **The Thunderbird extension's JavaScript is untested.** The framing and the relay are
   verified from both sides; the extension itself needs Thunderbird installed.
 - **CDP cannot attach to your existing browser profile.** Chrome and Edge have refused
-  remote debugging on the default profile since version 136, silently — the port simply does
+  remote debugging on the default profile since version 136, silently â€” the port simply does
   not open. Shellvis brings its own persistent profile; sign in there once.
 - **Anthropic and Gemini go through their OpenAI-compatible endpoints**, not the native
   APIs. That costs prompt caching and thinking blocks.
@@ -438,7 +439,7 @@ and tag the commit `vX.Y.Z`. Still 0.x deliberately: see Known limitations.
 
 ## Licence
 
-GNU Affero General Public License v3.0 — see [LICENSE](LICENSE).
+GNU Affero General Public License v3.0 â€” see [LICENSE](LICENSE).
 
 Worth knowing what the "Affero" part adds to the GPL: if you modify Shellvis and let other
 people use it **over a network**, you have to offer them the source of your modified version.

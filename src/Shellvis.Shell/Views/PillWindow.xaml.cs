@@ -40,15 +40,25 @@ namespace Shellvis.Shell.Views;
 /// </summary>
 public sealed partial class PillWindow : Window
 {
-    // Segoe Fluent Icons glyphs. They sit in the Unicode private use area, so
-    // most editors and diff viewers show them as empty boxes. Codepoints:
-    private const string GlyphChevronDown = ""; // U+E70D
-    private const string GlyphChevronUp = ""; // U+E70E
-    private const string GlyphTerminal = ""; // U+E756
-    private const string GlyphTool = ""; // U+E90F
-    private const string GlyphPerson = ""; // U+E77B
-    private const string GlyphWarning = ""; // U+E7BA
-    private const string GlyphSpeaker = ""; // U+E767, announcements
+    // Segoe Fluent Icons glyphs, written as escapes and never as literal characters.
+    //
+    // They sit in the Unicode private use area, where most editors, diff viewers and
+    // terminals show them as an empty box -- and a character nobody can see is a character
+    // any tool can lose. That is not hypothetical: GlyphMic and GlyphMicOff in the
+    // dictation file were silently emptied by a scripted edit, so pressing the microphone
+    // button set the button's content to "" and the icon vanished. It was reported as the
+    // symbol disappearing, and nothing in the source looked wrong, because an empty string
+    // literal and one holding an invisible character are indistinguishable on screen.
+    //
+    // An escape is plain ASCII in the file. It cannot be mangled by an encoding round
+    // trip, it survives sed and perl, and it says which codepoint it is without a comment.
+    private const string GlyphChevronDown = "\uE70D"; // U+E70D
+    private const string GlyphChevronUp = "\uE70E"; // U+E70E
+    private const string GlyphTerminal = "\uE756"; // U+E756
+    private const string GlyphTool = "\uE90F"; // U+E90F
+    private const string GlyphPerson = "\uE77B"; // U+E77B
+    private const string GlyphWarning = "\uE7BA"; // U+E7BA
+    private const string GlyphSpeaker = "\uE767"; // U+E767, announcements
 
     private readonly WindowShaper _shaper;
     private HotkeyListener? _hotkey;

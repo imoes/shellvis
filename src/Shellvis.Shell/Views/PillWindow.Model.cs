@@ -194,7 +194,7 @@ public sealed partial class PillWindow
 
         panel.Children.Add(new TextBlock
         {
-            Text = "",
+            Text = "\uE70D",
             FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
             FontSize = 8,
             Opacity = 0.9,

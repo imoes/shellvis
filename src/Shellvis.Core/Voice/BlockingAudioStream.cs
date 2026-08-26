@@ -77,22 +77,57 @@ internal sealed class BlockingAudioStream : Stream
         _available.Release(4);
     }
 
+    /// <summary>
+    /// How the consumer has actually behaved: reads attempted, bytes handed over, seeks.
+    ///
+    /// Counted because the difference between "the engine never read" and "the engine read
+    /// and could not decode" is the whole diagnosis, and from outside the two look identical
+    /// -- silence either way.
+    /// </summary>
+    internal int ReadCalls { get; private set; }
+
+    internal long BytesRead => _delivered;
+
+    internal int SeekCalls { get; private set; }
+
+    /// <summary>
+    /// Hand over exactly <paramref name="count"/> bytes, or fewer only at end of audio.
+    ///
+    /// FILLING THE BUFFER IS THE WHOLE POINT, and returning a partial read was the defect
+    /// that made dictation silent. A Stream is allowed to return fewer bytes than asked for
+    /// and well-behaved consumers loop -- SpeechRecognitionEngine does not. Measured: it
+    /// issued one read, was handed 3200 bytes (one capture buffer) out of 87522 available,
+    /// read once more and stopped. It treats a short read as end of audio.
+    ///
+    /// That is also why SetInputToWaveFile always worked and this did not: a FileStream
+    /// fills the buffer, so the engine never saw a short read and the difference between
+    /// the two paths was invisible from outside -- audio arriving at the level meter, no
+    /// recognition, and no rejection events either, because an engine that has decided the
+    /// audio ended is not rejecting anything.
+    /// </summary>
     public override int Read(byte[] buffer, int offset, int count)
     {
-        while (true)
+        ReadCalls++;
+
+        int filled = 0;
+
+        while (filled < count)
         {
             if (_current is not null && _offset < _current.Length)
             {
-                int take = Math.Min(count, _current.Length - _offset);
-                Array.Copy(_current, _offset, buffer, offset, take);
+                int take = Math.Min(count - filled, _current.Length - _offset);
+                Array.Copy(_current, _offset, buffer, offset + filled, take);
                 _offset += take;
+                filled += take;
+                _delivered += take;
 
                 if (_offset >= _current.Length)
                     _current = null;
 
-                _delivered += take;
-                return take;
+                continue;
             }
+
+            bool ended;
 
             lock (_gate)
             {
@@ -103,21 +138,19 @@ internal sealed class BlockingAudioStream : Stream
                     continue;
                 }
 
-                if (_closed)
-                    return 0;
+                ended = _closed;
             }
+
+            if (ended)
+                break;
 
             // Timed rather than indefinite: if capture dies without calling Finish, an
             // indefinite wait would wedge the engine's reader thread for the life of the
             // process. Returning to the loop re-checks the closed flag.
             _available.Wait(TimeSpan.FromMilliseconds(500));
-
-            lock (_gate)
-            {
-                if (_chunks.Count == 0 && _closed)
-                    return 0;
-            }
         }
+
+        return filled;
     }
 
     public override bool CanRead => true;
@@ -155,7 +188,11 @@ internal sealed class BlockingAudioStream : Stream
     }
 
     /// <summary>Reports where it is; cannot actually move.</summary>
-    public override long Seek(long offset, SeekOrigin origin) => _delivered;
+    public override long Seek(long offset, SeekOrigin origin)
+    {
+        SeekCalls++;
+        return _delivered;
+    }
 
     public override void SetLength(long value)
     {

@@ -13,8 +13,8 @@ namespace Shellvis.Shell.Views;
 /// </summary>
 public sealed partial class PillWindow
 {
-    private const string GlyphMic = ""; // U+E720
-    private const string GlyphMicOff = ""; // U+E74F
+    private const string GlyphMic = "\uE720"; // U+E720
+    private const string GlyphMicOff = "\uE74F"; // U+E74F
 
     private DictationEngine? _dictation;
 

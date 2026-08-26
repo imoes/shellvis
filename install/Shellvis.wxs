@@ -1,0 +1,191 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!--
+  Shellvis installer authoring, for both variants.
+
+  WHY TWO PACKAGES FROM ONE FILE. Windows Installer fixes the install scope at BUILD time:
+  a package is either per-user or per-machine, and nothing about it can be switched while it
+  runs. So "pick the variant you want" cannot be a checkbox inside one .msi. It is two
+  packages, built from this one source with the PerUser switch, so the two cannot drift:
+
+    Shellvis-<version>-user.msi     %LOCALAPPDATA%\Programs\Shellvis, no elevation
+    Shellvis-<version>-machine.msi  %ProgramFiles%\Shellvis, elevation, service optional
+
+  WHY THE SERVICE IS A FEATURE AND NOT A SECOND PACKAGE. Inside the machine variant the
+  broker genuinely is optional: the application works without it and reports elevated
+  operations as unavailable. That is a feature selection, which is what Windows Installer
+  features are for, and it means one package covers "machine-wide" and "machine-wide with
+  privileged operations" without a third build.
+
+  NO CUSTOM ACTIONS, anywhere. The one thing that would have needed native code is the
+  installing user's SID, which the broker's pipe ACL grants: Windows Installer exposes the
+  user's NAME as [LogonUser] and never their SID. The broker resolves the name itself, so
+  the package stays declarative, and a package with no custom actions cannot fail in a
+  way that leaves a half-installed machine behind.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+
+  <?ifdef PerUser ?>
+    <?define ScopeName = "perUser" ?>
+    <?define PackageSuffix = " (this user)" ?>
+    <!--
+      A distinct UpgradeCode per variant, on purpose. Sharing one would make the two
+      packages upgrades OF EACH OTHER, so installing the machine variant would silently
+      uninstall a per-user copy that is running, and vice versa. They are different
+      products that happen to share a name.
+    -->
+    <?define UpgradeGuid = "7A5C1E64-6C1F-4A83-9E5B-1D4F8B2A0C11" ?>
+  <?else ?>
+    <?define ScopeName = "perMachine" ?>
+    <?define PackageSuffix = " (all users)" ?>
+    <?define UpgradeGuid = "2F91B0D7-45AE-4C36-8B0E-9C7A6E5D3F22" ?>
+  <?endif ?>
+
+  <Package Name="Shellvis$(PackageSuffix)"
+           Manufacturer="imoes"
+           Version="$(Version)"
+           UpgradeCode="$(UpgradeGuid)"
+           Scope="$(ScopeName)"
+           Compressed="yes">
+
+    <!--
+      Refuse a downgrade rather than let it half-happen. The default behaviour without this
+      element is to allow two versions side by side, which for an application that keeps
+      state in one place under the profile is a way to have two builds fighting over it.
+    -->
+    <MajorUpgrade DowngradeErrorMessage="A newer version of Shellvis is already installed. Uninstall it first if you really want [ProductVersion]." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="ShellvisIcon" SourceFile="$(Stage)\Shellvis.Shell.exe" />
+    <Property Id="ARPPRODUCTICON" Value="ShellvisIcon" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/imoes/shellvis" />
+
+    <!-- The licence has to be shown, not merely shipped: it is AGPL-3.0. -->
+    <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+    <ui:WixUI Id="WixUI_FeatureTree" />
+
+    <?ifdef PerUser ?>
+      <StandardDirectory Id="LocalAppDataFolder">
+        <Directory Id="ProgramsFolder" Name="Programs">
+          <Directory Id="INSTALLFOLDER" Name="Shellvis" />
+        </Directory>
+      </StandardDirectory>
+    <?else ?>
+      <StandardDirectory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="Shellvis" />
+      </StandardDirectory>
+    <?endif ?>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ShortcutFolder" Name="Shellvis" />
+    </StandardDirectory>
+
+    <Feature Id="Application"
+             Title="Shellvis"
+             Description="The command bar, the console and all tools that need no elevation."
+             Level="1"
+             AllowAbsent="no">
+
+      <!--
+        Harvested rather than listed. A component per file for 450 files is a maintenance
+        burden with no benefit here: they install and uninstall together, always, and a
+        hand-written list is a list that goes stale the first time a dependency changes.
+      -->
+      <Files Include="$(Stage)\**" Directory="INSTALLFOLDER" />
+
+      <ComponentGroupRef Id="ShortcutComponents" />
+      <ComponentGroupRef Id="AutostartComponents" />
+    </Feature>
+
+    <?ifndef PerUser ?>
+      <Feature Id="BrokerService"
+               Title="Privileged broker service"
+               Description="Registers the broker as a LocalSystem service, which is what makes elevated operations available. Leave this out and those tools report as unavailable."
+               Level="1000">
+
+        <ComponentGroupRef Id="BrokerComponents" />
+      </Feature>
+    <?endif ?>
+
+    <ComponentGroup Id="ShortcutComponents" Directory="ShortcutFolder">
+      <Component Id="StartMenuShortcut" Guid="*">
+        <Shortcut Id="ShellvisShortcut"
+                  Name="Shellvis"
+                  Description="A native Windows AI agent"
+                  Target="[INSTALLFOLDER]Shellvis.Shell.exe"
+                  WorkingDirectory="INSTALLFOLDER" />
+
+        <RemoveFolder Id="RemoveShortcutFolder" On="uninstall" />
+
+        <!--
+          The key path for a shortcut component has to be a per-user registry value: a
+          Start Menu shortcut is not a reliable key path, and HKCU is where a per-user
+          package is allowed to write in both scopes.
+        -->
+        <RegistryValue Root="HKCU" Key="Software\Shellvis" Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <ComponentGroup Id="AutostartComponents" Directory="INSTALLFOLDER">
+      <Component Id="Autostart" Guid="*">
+        <!--
+          HKCU in BOTH variants, including the machine-wide one. The interactive
+          application is per user even when the binaries are shared, and an HKLM Run entry
+          would start a copy for every account that logs on to the machine.
+        -->
+        <RegistryValue Root="HKCU"
+                       Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                       Name="Shellvis"
+                       Type="string"
+                       Value="&quot;[INSTALLFOLDER]Shellvis.Shell.exe&quot;"
+                       KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <?ifndef PerUser ?>
+      <ComponentGroup Id="BrokerComponents" Directory="INSTALLFOLDER">
+        <Component Id="BrokerServiceRegistration" Guid="*">
+          <!--
+            The broker executable itself comes from the harvest above, so this component
+            only registers it, and it needs a key path that is not that file. A registry
+            value is the standard answer: a directory as key path is rejected outright by
+            the toolset for a component with an auto-generated guid, and duplicating the
+            executable into a second component would install it twice.
+          -->
+          <RegistryValue Root="HKLM"
+                         Key="SOFTWARE\Shellvis"
+                         Name="BrokerService"
+                         Type="integer"
+                         Value="1"
+                         KeyPath="yes" />
+
+          <ServiceInstall Id="BrokerInstall"
+                          Name="ShellvisBroker"
+                          DisplayName="Shellvis privileged broker"
+                          Description="Carries out the few operations that need administrator rights, on request from the interactive Shellvis session. Refuses everything else."
+                          Type="ownProcess"
+                          Start="auto"
+                          Account="LocalSystem"
+                          ErrorControl="normal"
+                          Vital="yes"
+                          Arguments="--allow-user &quot;[LogonUser]&quot;" />
+
+          <!--
+            Stopped and removed on uninstall, and started on install. Without the stop the
+            uninstaller cannot delete a running binary and leaves the file behind for a
+            reboot.
+          -->
+          <ServiceControl Id="BrokerControl"
+                          Name="ShellvisBroker"
+                          Start="install"
+                          Stop="both"
+                          Remove="uninstall"
+                          Wait="yes" />
+        </Component>
+      </ComponentGroup>
+    <?endif ?>
+
+  </Package>
+</Wix>

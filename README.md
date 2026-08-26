@@ -1,6 +1,6 @@
 # Shellvis
 
-[![version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.2.0-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 
 A native Windows AI agent: a floating command bar with a console beneath it, wired to
@@ -160,33 +160,91 @@ layout problem.
 
 ## Install
 
+Download an installer from [Releases](https://github.com/imoes/shellvis/releases). There
+are two, and which one you want depends on whether the privileged broker should run on the
+machine.
+
+| | `-user.msi` | `-machine.msi` |
+|---|---|---|
+| Installs into | `%LOCALAPPDATA%\Programs\Shellvis` | `%ProgramFiles%\Shellvis` |
+| Administrator rights | not needed | required |
+| Broker service | no | selectable feature |
+| Elevated tools | report as unavailable | available when the feature is installed |
+| Start Menu entry, autostart | yes | yes |
+
+**Why two files rather than one with a switch.** Windows Installer fixes the install scope
+when the package is *built*: a package is either per-user or per-machine and nothing about
+it can be changed while it runs. So the choice cannot be a checkbox inside one `.msi`. Both
+are built from the same `install/Shellvis.wxs` with one preprocessor switch, so they cannot
+drift apart.
+
+Inside the machine-wide package the broker genuinely *is* optional — the application works
+without it and says so — which is what a Windows Installer feature is for. Pick it in the
+feature tree, or from the command line:
+
 ```powershell
-# Per user. No administrator rights, no service.
-.\src\Shellvis.Setup\bin\Debug\net10.0-windows\Shellvis.Setup.exe --mode user
+# Everything, including the service. From an elevated prompt.
+msiexec /i Shellvis-0.2.0-machine.msi ADDLOCAL=Application,BrokerService
 
-# Machine-wide, plus the privileged broker as a LocalSystem service.
-# Needs an elevated prompt.
-.\Shellvis.Setup.exe --mode service
+# Application only, service left out.
+msiexec /i Shellvis-0.2.0-machine.msi ADDLOCAL=Application
 
+# Silent, with a log worth reading if it goes wrong.
+msiexec /i Shellvis-0.2.0-user.msi /qn /l*v install.log
+```
+
+The packages contain no custom actions. The one thing that would have needed native code is
+the installing user's SID, which the broker's pipe ACL grants: Windows Installer exposes the
+user's *name* as `[LogonUser]` and never their SID, so the broker resolves the name itself.
+A package with no custom actions cannot fail in a way that leaves a half-installed machine
+behind.
+
+### Building the installers
+
+```powershell
+dotnet tool install --global wix --version 5.*
+wix extension add -g WixToolset.UI.wixext/5.0.2
+
+# Publish all four executables into one folder, which is the layout they expect.
+foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','src/Shellvis.Thunderbird.Host') {
+    dotnet publish $p -c Release -r win-x64 --self-contained false -o artifacts/stage
+}
+
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.0 -d Stage="$PWD/artifacts/stage" `
+    -bindpath "$PWD/install" -ext WixToolset.UI.wixext -d PerUser=1 `
+    -o artifacts/Shellvis-0.2.0-user.msi
+
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.0 -d Stage="$PWD/artifacts/stage" `
+    -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
+    -o artifacts/Shellvis-0.2.0-machine.msi
+```
+
+**WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee
+EULA before the toolset will build anything. WiX 5 produces the same packages under the
+MS-RL and needs no such acceptance, so that is what the workflow pins.
+
+Each package is about 105 MB, nearly all of it the PowerShell SDK. That is over GitHub's
+100 MB per-file limit, so the installers are never committed — `.github/workflows/release.yml`
+builds them on a `v*` tag and attaches them to the release.
+
+### Without an installer
+
+The console installer is still there, and it is the only way to register the service
+without an MSI:
+
+```powershell
+.\Shellvis.Setup.exe --mode user      # no administrator rights
+.\Shellvis.Setup.exe --mode service   # elevated; registers the broker
 .\Shellvis.Setup.exe --status
 .\Shellvis.Setup.exe --uninstall user
 ```
 
-| Mode | Target | Service | Autostart |
-|---|---|---|---|
-| `user` | `%LOCALAPPDATA%\Programs\Shellvis` | no | `HKCU\...\Run` |
-| `service` | `%ProgramFiles%\Shellvis` | yes, LocalSystem | `HKCU\...\Run` |
-
-There is no interactive default mode on purpose: the two differ in whether a LocalSystem
-service runs on the machine, and that is not something to infer from whether the prompt
-happened to be elevated. Uninstalling leaves configuration and history in place —
-reinstalling is the commonest reason to uninstall.
+Uninstalling by either route leaves configuration and history in place — reinstalling is the
+commonest reason to uninstall.
 
 The broker's named pipe grants exactly two identities, the installing user and the local
 Administrators group, and denies `NETWORK`. A permissive pipe served by a LocalSystem
 process is a privilege-escalation service with a friendly name.
-
----
 
 ## Using it
 
@@ -316,7 +374,10 @@ Stated rather than discovered later.
 
 - **The privileged service is untested.** The development machine grants no administrator
   rights, so the pipe protocol, its ACL and every guard are verified with the broker running
-  as a console process in the user context. Session 0, LocalSystem and autostart are not.
+  as a console process in the user context. Session 0, LocalSystem and autostart are not --
+  and neither is the machine-wide MSI, for the same reason. The per-user MSI is verified end
+  to end: installed, 450 files and the right version in place, shortcut and autostart
+  created, then uninstalled with nothing left behind.
 - **Remote sessions to a live host are untested.** The transport, the failure messages and
   the risk classification are; loopback remoting needs `Enable-PSRemoting`, which needs
   administrator rights.

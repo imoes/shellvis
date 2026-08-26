@@ -19,6 +19,14 @@ public static class Program
         bool console = args.Contains("--console", StringComparer.OrdinalIgnoreCase);
 
         string? allowedSid = ReadArgument(args, "--allow-sid")
+            // A NAME rather than a SID, for the MSI.
+            //
+            // Windows Installer exposes the installing user's name as [LogonUser] and does
+            // not expose their SID at all, so an MSI can only pass a SID by way of a custom
+            // action -- native code shipped inside the package, for one lookup. Resolving
+            // the name here instead is a few lines and keeps the package free of custom
+            // actions entirely.
+            ?? Resolve(ReadArgument(args, "--allow-user"))
             ?? Environment.GetEnvironmentVariable("SHELLVIS_BROKER_ALLOW_SID")
             // Default to the account the broker is started under. Correct in console
             // mode, and correct in service mode only if the installer wrote the
@@ -70,6 +78,29 @@ public static class Program
         int index = Array.FindIndex(args, a => a.Equals(name, StringComparison.OrdinalIgnoreCase));
 
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
+    }
+
+    /// <summary>
+    /// Turn an account name into a SID, or null if it does not resolve.
+    ///
+    /// Null rather than a throw, and null rather than a fallback to some other account: the
+    /// SID decides who may talk to a LocalSystem service, so a name that cannot be resolved
+    /// has to fall through to the next source rather than quietly granting somebody else.
+    /// </summary>
+    private static string? Resolve(string? account)
+    {
+        if (string.IsNullOrWhiteSpace(account))
+            return null;
+
+        try
+        {
+            var name = new NTAccount(account.Trim());
+            return ((SecurityIdentifier)name.Translate(typeof(SecurityIdentifier))).Value;
+        }
+        catch (Exception ex) when (ex is IdentityNotMappedException or SystemException)
+        {
+            return null;
+        }
     }
 
     private static string? CurrentUserSid()

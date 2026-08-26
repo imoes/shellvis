@@ -283,6 +283,18 @@ internal static class VoiceProbe
         failures += Check("listening starts", engine.State == DictationState.Listening);
         failures += Check("the language is reported", engine.Language?.StartsWith("de") == true);
 
+        // The check that was missing, and the reason a whole release shipped with quiet
+        // dictation. Start() with no device index is what every unconfigured machine does,
+        // and it used to hand the microphone to the engine directly -- bypassing the capture
+        // gain and the buffer-filling bridge that the other harnesses were busy proving
+        // correct in isolation. Both halves were green; the wire between them was not
+        // connected. So this asserts the WIRE: a plain Start must run through our own stage.
+        Console.WriteLine($"    default start opened {engine.DeviceName}");
+
+        failures += Check(
+            "the Windows default is captured by our own stage, so the gain applies",
+            engine.UsingCaptureStage);
+
         string? twice = engine.Start("de-DE");
         failures += Check("starting twice is refused rather than doubling up", twice is not null);
 

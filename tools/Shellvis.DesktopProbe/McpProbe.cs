@@ -144,10 +144,39 @@ internal static class McpProbe
         return failures == 0 ? 0 : 1;
     }
 
-    private static string DefaultServerPath() => Path.GetFullPath(Path.Combine(
-        AppContext.BaseDirectory,
-        "..", "..", "..", "..", "Shellvis.TestMcpServer",
-        "bin", "Debug", "net10.0", "Shellvis.TestMcpServer.exe"));
+    /// <summary>
+    /// Find the test server by walking up to the repository root.
+    ///
+    /// Counting fixed "../" hops was wrong, and wrong in a way that looked like a missing
+    /// build: adding an x64 platform to the solution put this probe one directory deeper,
+    /// so the path landed inside the probe's own project and reported "build the test
+    /// server first" about a binary that was sitting there. Anchoring on a file that marks
+    /// the root instead makes the depth irrelevant. Searched under both layouts for the
+    /// same reason -- which one a project uses depends on whether it carries a platform.
+    /// </summary>
+    private static string DefaultServerPath()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Shellvis.slnx")))
+            dir = dir.Parent;
+
+        if (dir is null)
+            return "Shellvis.TestMcpServer.exe";
+
+        string project = Path.Combine(dir.FullName, "tools", "Shellvis.TestMcpServer", "bin");
+
+        if (!Directory.Exists(project))
+            return Path.Combine(project, "Shellvis.TestMcpServer.exe");
+
+        // Newest, because a stale copy under the other layout is exactly the trap this
+        // project has already been caught by twice.
+        return Directory
+            .EnumerateFiles(project, "Shellvis.TestMcpServer.exe", SearchOption.AllDirectories)
+            .OrderByDescending(File.GetLastWriteTimeUtc)
+            .FirstOrDefault()
+            ?? Path.Combine(project, "Shellvis.TestMcpServer.exe");
+    }
 
     private static int Expect(bool condition, string what)
     {

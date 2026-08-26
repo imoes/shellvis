@@ -169,6 +169,18 @@ public sealed class DictationEngine : IDisposable
     /// <summary>Which device the current session opened, for the transcript.</summary>
     public string? DeviceName { get; private set; }
 
+    /// <summary>
+    /// Whether audio is flowing through this project's own capture stage.
+    ///
+    /// Exposed because the alternative -- letting the engine open the device itself -- is
+    /// silently a different feature: no capture gain, and none of the buffer-filling the
+    /// recognizer needs. That difference was invisible for a whole release, and the
+    /// harnesses stayed green because they exercised the stage directly instead of asking
+    /// whether a real Start actually used it. It is a fact about the wire, so it is
+    /// readable rather than inferred.
+    /// </summary>
+    public bool UsingCaptureStage => _capture is not null;
+
     private NAudio.Wave.WaveInEvent? _waveIn;
 
     /// <summary>Automatic level correction, reset with each capture session.</summary>
@@ -176,12 +188,20 @@ public sealed class DictationEngine : IDisposable
     private BlockingAudioStream? _capture;
 
     /// <summary>
-    /// Open a specific recording device and pipe it into a blocking stream.
+    /// Open a recording device and pipe it into a blocking stream.
     /// </summary>
+    /// <param name="deviceIndex">
+    /// A device index, or -1 for the Windows default. -1 is passed straight through as
+    /// WAVE_MAPPER, which is how the default is addressed without giving up this capture
+    /// stage -- and this stage is where the gain and the buffer-filling bridge live.
+    /// </param>
     private string? StartCapture(int deviceIndex)
     {
         try
         {
+            if (NAudio.Wave.WaveInEvent.DeviceCount == 0)
+                return "Windows reports no recording device at all";
+
             if (deviceIndex >= NAudio.Wave.WaveInEvent.DeviceCount)
             {
                 IReadOnlyList<string> devices = InputDevices();
@@ -200,7 +220,9 @@ public sealed class DictationEngine : IDisposable
 
             _waveIn = new NAudio.Wave.WaveInEvent
             {
-                DeviceNumber = deviceIndex,
+                // Negative values all mean WAVE_MAPPER; normalised so an accidental -2 from
+                // a hand-edited config does not reach waveInOpen as a different request.
+                DeviceNumber = deviceIndex < 0 ? -1 : deviceIndex,
                 WaveFormat = new NAudio.Wave.WaveFormat(16000, 16, 1),
                 // 100 ms buffers: short enough that the level meter reacts as the user
                 // speaks, long enough not to wake the callback constantly.
@@ -232,7 +254,9 @@ public sealed class DictationEngine : IDisposable
         }
         catch (Exception ex)
         {
-            return $"could not open recording device {deviceIndex}: {ex.Message}";
+            return deviceIndex < 0
+                ? $"could not open the default recording device: {ex.Message}"
+                : $"could not open recording device {deviceIndex}: {ex.Message}";
         }
     }
 
@@ -285,17 +309,42 @@ public sealed class DictationEngine : IDisposable
                 // headset produces exactly the reported symptom: listening starts,
                 // nothing is recognised, and nothing says why. So a device can be chosen,
                 // which needs a capture stage of our own.
-                if (deviceIndex >= 0)
-                {
-                    string? captureProblem = StartCapture(deviceIndex);
+                //
+                // And the DEFAULT goes through that same stage. This used to branch: a
+                // chosen device was captured by us, while -1 went to
+                // SetInputToDefaultAudioDevice -- which made the default, the state every
+                // machine is in until someone edits the config, the one path with no
+                // capture gain and none of the audio-bridge fixes. The reported symptom was
+                // exactly that shape: "peak 34/100 but no words were recognised", in a
+                // session whose own transcript said "Windows default recording device".
+                //
+                // NAudio addresses the default as WAVE_MAPPER (-1), so honouring the user's
+                // Windows choice and keeping our own capture stage were never in conflict.
+                string? captureProblem = StartCapture(deviceIndex);
 
-                    if (captureProblem is not null)
+                if (captureProblem is not null)
+                {
+                    // A device the user NAMED must fail loudly: silently listening to a
+                    // different microphone than the one they configured is the defect this
+                    // whole path exists to prevent.
+                    if (deviceIndex >= 0)
                     {
                         State = DictationState.Failed;
                         Stop(quiet: true);
                         return captureProblem;
                     }
 
+                    // For the default, fall back to the engine's own device handling. It
+                    // dictates without the gain, which is worse -- but refusing outright
+                    // would turn a degraded feature into a missing one. The device name
+                    // carries the reason so the transcript says which one is in use.
+                    StopCapture();
+
+                    _engine.SetInputToDefaultAudioDevice();
+                    DeviceName = $"the Windows default device, without gain ({captureProblem})";
+                }
+                else
+                {
                     // 16 kHz mono 16-bit: what the desktop recognizer is trained on.
                     // Feeding it 44.1 kHz stereo works but recognises measurably worse,
                     // and the resampling would happen inside the engine anyway.
@@ -305,12 +354,9 @@ public sealed class DictationEngine : IDisposable
                             16000, System.Speech.AudioFormat.AudioBitsPerSample.Sixteen,
                             System.Speech.AudioFormat.AudioChannel.Mono));
 
-                    DeviceName = InputDevices().ElementAtOrDefault(deviceIndex) ?? $"device {deviceIndex}";
-                }
-                else
-                {
-                    _engine.SetInputToDefaultAudioDevice();
-                    DeviceName = "Windows default recording device";
+                    DeviceName = deviceIndex >= 0
+                        ? InputDevices().ElementAtOrDefault(deviceIndex) ?? $"device {deviceIndex}"
+                        : "the Windows default recording device";
                 }
 
                 _engine.SpeechRecognized += OnRecognized;

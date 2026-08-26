@@ -158,9 +158,10 @@ public sealed partial class PillWindow
                 if (peak == 0)
                 {
                     AddRow(GlyphWarning,
-                        "The microphone stayed silent (peak level 0). Windows speech uses "
-                        + "the DEFAULT recording device -- check which one that is under "
-                        + "Settings > System > Sound, and that it is not muted.",
+                        $"The microphone stayed silent (peak level 0) on {_dictation?.DeviceName ?? "the recording device"}. "
+                        + "Check that it is the one you speak into, under Settings > System "
+                        + "> Sound, and that it is not muted. To pick a different one, set "
+                        + "voice.deviceIndex in config.yaml.",
                         "voice");
                 }
                 else if (rejected > 0)

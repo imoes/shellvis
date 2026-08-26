@@ -17,7 +17,7 @@
     and calling this 1.0 would claim a completeness it does not have.
   -->
   <PropertyGroup>
-    <VersionPrefix>0.2.2</VersionPrefix>
+    <VersionPrefix>0.2.3</VersionPrefix>
 
     <Product>Shellvis</Product>
     <Company>Shellvis</Company>

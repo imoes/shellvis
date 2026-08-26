@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Shellvis.Core;
 using Shellvis.Core.Agent;
 using Shellvis.Shell.Agent;
 using Shellvis.Shell.Controls;
@@ -608,7 +609,7 @@ public sealed partial class PillWindow : Window
 
         bool added = _tray.TryAdd(
             icon,
-            "Shellvis - Ctrl+Alt+Space to show, Ctrl+Alt+D to dictate");
+            $"Shellvis {ShellvisVersion.Current} - Ctrl+Alt+Space to show, Ctrl+Alt+D to dictate");
 
         AddRow(
             added ? GlyphTool : GlyphWarning,
@@ -653,7 +654,9 @@ public sealed partial class PillWindow : Window
     /// </summary>
     private void StartSession()
     {
-        AddRow(GlyphSpeaker, ShellvisVoice.Greeting, string.Empty, isAnnouncement: true);
+        // The version rides on the greeting rather than taking a row of its own: it is
+        // wanted for identifying a build, not worth a line of the transcript every start.
+        AddRow(GlyphSpeaker, ShellvisVoice.Greeting, ShellvisVersion.Current, isAnnouncement: true);
         StatusText.Text = "Shellvis is tuning up.";
 
         var gate = new PillApprovalGate(

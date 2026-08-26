@@ -1,0 +1,35 @@
+<Project>
+
+  <!--
+    The version, in one place.
+
+    Every project in the tree picks this up, so the shell, the broker, the installer and
+    the probe all report the same number. Defining it per project is how a build ends up
+    with a shell and a broker that disagree about what they are, and this project has
+    already lost time twice to running against a stale binary: a version that is visible
+    in the console, the tray tooltip and the installer's status turns that from an
+    invisible problem into an obvious one.
+
+    Raise it with every change set. Patch for fixes, minor for new tools or capabilities,
+    and tag the commit vX.Y.Z.
+
+    0.x on purpose: the privileged service is untested, the file tools do not exist yet,
+    and calling this 1.0 would claim a completeness it does not have.
+  -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+
+    <Product>Shellvis</Product>
+    <Company>Shellvis</Company>
+    <Authors>imoes</Authors>
+    <Copyright>Copyright (c) 2026</Copyright>
+
+    <!--
+      The informational version is what the application reads back at runtime, because it
+      survives as written. AssemblyVersion is normalised to four numeric parts, so a
+      pre-release suffix would be silently dropped from it.
+    -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+
+</Project>

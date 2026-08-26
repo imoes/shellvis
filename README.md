@@ -1,5 +1,8 @@
 # Shellvis
 
+[![version](https://img.shields.io/badge/version-0.1.0-blue)](https://github.com/imoes/shellvis/releases)
+[![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
+
 A native Windows AI agent: a floating command bar with a console beneath it, wired to
 PowerShell, the desktop, Office, Outlook, a browser and anything else on the machine.
 
@@ -357,6 +360,20 @@ candidate list rather than a guess.
 ambiguous string costs money exactly like a wrong schema.
 
 ---
+
+## Versioning
+
+The version lives in `Directory.Build.props` and nowhere else, so the shell, the broker,
+the installer and the probe always report the same one. It is read back at runtime from
+the assembly rather than written down twice.
+
+It is shown in three places on purpose: beside the greeting in the console, in the tray
+tooltip, and in `Shellvis.Setup --status`. This project has lost time twice to running
+against a stale binary, and a visible version turns that from an invisible problem into an
+obvious one.
+
+Raise it with every change set -- patch for fixes, minor for new tools or capabilities --
+and tag the commit `vX.Y.Z`. Still 0.x deliberately: see Known limitations.
 
 ## Licence
 

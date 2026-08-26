@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Diagnostics;
 using System.Security.AccessControl;
 using System.Security.Principal;
@@ -394,6 +395,7 @@ public sealed class Installer(Action<string> log)
     {
         var sb = new StringBuilder();
 
+        sb.AppendLine($"Shellvis {OwnVersion()}");
         sb.AppendLine($"elevated: {IsElevated()}");
 
         foreach (InstallMode mode in (InstallMode[])[InstallMode.User, InstallMode.Service])
@@ -493,6 +495,27 @@ public sealed class Installer(Action<string> log)
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// This installer's own version.
+    ///
+    /// Read from its own assembly rather than from Shellvis.Core, deliberately. The number
+    /// comes from the same Directory.Build.props either way, and referencing Core for one
+    /// string would pull the PowerShell SDK, FlaUI and everything else into what is meant
+    /// to be a single-file installer.
+    /// </summary>
+    private static string OwnVersion()
+    {
+        string? informational = typeof(Installer).Assembly
+            .GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion;
+
+        if (informational is not { Length: > 0 })
+            return "unknown";
+
+        int plus = informational.IndexOf('+');
+        return plus > 0 ? informational[..plus] : informational;
     }
 
     public static bool IsElevated()

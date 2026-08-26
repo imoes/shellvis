@@ -89,6 +89,35 @@ internal static class StreamedAudioProbe
                 "and hears at least one of the same words");
 
             Console.WriteLine();
+            Console.WriteLine("-- and when the microphone is too quiet --");
+
+            // The user's actual condition, reproduced: a headset that reads about 40 out of
+            // 100 instead of filling the range. Attenuating to a tenth is roughly that, and
+            // it is the case a wave-file test can never reach, because a file is as loud as
+            // whoever recorded it.
+            byte[] quiet = Attenuate(File.ReadAllBytes(wav)[44..], 0.1);
+
+            string withoutGain = Recognise(recognizer, quiet, gain: false);
+            Console.WriteLine($"    quiet audio, no gain:      \"{withoutGain}\"");
+
+            string withGain = Recognise(recognizer, quiet, gain: true);
+            Console.WriteLine($"    quiet audio, with gain:    \"{withGain}\"");
+
+            failures += Expect(
+                withGain.Length > 0,
+                "quiet speech is recognised once the capture gain is applied");
+
+            // Not asserted the other way round. Whether the recogniser copes with the
+            // attenuated audio unaided depends on the utterance and the machine, and a test
+            // that demands failure would be a test of the recogniser's weakness rather than
+            // of the gain.
+            if (withoutGain.Length > 0)
+            {
+                Console.WriteLine("    (it managed without gain too, so the gain is "
+                    + "headroom rather than the difference here)");
+            }
+
+            Console.WriteLine();
             return Report(failures);
         }
         finally
@@ -191,6 +220,80 @@ internal static class StreamedAudioProbe
 
         Console.WriteLine($"    bridge saw {stream.ReadCalls} read(s), handed over "
             + $"{stream.BytesRead} of {pcm.Length} bytes, {stream.SeekCalls} seek(s)");
+
+        return heard;
+    }
+
+    /// <summary>Scale 16-bit PCM, to stand in for a microphone that is too quiet.</summary>
+    private static byte[] Attenuate(byte[] pcm, double factor)
+    {
+        byte[] copy = (byte[])pcm.Clone();
+
+        for (int at = 0; at + 1 < copy.Length; at += 2)
+        {
+            short sample = (short)(copy[at] | (copy[at + 1] << 8));
+            int scaled = (int)Math.Round(sample * factor);
+
+            copy[at] = (byte)(scaled & 0xFF);
+            copy[at + 1] = (byte)((scaled >> 8) & 0xFF);
+        }
+
+        return copy;
+    }
+
+    /// <summary>
+    /// Push PCM through the bridge and recognise it, optionally through the gain stage.
+    ///
+    /// Both paths use the real classes rather than a copy of what they do, because a test
+    /// against a reimplementation of the thing under test proves only that the two agree.
+    /// </summary>
+    private static string Recognise(RecognizerInfo info, byte[] pcm, bool gain)
+    {
+        using var stream = new Shellvis.Core.Voice.BlockingAudioStream();
+        var boost = new Shellvis.Core.Voice.CaptureGain();
+
+        using var engine = new SpeechRecognitionEngine(info);
+        engine.LoadGrammar(new DictationGrammar());
+        engine.SetInputToAudioStream(stream,
+            new SpeechAudioFormatInfo(16000, AudioBitsPerSample.Sixteen, AudioChannel.Mono));
+
+        var pump = new Thread(() =>
+        {
+            for (int at = 0; at < pcm.Length; at += ChunkBytes)
+            {
+                int take = Math.Min(ChunkBytes, pcm.Length - at);
+
+                // Copied per chunk because the gain scales IN PLACE, exactly as it does on
+                // the capture callback, and the caller's buffer must survive for the second
+                // run.
+                byte[] chunk = new byte[take];
+                Array.Copy(pcm, at, chunk, 0, take);
+
+                if (gain)
+                    boost.Apply(chunk, take);
+
+                stream.Push(chunk);
+                Thread.Sleep(20);
+            }
+
+            for (int i = 0; i < 10; i++)
+            {
+                stream.Push(new byte[ChunkBytes]);
+                Thread.Sleep(20);
+            }
+
+            stream.Finish();
+        })
+        {
+            IsBackground = true,
+        };
+
+        pump.Start();
+        string heard = Drain(engine);
+        pump.Join(TimeSpan.FromSeconds(5));
+
+        if (gain)
+            Console.WriteLine($"    gain settled at {boost.Current:F1}x");
 
         return heard;
     }

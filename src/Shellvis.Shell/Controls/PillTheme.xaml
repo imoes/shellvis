@@ -68,6 +68,14 @@
          a control the user will leave switched on by accident. Top-level rather than in a
          theme dictionary because both variants are needed at once: the chip is picked by
          mode, not by theme. -->
+    <!-- The microphone accent while recording. Distinct from the mode warning: this is a
+         state, not a hazard, and the two must not be read as the same thing. -->
+    <SolidColorBrush x:Key="MicRecordingBrush" Color="#FFE24A4A" />
+
+    <!-- On the taskbar the accent circle is dropped entirely, so the idle brush there is
+         transparent rather than the pill's lilac. -->
+    <SolidColorBrush x:Key="DockedMicIdleBrush" Color="#00000000" />
+
     <SolidColorBrush x:Key="ModeWarnBrush" Color="#FFB3261E" />
     <SolidColorBrush x:Key="ModeWarnBrushDark" Color="#FFFFB4AB" />
 

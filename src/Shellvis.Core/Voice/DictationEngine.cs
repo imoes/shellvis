@@ -170,6 +170,9 @@ public sealed class DictationEngine : IDisposable
     public string? DeviceName { get; private set; }
 
     private NAudio.Wave.WaveInEvent? _waveIn;
+
+    /// <summary>Automatic level correction, reset with each capture session.</summary>
+    private CaptureGain _gain = new();
     private BlockingAudioStream? _capture;
 
     /// <summary>
@@ -191,6 +194,10 @@ public sealed class DictationEngine : IDisposable
 
             _capture = new BlockingAudioStream();
 
+            // A fresh one per session: the gain it settled on for the last microphone at
+            // the last distance is not a useful starting point for this one.
+            _gain = new CaptureGain();
+
             _waveIn = new NAudio.Wave.WaveInEvent
             {
                 DeviceNumber = deviceIndex,
@@ -202,13 +209,20 @@ public sealed class DictationEngine : IDisposable
 
             _waveIn.DataAvailable += (_, e) =>
             {
+                // Amplified in place FIRST, so the recogniser gets the boosted samples and
+                // the meter reports what it actually hears rather than what the device
+                // delivered. A microphone that reads 42 out of 100 is not broken, but it is
+                // quiet enough that recognition suffers, and the device level belongs to the
+                // user and to every other application sharing it.
+                OnLevel(this, _gain.Apply(e.Buffer, e.BytesRecorded));
+
                 _capture?.Push(e.Buffer.AsSpan(0, e.BytesRecorded));
 
                 // The level is computed here rather than taken from the engine: with a
                 // stream input, SpeechRecognitionEngine reports no audio level at all,
                 // so the meter and the "was the microphone silent" diagnosis would both
                 // be blind.
-                ReportPeak(e.Buffer, e.BytesRecorded);
+
             };
 
             _waveIn.RecordingStopped += (_, _) => _capture?.Finish();
@@ -222,28 +236,7 @@ public sealed class DictationEngine : IDisposable
         }
     }
 
-    /// <summary>
-    /// Turn a 16-bit PCM buffer into a 0-100 level.
-    ///
-    /// Peak rather than RMS: the question this answers is "did any sound reach us at
-    /// all", and RMS over a buffer that is mostly silence hides a spoken word.
-    /// </summary>
-    private void ReportPeak(byte[] buffer, int count)
-    {
-        short loudest = 0;
 
-        for (int i = 0; i + 1 < count; i += 2)
-        {
-            short sample = (short)(buffer[i] | (buffer[i + 1] << 8));
-            short magnitude = sample == short.MinValue ? short.MaxValue : Math.Abs(sample);
-
-            if (magnitude > loudest)
-                loudest = magnitude;
-        }
-
-        int level = (int)(loudest / (double)short.MaxValue * 100);
-        OnLevel(this, level);
-    }
 
     private void OnLevel(object? sender, int level)
     {
@@ -529,6 +522,12 @@ public sealed class DictationEngine : IDisposable
     /// while a healthy peak means the engine heard sound and could not parse it.
     /// </summary>
     public int PeakLevel { get; private set; }
+
+    /// <summary>The multiplier the capture gain settled on, for the diagnostic line.</summary>
+    public double Gain => _gain.Current;
+
+    /// <summary>Whether it had to amplify noticeably, which points at the device level.</summary>
+    public bool IsBoosting => _gain.IsBoosting;
 
     /// <summary>How many utterances the engine heard but rejected.</summary>
     public int RejectedCount => Volatile.Read(ref _rejected);

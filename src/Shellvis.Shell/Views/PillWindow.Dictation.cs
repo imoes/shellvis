@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml;
 using Shellvis.Core.Voice;
 
@@ -14,7 +15,7 @@ namespace Shellvis.Shell.Views;
 public sealed partial class PillWindow
 {
     private const string GlyphMic = "\uE720"; // U+E720
-    private const string GlyphMicOff = "\uE74F"; // U+E74F
+
 
     private DictationEngine? _dictation;
 
@@ -80,7 +81,7 @@ public sealed partial class PillWindow
             return;
         }
 
-        MicButton.Content = GlyphMicOff;
+        ShowListening(true);
         StatusText.Text = "Listening... Ctrl+Alt+D or Escape to stop.";
 
         AddRow(GlyphMic,
@@ -131,14 +132,17 @@ public sealed partial class PillWindow
         // A coarse meter in the status line rather than a control of its own: the pill has
         // no room for one, and what the user needs to know is only whether the microphone
         // is hearing anything at all.
-        int bars = Math.Clamp(level / 12, 0, 8);
+        // Eight bars over the useful range, not over the whole scale. Dividing by 12 meant
+        // a healthy level of 60 lit five bars and nothing ever filled the meter, which
+        // reads as a quiet microphone even when the level is fine.
+        int bars = Math.Clamp(level / 8, 0, 8);
 
         StatusText.Text = "Listening " + new string('█', bars).PadRight(8, '░');
     }
 
     private void OnDictationFinished(string text, DictationState state)
     {
-        MicButton.Content = GlyphMic;
+        ShowListening(false);
         StatusText.Text = ShellvisVoice.Standby;
 
         switch (state)
@@ -171,8 +175,11 @@ public sealed partial class PillWindow
                 {
                     AddRow(GlyphWarning,
                         $"Sound arrived (peak {peak}/100) but no words were recognised. "
-                        + "The recognizer's language is "
-                        + $"{_dictation?.Language ?? DictationLanguage()}.",
+                        + $"The recognizer's language is {_dictation?.Language ?? DictationLanguage()}"
+                        + (_dictation?.IsBoosting == true
+                            ? $", and the input had to be amplified {_dictation.Gain:F1}x, so the "
+                              + "recording level of the device is probably too low."
+                            : "."),
                         "voice");
                 }
 
@@ -202,9 +209,37 @@ public sealed partial class PillWindow
 
         _dictation.Cancel();
 
-        MicButton.Content = GlyphMic;
+        ShowListening(false);
         StatusText.Text = ShellvisVoice.Standby;
         AddRow(GlyphWarning, "Dictation cancelled.", "voice");
+    }
+
+    /// <summary>
+    /// Show whether the microphone is open.
+    ///
+    /// The glyph stays a MICROPHONE either way, and the state is carried by the accent
+    /// behind it. Swapping in U+E74F while listening was worse than no indicator: that
+    /// codepoint is Mute, a speaker with a cross, which says something about audio OUTPUT
+    /// and reads as "your sound is off" on a button that is recording. Segoe Fluent Icons
+    /// has no microphone-off glyph whose codepoint I could confirm, and guessing one would
+    /// have risked shipping an empty box, which is how the icon disappeared in the first
+    /// place.
+    ///
+    /// Colour is not the only signal: the status line says "Listening" with a level meter
+    /// beside it, and the tooltip changes. Colour alone would be the mistake -- it is
+    /// already spoken for by severity in the transcript.
+    /// </summary>
+    private void ShowListening(bool listening)
+    {
+        MicButton.Content = GlyphMic;
+
+        MicBackdrop.Background = listening
+            ? Brush("MicRecordingBrush")
+            : Brush(_docked ? "DockedMicIdleBrush" : "MicButtonBrush");
+
+        MicButton.SetValue(
+            ToolTipService.ToolTipProperty,
+            listening ? "Stop dictating (Ctrl+Alt+D)" : "Dictate (Ctrl+Alt+D)");
     }
 
     private void OpenConsoleIfShut()

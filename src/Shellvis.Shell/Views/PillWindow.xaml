@@ -226,19 +226,26 @@
                          purpose: at 460 DIP another chip would leave the input field too
                          narrow to type in, and changing model is a rare act while the
                          permission mode has to be legible at all times. -->
+                    <!-- Bordered, with a chevron, because the first version was not
+                         recognisable as a control. It showed the model name in muted text
+                         with no border and no affordance, top left of the panel, where it
+                         reads as a caption, and the report was that there was no way to
+                         configure the model at all. A control has to look like one: the
+                         outline and the caret are the same pair the mode chip on the bar
+                         uses, and that one was understood. -->
                     <Button x:Name="ModelButton"
                             Grid.Column="0"
-                            Padding="0"
+                            Padding="7,2,6,2"
                             MinWidth="0"
                             MinHeight="0"
                             Background="Transparent"
-                            BorderThickness="0"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource ConsoleMutedBrush}"
+                            CornerRadius="9"
                             FontSize="11"
-                            FontWeight="SemiBold"
                             VerticalAlignment="Center"
                             Foreground="{ThemeResource ConsoleMutedBrush}"
-                            Content="Console"
-                            ToolTipService.ToolTip="Change the model" />
+                            ToolTipService.ToolTip="Choose and configure the model" />
 
                     <TextBlock x:Name="StatusText"
                                Grid.Column="1"

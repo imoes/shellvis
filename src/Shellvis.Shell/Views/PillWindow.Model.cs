@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Shellvis.Core.Providers;
@@ -165,6 +166,41 @@ public sealed partial class PillWindow
         if (model.Length > 22)
             model = "..." + model[^19..];
 
-        ModelButton.Content = $"{_session.Provider.Id} / {model}";
+        SetModelButtonText($"{_session.Provider.Id} / {model}");
+    }
+
+    /// <summary>
+    /// Put text on the model button, followed by a chevron.
+    ///
+    /// A panel rather than a string, because the caret has to come from Segoe Fluent Icons
+    /// while the label is proportional text, and a single Content string can only have one
+    /// font. The caret is the part that says "this opens something": without it the button
+    /// was read as a caption and the model looked unconfigurable.
+    /// </summary>
+    private void SetModelButtonText(string text)
+    {
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 5,
+        };
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = text,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        panel.Children.Add(new TextBlock
+        {
+            Text = "",
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+            FontSize = 8,
+            Opacity = 0.9,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        ModelButton.Content = panel;
     }
 }

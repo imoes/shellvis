@@ -34,7 +34,7 @@ public sealed partial class PillWindow
         // says so instead. Switching back restores the model rather than a fixed word,
         // because that slot is also the model picker.
         if (_historyVisible)
-            ModelButton.Content = "History";
+            SetModelButtonText("History");
         else
             RefreshModelLabel();
 

@@ -38,6 +38,9 @@ internal static class Program
                 "endpoint" => EndpointProbe.Run(),
                 "audiobridge" => StreamedAudioProbe.Run(),
 
+                // When the bar steps out of the way of the foreground window.
+                "topmost" => TopmostProbe.Run(),
+
                 // Which microphone Windows actually hands over, and what it hears. Needed
                 // because "the default recording device" is two different devices in Windows.
                 "mic" => MicrophoneProbe.Run(
@@ -87,7 +90,7 @@ internal static class Program
     private static int Usage()
     {
         Console.WriteLine(
-            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | whisper [--fetch] | stream | officelive]");
+            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | whisper [--fetch] | mic | topmost | stream | officelive]");
         return 2;
     }
 

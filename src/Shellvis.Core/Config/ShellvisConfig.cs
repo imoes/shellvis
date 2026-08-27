@@ -200,6 +200,27 @@ public sealed class HookSection
 /// <summary>
 /// Dictation settings.
 /// </summary>
+/// <summary>How the floating bar behaves towards other windows.</summary>
+public sealed class WindowSection
+{
+    /// <summary>
+    /// Processes the bar steps behind while they are in the foreground, even in a window.
+    ///
+    /// The bar already yields to anything that covers a whole monitor and to anything Windows
+    /// reports as a presentation or a full-screen application -- those are properties that can
+    /// be measured. A remote desktop client in a WINDOW has neither: it is not full-screen and
+    /// reports nothing unusual, yet it captures the keyboard, so the bar floating over it is
+    /// both in the way and unusable.
+    ///
+    /// A list is the weak part of this and it is deliberately here rather than compiled in, so
+    /// a client this does not know about can be added without a build. Defaults cover the
+    /// Microsoft clients: mstsc is the classic Remote Desktop Connection, msrdc and
+    /// msrdcw the newer ones, CmRcViewer is Configuration Manager's remote control.
+    /// </summary>
+    public string[]? YieldTo { get; set; } =
+        ["mstsc", "msrdc", "msrdcw", "CmRcViewer", "vmconnect"];
+}
+
 public sealed class VoiceSection
 {
     /// <summary>
@@ -304,6 +325,8 @@ public sealed class ShellvisConfig
 
     /// <summary>Dictation settings.</summary>
     public VoiceSection Voice { get; set; } = new();
+
+    public WindowSection Window { get; set; } = new();
 
     /// <summary>
     /// Hooks, keyed by event name, each holding a list of commands.

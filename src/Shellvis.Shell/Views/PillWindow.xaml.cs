@@ -536,6 +536,7 @@ public sealed partial class PillWindow : Window
         PromptBox.Focus(FocusState.Programmatic);
         RegisterHotkey();
         RegisterHoldToTalk();
+        RegisterTopmostYield();
 
         // Warmed here rather than on the first key press. The model takes about a second and a
         // half to load, and paying that at the moment someone holds the space bar means the

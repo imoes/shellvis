@@ -13,6 +13,13 @@
     <WinUISDKReferences>false</WinUISDKReferences>
     <EnableMsixTooling>true</EnableMsixTooling>
     <WindowsPackageType>None</WindowsPackageType>
+
+    <!--
+      Puts the icon into the executable's resources. Without it the exe carried the default
+      .NET icon, and because the installer takes its icon FROM the exe, so did the entry in
+      Programs and Features.
+    -->
+    <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -27,6 +34,12 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\Square44x44Logo.targetsize-48_altform-lightunplated.png" />
     <Content Include="Assets\StoreLogo.png" />
+    <!--
+      Shipped as content because the notification area loads it from disk with LoadImage,
+      and declared as the ApplicationIcon below so the executable carries it too. Both are
+      needed: the tray reads the file, while the taskbar, Alt+Tab and the installer read the
+      icon resource inside the .exe.
+    -->
     <Content Include="Assets\AppIcon.ico" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
   </ItemGroup>

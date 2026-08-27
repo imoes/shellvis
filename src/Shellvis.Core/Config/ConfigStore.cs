@@ -368,6 +368,15 @@ public static class ConfigStore
         # when the machine has several microphones and the default is not the one you
         # speak into -- that is the usual reason dictation hears nothing. The transcript
         # lists the devices with their indices the first time you use the microphone.
+        # The bar floats above other windows, but steps behind anything that has taken over
+        # the screen: a window covering a whole monitor, or one Windows reports as a
+        # presentation or a full-screen application. Those are measurable. A remote desktop
+        # client in a WINDOW is neither, yet it captures the keyboard, so it is named instead.
+        # Add your own remote or kiosk clients here.
+        #
+        # window:
+        #   yieldTo: [mstsc, msrdc, msrdcw, CmRcViewer, vmconnect]
+
         voice:
           deviceIndex: -1
           # language: de-DE     # empty follows the Windows display language

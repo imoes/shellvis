@@ -59,12 +59,26 @@ internal static class PillMetrics
     public const double DockedHeight = 34;
 
     /// <summary>
+    /// Size of a button on the docked bar.
+    ///
+    /// 26 rather than the pill's 36: the bar is 34 tall, so a 36px button would not fit
+    /// inside it at all. Matches the microphone, which is already shrunk to the same size.
+    /// </summary>
+    public const double DockedButton = 26;
+
+    /// <summary>
     /// Width of the docked bar.
     ///
-    /// Narrower than the pill, because the docked mode drops four of the six buttons and
-    /// a 460px bar next to the taskbar's own search field looks like a mistake.
+    /// Narrower than the pill, because the docked mode drops three of the six buttons and a
+    /// pill-width bar next to the taskbar's own search field looks like a mistake.
+    ///
+    /// The console toggle's footprint is ADDED rather than taken out of the field: the bar
+    /// grew by exactly one button when the console toggle was put back on it, so the input
+    /// field is the same size docked as it was before. Squeezing the field instead would
+    /// have been invisible in the code and obvious in use -- the field is the reason the
+    /// docked bar exists.
     /// </summary>
-    public const double DockedWidth = 320;
+    public const double DockedWidth = 320 + DockedButton + 2;
 
     /// <summary>Half of <see cref="DockedHeight"/>, so the docked bar is a stadium too.</summary>
     public const double DockedRadius = DockedHeight / 2;

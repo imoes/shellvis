@@ -59,3 +59,11 @@ TranslateMessage
 DispatchMessage
 MSG
 WM_QUIT
+SHQueryUserNotificationState
+QUERY_USER_NOTIFICATION_STATE
+MonitorFromWindow
+MONITOR_FROM_FLAGS
+GetMonitorInfo
+MONITORINFO
+GetWindowThreadProcessId
+GetWindowRect

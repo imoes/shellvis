@@ -54,12 +54,15 @@ public sealed partial class PillWindow
         _docked = true;
 
         // The buttons that have no room in a 34px bar. The prompt box and the microphone
-        // stay, because dictating into a docked field is the main reason to have one.
+        // stay, because dictating into a docked field is the main reason to have one -- and
+        // so does the console toggle: a docked bar is the state in which output is least
+        // visible, so being able to open the console from it matters more here than when the
+        // pill is floating with its full row of controls.
         AttachButton.Visibility = Visibility.Collapsed;
         HistoryButton.Visibility = Visibility.Collapsed;
-        ConsoleToggleButton.Visibility = Visibility.Collapsed;
         ModeButton.Visibility = Visibility.Collapsed;
         SparkleButton.Visibility = Visibility.Collapsed;
+        ConsoleToggleButton.Visibility = Visibility.Visible;
         ExpandButton.Visibility = Visibility.Visible;
 
         PillHost.Height = PillMetrics.DockedHeight;
@@ -99,6 +102,10 @@ public sealed partial class PillWindow
             MicButton.Foreground = Brush("PillGlyphBrush");
             ExpandButton.Foreground = Brush("PillGlyphBrush");
 
+            ConsoleToggleButton.Width = 36;
+            ConsoleToggleButton.Height = 36;
+            ConsoleToggleButton.Foreground = Brush("PillGlyphBrush");
+
             return;
         }
 
@@ -131,6 +138,12 @@ public sealed partial class PillWindow
         MicBackdrop.Height = 26;
         MicButton.Foreground = Brush("DockedGlyph" + suffix);
         ExpandButton.Foreground = Brush("DockedGlyph" + suffix);
+
+        // Shrunk to fit the strip, like the microphone beside it. Left at 36 it would be
+        // taller than the 34px bar that contains it.
+        ConsoleToggleButton.Width = PillMetrics.DockedButton;
+        ConsoleToggleButton.Height = PillMetrics.DockedButton;
+        ConsoleToggleButton.Foreground = Brush("DockedGlyph" + suffix);
     }
 
     private static Brush Brush(string key) =>

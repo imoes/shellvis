@@ -1,7 +1,8 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.2.6-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.2.7-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
+[![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 
 A native Windows AI agent: a floating command bar with a console beneath it, wired to
 PowerShell, the desktop, Office, Outlook, a browser and anything else on the machine.
@@ -198,13 +199,13 @@ feature tree, or from the command line:
 
 ```powershell
 # Everything, including the service. From an elevated prompt.
-msiexec /i Shellvis-0.2.0-machine.msi ADDLOCAL=Application,BrokerService
+msiexec /i Shellvis-0.2.7-machine.msi ADDLOCAL=Application,BrokerService
 
 # Application only, service left out.
-msiexec /i Shellvis-0.2.0-machine.msi ADDLOCAL=Application
+msiexec /i Shellvis-0.2.7-machine.msi ADDLOCAL=Application
 
 # Silent, with a log worth reading if it goes wrong.
-msiexec /i Shellvis-0.2.0-user.msi /qn /l*v install.log
+msiexec /i Shellvis-0.2.7-user.msi /qn /l*v install.log
 ```
 
 The packages contain no custom actions. The one thing that would have needed native code is
@@ -224,13 +225,13 @@ foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','
     dotnet publish $p -c Release -r win-x64 --self-contained false -o artifacts/stage
 }
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.0 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.7 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext -d PerUser=1 `
-    -o artifacts/Shellvis-0.2.0-user.msi
+    -o artifacts/Shellvis-0.2.7-user.msi
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.0 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.7 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
-    -o artifacts/Shellvis-0.2.0-machine.msi
+    -o artifacts/Shellvis-0.2.7-machine.msi
 ```
 
 **WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee

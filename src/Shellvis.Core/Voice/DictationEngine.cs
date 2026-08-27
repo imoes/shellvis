@@ -197,7 +197,7 @@ public sealed class DictationEngine : IDisposable
     private BlockingAudioStream? _capture;
 
     /// <summary>The Whisper model in use this session, or null for the Windows engine.</summary>
-    private WhisperRecognizer? _whisper;
+    private ITranscriber? _whisper;
 
     /// <summary>
     /// The utterance being collected for Whisper.
@@ -343,7 +343,7 @@ public sealed class DictationEngine : IDisposable
     /// dictation works on a machine that has no Windows speech language installed, the case
     /// the old path had to refuse outright.
     /// </param>
-    public string? Start(string? language = null, int deviceIndex = -1, WhisperRecognizer? whisper = null)
+    public string? Start(string? language = null, int deviceIndex = -1, ITranscriber? whisper = null)
     {
         if (whisper is { IsLoaded: true })
             return StartWithWhisper(language, deviceIndex, whisper);
@@ -493,7 +493,7 @@ public sealed class DictationEngine : IDisposable
     /// could not do and why it turned "Welche Termine liegen diese Woche an" into
     /// something else.
     /// </summary>
-    private string? StartWithWhisper(string? language, int deviceIndex, WhisperRecognizer whisper)
+    private string? StartWithWhisper(string? language, int deviceIndex, ITranscriber whisper)
     {
         lock (_gate)
         {
@@ -550,10 +550,16 @@ public sealed class DictationEngine : IDisposable
     }
 
     /// <summary>Which recogniser this session is using, for the transcript.</summary>
-    public string RecognizerName =>
-        _whisper?.LoadedModel is { Length: > 0 } model
-            ? $"Whisper ({model})"
-            : "the Windows speech recognizer";
+    public string RecognizerName => _whisper?.Description ?? "the Windows speech recognizer";
+
+    /// <summary>
+    /// Whether this session sends the recording off the machine.
+    ///
+    /// Read by the UI to choose what it says. The sentence "recognition runs on this machine"
+    /// was printed unconditionally before there was anything that could make it false, and a
+    /// promise that is only true by accident is the kind that gets broken silently.
+    /// </summary>
+    public bool IsRemote => _whisper?.IsRemote == true;
 
     /// <summary>
     /// Stop listening and report what was heard.
@@ -562,7 +568,7 @@ public sealed class DictationEngine : IDisposable
     public string Stop(bool quiet = false)
     {
         SpeechRecognitionEngine? engine;
-        WhisperRecognizer? whisper;
+        ITranscriber? whisper;
         MemoryStream? utterance;
         bool wasListening;
         string text;
@@ -666,7 +672,7 @@ public sealed class DictationEngine : IDisposable
     /// <summary>
     /// Hand the recording to Whisper and report the result through the usual events.
     /// </summary>
-    private async Task TranscribeAsync(WhisperRecognizer whisper, MemoryStream? utterance)
+    private async Task TranscribeAsync(ITranscriber whisper, MemoryStream? utterance)
     {
         byte[] pcm;
 

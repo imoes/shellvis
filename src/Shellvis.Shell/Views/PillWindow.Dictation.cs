@@ -103,10 +103,14 @@ public sealed partial class PillWindow
         ShowListening(true);
         StatusText.Text = "Listening... Ctrl+Alt+D or Escape to stop.";
 
-        AddRow(GlyphMic,
+        // The second sentence is conditional now, and that is the point: it used to be
+        // printed unconditionally because nothing could make it false. A hosted recogniser can.
+        AddRow(_dictation.IsRemote ? GlyphWarning : GlyphMic,
             $"Listening ({_dictation.Language}) on {_dictation.DeviceName} with "
             + $"{_dictation.RecognizerName}. "
-            + "Nothing is sent anywhere; recognition runs on this machine.",
+            + (_dictation.IsRemote
+                ? "The recording will be SENT to that service."
+                : "Nothing is sent anywhere; recognition runs on this machine."),
             "voice");
 
         OpenConsoleIfShut();

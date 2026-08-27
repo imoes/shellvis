@@ -260,6 +260,15 @@ public sealed class VoiceSection
     /// defer to that rather than overrule it with a built-in guess.
     /// </remarks>
     public string? WhisperModel { get; set; }
+
+    /// <summary>
+    /// The Azure region a speech key belongs to, e.g. westeurope.
+    ///
+    /// Needed because Azure's speech endpoint is per-region with no global address, so the
+    /// wrong region is a connection failure rather than an authentication one -- which reads
+    /// like an outage instead of a typo. Ignored by every other provider.
+    /// </summary>
+    public string? AzureRegion { get; set; }
 }
 
 /// <summary>

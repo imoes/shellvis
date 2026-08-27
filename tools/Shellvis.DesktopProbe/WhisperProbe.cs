@@ -22,7 +22,13 @@ namespace Shellvis.DesktopProbe;
 /// </summary>
 internal static class WhisperProbe
 {
-    public static async Task<int> RunAsync(bool fetch)
+    /// <param name="wanted">
+    /// A model name to work with, or null for the configured one. Named on the command line so
+    /// a specific model can be installed without editing the configuration first, which was
+    /// the alternative and is a worse idea: it changes what the application uses in order to
+    /// download something.
+    /// </param>
+    public static async Task<int> RunAsync(bool fetch, string? wanted = null)
     {
         int failures = 0;
 
@@ -30,7 +36,9 @@ internal static class WhisperProbe
         failures += ResolutionChecks();
         failures += PresenceChecks();
 
-        WhisperModel model = WhisperModelStore.Configured(null, out _);
+        WhisperModel model = wanted is { Length: > 0 }
+            ? WhisperModelStore.Resolve(wanted, out _)
+            : WhisperModelStore.Configured(null, out _);
 
         if (!WhisperModelStore.IsPresent(model) && fetch)
         {

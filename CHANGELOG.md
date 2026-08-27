@@ -4,6 +4,16 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.2.8
+
+- **Hosted speech recognition as an option.** `voice.engine: azure` or `voice.engine: google`
+  recognises through that service — more accurate than the largest local model and faster than
+  the smallest. **This is the one place where audio leaves the machine**, it is never reached
+  by the default `auto`, and while it is in use the console says so at the start of every
+  dictation. Keys go in the DPAPI secret store or in `AZURE_SPEECH_KEY` / `GOOGLE_SPEECH_KEY`,
+  never in `config.yaml`. The README's previous claim that no cloud path exists in the code has
+  been corrected rather than quietly left standing.
+
 ## 0.2.7
 
 - **Shellvis steps out of the way of full-screen and remote sessions.** It still floats above

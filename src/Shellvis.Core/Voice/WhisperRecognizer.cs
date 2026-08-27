@@ -24,7 +24,7 @@ namespace Shellvis.Core.Voice;
 /// driven over a pipe, which is why Playwright was rejected for the browser tools. Nothing
 /// new runs, and nothing leaves the machine.
 /// </summary>
-public sealed class WhisperRecognizer : IDisposable
+public sealed class WhisperRecognizer : ITranscriber
 {
     private readonly object _gate = new();
 
@@ -34,6 +34,12 @@ public sealed class WhisperRecognizer : IDisposable
 
     /// <summary>Which model file is loaded, for the transcript.</summary>
     public string? LoadedModel { get; private set; }
+
+    /// <summary>Never: this is the whole point of the local model.</summary>
+    public bool IsRemote => false;
+
+    public string Description =>
+        LoadedModel is { Length: > 0 } model ? $"Whisper ({model})" : "Whisper";
 
     /// <summary>
     /// Words this application's users say that a general model has no reason to expect.
@@ -102,6 +108,17 @@ public sealed class WhisperRecognizer : IDisposable
                 return _factory is not null;
         }
     }
+
+    /// <summary>
+    /// The interface method, forwarding to the overload that also takes an encoder window.
+    ///
+    /// Explicit because the public method carries a fourth, optional parameter for the harness,
+    /// and an extra optional parameter does not satisfy an interface member -- the signatures
+    /// have to match exactly.
+    /// </summary>
+    Task<WhisperResult> ITranscriber.TranscribeAsync(
+        ReadOnlyMemory<byte> pcm, string? language, CancellationToken cancel) =>
+        TranscribeAsync(pcm, language, cancel);
 
     /// <summary>
     /// Transcribe 16 kHz mono 16-bit PCM.

@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.2.7-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.2.8-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 
@@ -55,8 +55,8 @@ agent itself: after a turn that used tools, one extra tool-less model call asks 
 anything was learned worth keeping, and Shellvis writes it. Sessions persist to SQLite with
 full-text search and survive being killed.
 
-**Speaks and listens.** Push-to-talk dictation with on-device recognition — no cloud path
-exists in the code. Recognition uses a local **Whisper** model, because the recogniser built
+**Speaks and listens.** Push-to-talk dictation, on-device by default. Recognition uses a local
+**Whisper** model, because the recogniser built
 into Windows is not good enough to dictate with: on this machine it turned *"Welche Termine
 liegen diese Woche an"* into *"Dänische Termine legen diese Woche an"*, while Whisper returns
 it verbatim. Windows does expose a much better DNN engine, but only to WinRT, whose
@@ -71,6 +71,18 @@ exceeds GitHub's 100 MB asset limit. Until a model is present, dictation falls b
 Windows engine rather than being unavailable, and the console says which one it is using.
 Change it later with `voice.whisperModel` in `config.yaml`, or switch Whisper off entirely
 with `voice.engine: sapi`.
+
+**Hosted recognition, if you want it.** `voice.engine: azure` or `voice.engine: google` sends
+each recording to that service instead. Both are more accurate than the largest local model
+and faster than the smallest, which is a combination no local model offers today: `medium`
+measured 11.5 seconds for three seconds of speech on this machine against `small`'s 3.8.
+
+**This is the one place where audio leaves the machine, and it is off by default.** `auto`
+never reaches it — a hosted provider has to be named explicitly, and a key has to be present.
+When one is in use the console says so when it is picked up and again at the start of every
+dictation, and the sentence "recognition runs on this machine" is not printed. Keys live in
+the DPAPI secret store or in `AZURE_SPEECH_KEY` / `GOOGLE_SPEECH_KEY`, never in `config.yaml`.
+Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 
 ### 76 tools
 
@@ -199,13 +211,13 @@ feature tree, or from the command line:
 
 ```powershell
 # Everything, including the service. From an elevated prompt.
-msiexec /i Shellvis-0.2.7-machine.msi ADDLOCAL=Application,BrokerService
+msiexec /i Shellvis-0.2.8-machine.msi ADDLOCAL=Application,BrokerService
 
 # Application only, service left out.
-msiexec /i Shellvis-0.2.7-machine.msi ADDLOCAL=Application
+msiexec /i Shellvis-0.2.8-machine.msi ADDLOCAL=Application
 
 # Silent, with a log worth reading if it goes wrong.
-msiexec /i Shellvis-0.2.7-user.msi /qn /l*v install.log
+msiexec /i Shellvis-0.2.8-user.msi /qn /l*v install.log
 ```
 
 The packages contain no custom actions. The one thing that would have needed native code is
@@ -225,13 +237,13 @@ foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','
     dotnet publish $p -c Release -r win-x64 --self-contained false -o artifacts/stage
 }
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.7 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.8 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext -d PerUser=1 `
-    -o artifacts/Shellvis-0.2.7-user.msi
+    -o artifacts/Shellvis-0.2.8-user.msi
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.7 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.8 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
-    -o artifacts/Shellvis-0.2.7-machine.msi
+    -o artifacts/Shellvis-0.2.8-machine.msi
 ```
 
 **WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee

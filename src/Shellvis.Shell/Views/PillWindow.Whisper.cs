@@ -12,7 +12,7 @@ namespace Shellvis.Shell.Views;
 /// </summary>
 public sealed partial class PillWindow
 {
-    private WhisperRecognizer? _whisper;
+    private Shellvis.Core.Voice.ITranscriber? _whisper;
 
     /// <summary>Set once, so a failed load is not retried on every key press.</summary>
     private bool _whisperSettled;
@@ -38,6 +38,17 @@ public sealed partial class PillWindow
         if (engine.Equals("sapi", StringComparison.OrdinalIgnoreCase))
         {
             _whisperSettled = true;
+            return;
+        }
+
+        // A hosted service, if one is asked for by name. Never reached by "auto": sending a
+        // recording off the machine is not something to arrive at by default, so it takes the
+        // user naming the provider in the config.
+        if (CloudTranscriber.ServiceFor(engine) is { } service)
+        {
+            _whisperSettled = true;
+            UseCloud(service, config);
+
             return;
         }
 
@@ -118,16 +129,68 @@ public sealed partial class PillWindow
     }
 
     /// <summary>
+    /// Use a hosted recogniser, and say so plainly.
+    ///
+    /// The announcement is not decoration. Every earlier version of this application printed
+    /// "recognition runs on this machine" at the start of every dictation, and the README
+    /// promised that no cloud path existed in the code. Both are now conditional, so the
+    /// condition has to be visible at the moment it applies -- once in the console when the
+    /// provider is picked up, and again in the line that opens every dictation.
+    /// </summary>
+    private void UseCloud(CloudTranscriber.Service service, ShellvisConfig config)
+    {
+        // The environment wins over the stored key, the same order the model providers use:
+        // someone who exported a key for their whole shell expects that to be what is used.
+        string? key = Environment.GetEnvironmentVariable(
+            CloudTranscriber.EnvironmentVariableFor(service));
+
+        key ??= SecretStore.Get(CloudTranscriber.SecretNameFor(service));
+
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            AddRow(GlyphWarning,
+                $"voice.engine is set to {service.ToString().ToLowerInvariant()} but no API key "
+                + $"is stored. Set {CloudTranscriber.EnvironmentVariableFor(service)} in the "
+                + "environment, or put the key in the secret store. Dictation continues locally.",
+                "voice");
+
+            // Deliberately falls back rather than refusing. The user asked for the cloud, but a
+            // missing key is a setup step, not a decision to stop dictating.
+            LoadLocal(config);
+
+            return;
+        }
+
+        var cloud = new CloudTranscriber(service, key, config.Voice.AzureRegion ?? string.Empty);
+        _whisper = cloud;
+
+        AddRow(GlyphWarning,
+            $"Dictation now uses {cloud.Description}. Recordings are SENT TO THAT SERVICE and "
+            + "no longer stay on this machine. Set voice.engine back to auto to keep them local.",
+            "voice", isAnnouncement: true);
+
+        OpenConsoleIfShut();
+    }
+
+    /// <summary>Fall back to the local path when a cloud provider cannot be used.</summary>
+    private void LoadLocal(ShellvisConfig config)
+    {
+        WhisperModel model = WhisperModelStore.Configured(config.Voice.WhisperModel, out _);
+
+        if (WhisperModelStore.IsPresent(model))
+            Load(model);
+    }
+
+    /// <summary>
     /// Load the model off the UI thread.
     ///
-    /// Off-thread because it is slow in a way that was measured, not assumed: whisper.cpp
-    /// reads the whole file and allocates its context, which for the small model is about
-    /// 1.5 seconds. Doing that inline froze the pill for 1.8 seconds on the first dictation --
-    /// and worse, it broke the hold-to-talk gesture outright. A low-level keyboard hook is
-    /// called on the thread that installed it, so while the UI thread is blocked Windows
-    /// cannot call the hook and delivers the keystroke normally: spaces leaked into the prompt
-    /// box for exactly as long as the load took. One blocking call, two unrelated-looking
-    /// symptoms.
+    /// Off-thread because it is slow in a way that was measured, not assumed: whisper.cpp reads
+    /// the whole file and allocates its context, which for the small model is about 1.5 seconds
+    /// and for the large one four. Doing that inline froze the pill on the first dictation --
+    /// and worse, it broke hold-to-talk outright. A low-level keyboard hook is called on the
+    /// thread that installed it, so while the UI thread was blocked Windows could not call the
+    /// hook and delivered the keystroke normally: spaces leaked into the prompt box for exactly
+    /// as long as the load took. One blocking call, two unrelated-looking symptoms.
     /// </summary>
     private void Load(WhisperModel model)
     {

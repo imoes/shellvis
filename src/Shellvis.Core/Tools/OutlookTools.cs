@@ -177,25 +177,21 @@ public sealed class OutlookTools(ComApartment apartment)
         if (!OutlookClient.IsAvailable)
             return Unavailable;
 
-        DateTime start = ParseDate(from) ?? DateTime.Today;
-        DateTime end = ParseDate(to) ?? start.AddDays(7);
-
-        if (end < start)
-            (start, end) = (end, start);
+        (DateTime start, DateTime lastDay, DateTime endExclusive) = ResolveRange(from, to);
 
         try
         {
             IReadOnlyList<AppointmentSummary> appointments = await _outlook
-                .ListAppointmentsAsync(start, end, cancellationToken)
+                .ListAppointmentsAsync(start, endExclusive, cancellationToken)
                 .ConfigureAwait(false);
 
             if (appointments.Count == 0)
-                return $"no appointments between {start:yyyy-MM-dd} and {end:yyyy-MM-dd}.";
+                return $"no appointments between {start:yyyy-MM-dd} and {lastDay:yyyy-MM-dd}.";
 
             var sb = new StringBuilder();
             sb.Append(appointments.Count).Append(" appointment(s) from ")
               .Append(start.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
-              .Append(" to ").Append(end.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
+              .Append(" to ").Append(lastDay.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))
               .AppendLine(":");
 
             foreach (AppointmentSummary appointment in appointments)
@@ -271,6 +267,63 @@ public sealed class OutlookTools(ComApartment apartment)
 
         return $"error: Outlook automation failed: {message}";
     }
+
+    /// <summary>
+    /// Turn the requested dates into the half-open range Outlook has to be asked for.
+    /// </summary>
+    /// <returns>
+    /// The first instant included, the last DAY included (for the wording of the answer), and
+    /// the first instant excluded (for the filter).
+    /// </returns>
+    /// <remarks>
+    /// <b>Why the end has to be pushed out by a day.</b> A date with no time means midnight,
+    /// and Outlook is asked for appointments that overlap [from, to). So "today to today"
+    /// resolved to a range of zero length and matched nothing -- "welche Termine liegen heute
+    /// an" answered "no appointments" on a day with a meeting at 11:00, every single time.
+    /// The same arithmetic silently dropped the last day of every multi-day range.
+    ///
+    /// A date names a whole day, so the day after it is the first instant that is genuinely
+    /// outside. The reported range keeps naming the last INCLUDED day, because "no appointments
+    /// between 27 and 28 August" would be a different and wrong statement about what was
+    /// searched.
+    ///
+    /// A time given explicitly is honoured as an instant rather than widened, which is what
+    /// makes "from 14:00 to 16:00" answerable at all.
+    ///
+    /// Public and pure so it can be tested without Outlook running: the defect was in this
+    /// arithmetic, not in the COM call, and a harness that needs a live calendar with a known
+    /// appointment in it cannot check arithmetic.
+    /// </remarks>
+    public static (DateTime Start, DateTime LastDay, DateTime EndExclusive) ResolveRange(
+        string? from, string? to)
+    {
+        DateTime start = ParseDate(from) ?? DateTime.Today;
+        bool startHasTime = HasTime(from);
+
+        DateTime end = ParseDate(to) ?? start.Date.AddDays(6);
+        bool endHasTime = HasTime(to);
+
+        if (end < start)
+        {
+            (start, end) = (end, start);
+            (startHasTime, endHasTime) = (endHasTime, startHasTime);
+        }
+
+        // A start given as a bare date means from the beginning of that day, which is what
+        // midnight already is -- nothing to do. The end is the half that needs widening.
+        DateTime endExclusive = endHasTime ? end : end.Date.AddDays(1);
+
+        return (start, endHasTime ? end : end.Date, endExclusive);
+    }
+
+    /// <summary>
+    /// Whether the caller named a time of day, rather than just a date.
+    ///
+    /// Decided on the text, not on the parsed value: midnight is a perfectly valid time to
+    /// ask for, and a parsed DateTime cannot tell "2026-08-27" from "2026-08-27 00:00".
+    /// </summary>
+    private static bool HasTime(string? value) =>
+        value is { Length: > 0 } && (value.Contains(':') || value.Contains('T'));
 
     private static DateTime? ParseDate(string? value)
     {

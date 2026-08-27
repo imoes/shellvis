@@ -1,3 +1,4 @@
+using System.Globalization;
 using Shellvis.Core.Office;
 using Shellvis.Core.Tools;
 
@@ -22,18 +23,99 @@ namespace Shellvis.DesktopProbe;
 /// </summary>
 internal static class OutlookProbe
 {
+    /// <summary>
+    /// The date arithmetic behind calendar_list, checked without Outlook.
+    ///
+    /// This exists because "welche Termine liegen heute an" answered "no appointments" on a
+    /// day that had a meeting at 11:00. Nothing was wrong with the COM call: asking for one
+    /// day produced from == to, the range Outlook is given is half-open, and a range of zero
+    /// length matches nothing. The old harness could not see it -- it asked for a week and got
+    /// a week, and the empty answer for a single day looked like an empty calendar.
+    ///
+    /// Pure arithmetic, so it needs no live calendar and no known appointment. That is the
+    /// point: a check that depends on the user having a meeting today is a check that passes
+    /// or fails for the wrong reason.
+    /// </summary>
+    private static int RangeChecks()
+    {
+        Console.WriteLine("-- the date range calendar_list asks for --");
+        int failures = 0;
+
+        // The reported case: one day.
+        (DateTime start, DateTime lastDay, DateTime endExclusive) =
+            OutlookTools.ResolveRange("2026-08-27", "2026-08-27");
+
+        Console.WriteLine(
+            $"    today only      -> [{start:yyyy-MM-dd HH:mm}, {endExclusive:yyyy-MM-dd HH:mm})"
+            + $" reported as {lastDay:yyyy-MM-dd}");
+
+        failures += Check2(
+            "a single day covers that whole day, not zero length",
+            endExclusive == start.AddDays(1));
+
+        failures += Check2(
+            "and an appointment at 11:00 that day falls inside it",
+            new DateTime(2026, 8, 27, 11, 0, 0) < endExclusive
+            && new DateTime(2026, 8, 27, 11, 30, 0) > start);
+
+        failures += Check2(
+            "while the answer still names the day that was asked for",
+            lastDay.Date == new DateTime(2026, 8, 27));
+
+        // The same defect, one step less obvious: the last day of any range was dropped.
+        (start, lastDay, endExclusive) = OutlookTools.ResolveRange("2026-08-24", "2026-08-30");
+
+        failures += Check2(
+            "the last day of a range is included too",
+            endExclusive == new DateTime(2026, 8, 31));
+
+        // A time, when given, is an instant and must not be widened -- otherwise "from 14:00
+        // to 16:00" would silently mean the rest of the day.
+        (start, lastDay, endExclusive) = OutlookTools.ResolveRange("2026-08-27 14:00", "2026-08-27 16:00");
+
+        failures += Check2(
+            "an explicit time is honoured rather than rounded to a day",
+            endExclusive == new DateTime(2026, 8, 27, 16, 0, 0));
+
+        // Reversed input is a plausible model mistake and must not produce an empty range.
+        (start, lastDay, endExclusive) = OutlookTools.ResolveRange("2026-08-30", "2026-08-24");
+
+        failures += Check2(
+            "reversed dates are swapped rather than returning nothing",
+            start.Date == new DateTime(2026, 8, 24) && endExclusive == new DateTime(2026, 8, 31));
+
+        // The default, which is what an unqualified "what is coming up" hits.
+        (start, lastDay, endExclusive) = OutlookTools.ResolveRange(null, null);
+
+        failures += Check2(
+            "the default spans seven whole days from today",
+            start.Date == DateTime.Today && endExclusive == DateTime.Today.AddDays(7));
+
+        Console.WriteLine();
+        return failures;
+    }
+
+    private static int Check2(string what, bool condition)
+    {
+        Console.WriteLine($"  {(condition ? "ok  " : "FAIL")} {what}");
+        return condition ? 0 : 1;
+    }
+
     public static async Task<int> RunAsync()
     {
+        // Checked first, and without Outlook, because this is where the defect was.
+        int rangeFailures = RangeChecks();
+
         if (!OutlookClient.IsAvailable)
         {
             Console.WriteLine("Outlook is not registered for automation on this machine.");
-            return 1;
+            return rangeFailures + 1;
         }
 
         bool wasRunning = IsOutlookRunning();
         Console.WriteLine($"Outlook running before the probe: {wasRunning}\n");
 
-        int failures = 0;
+        int failures = rangeFailures;
 
         using (var apartment = new ComApartment("Shellvis probe COM"))
         {
@@ -66,6 +148,35 @@ internal static class OutlookProbe
             string calendar = await tools.ListAppointments().ConfigureAwait(false);
             failures += Check("calendar_list", calendar);
             Console.WriteLine("       " + Summarise(calendar));
+
+            // Today alone, which is the question that was answered wrongly: "welche Termine
+            // liegen heute an" reached the tool as from == to and could never match anything.
+            // Asked against the real calendar, because the arithmetic is checked above and
+            // what remains to confirm is that Outlook agrees.
+            string today = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string singleDay = await tools.ListAppointments(today, today).ConfigureAwait(false);
+
+            failures += Check("calendar_list for one day", singleDay);
+            Console.WriteLine("       " + Summarise(singleDay));
+
+            // Cross-checked against the surrounding week rather than against a hard-coded
+            // expectation: a day that shows nothing while the week shows something on that
+            // same day is the exact shape of the reported defect, and an empty calendar is a
+            // legitimate state that must not be reported as a failure.
+            bool weekMentionsToday = calendar.Contains(
+                DateTime.Today.ToString("ddd", CultureInfo.InvariantCulture),
+                StringComparison.OrdinalIgnoreCase);
+
+            if (weekMentionsToday)
+            {
+                failures += Check2(
+                    "a day the week-long query lists is not empty when asked alone",
+                    !singleDay.StartsWith("no appointments", StringComparison.OrdinalIgnoreCase));
+            }
+            else
+            {
+                Console.WriteLine("  ok   single-day cross-check  skipped, the week shows nothing today");
+            }
 
             // --------------------------------------------------------- contacts
             string contacts = await tools.FindContacts("a", limit: 3).ConfigureAwait(false);

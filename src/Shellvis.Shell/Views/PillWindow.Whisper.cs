@@ -117,13 +117,39 @@ public sealed partial class PillWindow
         Load(model);
     }
 
+    /// <summary>
+    /// Load the model off the UI thread.
+    ///
+    /// Off-thread because it is slow in a way that was measured, not assumed: whisper.cpp
+    /// reads the whole file and allocates its context, which for the small model is about
+    /// 1.5 seconds. Doing that inline froze the pill for 1.8 seconds on the first dictation --
+    /// and worse, it broke the hold-to-talk gesture outright. A low-level keyboard hook is
+    /// called on the thread that installed it, so while the UI thread is blocked Windows
+    /// cannot call the hook and delivers the keystroke normally: spaces leaked into the prompt
+    /// box for exactly as long as the load took. One blocking call, two unrelated-looking
+    /// symptoms.
+    /// </summary>
     private void Load(WhisperModel model)
     {
         _whisperSettled = true;
 
+        string path = WhisperModelStore.PathFor(model);
         var recognizer = new WhisperRecognizer();
-        string? problem = recognizer.Load(WhisperModelStore.PathFor(model));
 
+        _ = Task.Run(() => recognizer.Load(path)).ContinueWith(
+            task =>
+            {
+                string? problem = task.IsFaulted
+                    ? task.Exception?.GetBaseException().Message
+                    : task.Result;
+
+                DispatcherQueue.TryEnqueue(() => Loaded(recognizer, model, problem));
+            },
+            TaskScheduler.Default);
+    }
+
+    private void Loaded(WhisperRecognizer recognizer, WhisperModel model, string? problem)
+    {
         if (problem is not null)
         {
             recognizer.Dispose();

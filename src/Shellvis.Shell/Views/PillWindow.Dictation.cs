@@ -177,11 +177,18 @@ public sealed partial class PillWindow
 
                 if (peak == 0)
                 {
+                    // "Peak level 0" is the expected reading when nobody spoke, and saying
+                    // so first matters: headsets with hardware noise suppression deliver
+                    // digital silence between words, so this exact message appears after
+                    // every accidental key press. Leading with "check your microphone"
+                    // sends the user to fix something that is not broken.
                     AddRow(GlyphWarning,
-                        $"The microphone stayed silent (peak level 0) on {_dictation?.DeviceName ?? "the recording device"}. "
-                        + "Check that it is the one you speak into, under Settings > System "
-                        + "> Sound, and that it is not muted. To pick a different one, set "
-                        + "voice.deviceIndex in config.yaml.",
+                        $"Nothing was heard on {_dictation?.DeviceName ?? "the recording device"} "
+                        + "(peak level 0). If you did not speak, that is the expected reading -- "
+                        + "many headsets send exact silence when quiet. If you did speak, check "
+                        + "under Settings > System > Sound that this is the device you talk into "
+                        + "and that it is not muted, and run 'probe mic' to see which one hears "
+                        + "you; then set voice.deviceIndex in config.yaml.",
                         "voice");
                 }
                 else if (rejected > 0)

@@ -535,6 +535,13 @@ public sealed partial class PillWindow : Window
         ApplyRegion(ConsoleHost.Height);
         PromptBox.Focus(FocusState.Programmatic);
         RegisterHotkey();
+        RegisterHoldToTalk();
+
+        // Warmed here rather than on the first key press. The model takes about a second and a
+        // half to load, and paying that at the moment someone holds the space bar means the
+        // gesture appears to do nothing -- and, because the keyboard hook runs on this thread,
+        // means the key is not even suppressed while it happens.
+        EnsureWhisper();
     }
 
     /// <summary>

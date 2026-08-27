@@ -47,3 +47,15 @@ GetWindowRect
 GetClientRect
 ClientToScreen
 GetCursorPos
+SetWindowsHookEx
+UnhookWindowsHookEx
+CallNextHookEx
+WINDOWS_HOOK_ID
+KBDLLHOOKSTRUCT
+GetForegroundWindow
+GetMessage
+PostThreadMessage
+TranslateMessage
+DispatchMessage
+MSG
+WM_QUIT

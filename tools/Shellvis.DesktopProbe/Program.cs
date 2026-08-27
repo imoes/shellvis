@@ -38,6 +38,11 @@ internal static class Program
                 "endpoint" => EndpointProbe.Run(),
                 "audiobridge" => StreamedAudioProbe.Run(),
 
+                // Which microphone Windows actually hands over, and what it hears. Needed
+                // because "the default recording device" is two different devices in Windows.
+                "mic" => MicrophoneProbe.Run(
+                    args.Length > 1 && int.TryParse(args[1], out int secs) ? secs : 3),
+
                 // --fetch downloads the model. Off by default: a harness that pulls half a
                 // gigabyte because someone ran the suite is a harness people stop running.
                 "whisper" => WhisperProbe.RunAsync(

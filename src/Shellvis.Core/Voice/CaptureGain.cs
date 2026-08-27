@@ -67,6 +67,17 @@ internal sealed class CaptureGain
     /// <summary>The multiplier currently in use, for the diagnostic line.</summary>
     public double Current => _gain;
 
+    /// <summary>
+    /// The loudest fraction of full scale seen BEFORE any amplification.
+    ///
+    /// Exposed because a decision about whether anything was actually said cannot be made
+    /// downstream of this class. Gain lifts room noise to the same level as speech by design,
+    /// so a "was there speech" test applied after it always says yes -- which is how three
+    /// seconds of a quiet office became "* Musik *" in the prompt box. The raw figure is the
+    /// only one that still distinguishes them.
+    /// </summary>
+    public double LoudestRaw => _loudest;
+
     /// <summary>Whether it has had to amplify at all, so the console can mention it.</summary>
     public bool IsBoosting => _gain > 1.5;
 

@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.2.2-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.2.5-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 
 A native Windows AI agent: a floating command bar with a console beneath it, wired to
@@ -265,7 +265,8 @@ process is a privilege-escalation service with a friendly name.
 | | |
 |---|---|
 | **Ctrl+Alt+Space** | bring the bar to the front and focus the input |
-| **Ctrl+Alt+D** | start and stop dictation |
+| **Ctrl+Alt+D** | start and stop dictation (a toggle, works from anywhere) |
+| **Hold Space** | push-to-talk while Shellvis has focus: hold to listen, release to transcribe. A tap still types a space — what tells them apart is holding it past 400 ms |
 | Tray icon | left click shows, right click opens the menu |
 | Chevron on the bar | open and close the console |
 | Chip on the bar | permission mode |
@@ -368,6 +369,7 @@ $probe = ".\tools\Shellvis.DesktopProbe\bin\Debug\net10.0-windows10.0.26100.0\Sh
 & $probe remote        # PowerShell Remoting against a real listener
 & $probe audiobridge   # the dictation audio bridge, compared against a wave file
 & $probe whisper       # local Whisper, measured against the Windows engine
+& $probe mic [seconds]  # which capture device Windows hands over, and what it hears
                        #   --fetch also downloads the configured model
 & $probe browser       # a real Chromium against a real page
 & $probe broker        # the pipe protocol and every guard

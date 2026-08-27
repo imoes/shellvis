@@ -288,11 +288,63 @@ public sealed class WhisperRecognizer : IDisposable
     /// about a video could legitimately write one of these, and the failure being caught is
     /// a segment that consists of nothing else.
     /// </summary>
+    /// <summary>Whether a segment is a non-speech annotation. Public for the harness.</summary>
+    public static bool LooksLikeNonSpeech(string text) => IsBoilerplate(text);
+
     private static bool IsBoilerplate(string text)
     {
-        string bare = text.Trim().TrimEnd('.', '!', '?').Trim();
+        string trimmed = text.Trim();
 
-        return Boilerplate.Contains(bare);
+        if (trimmed.Length == 0)
+            return true;
+
+        // A SHAPE rule, not a vocabulary one, and that is the point.
+        //
+        // A list of literal phrases was defeated three times in a row: "Musik" was listed and
+        // "* Musik *" walked past it, then "[Stimmengewirr]" arrived, which no list would have
+        // anticipated. What these have in common is not their words but their form -- Whisper
+        // wraps non-speech annotations in brackets, asterisks or underscores, learnt from the
+        // subtitles it was trained on. A segment that is ENTIRELY wrapped is an annotation
+        // whatever the word inside, and that closes the whole class instead of one instance.
+        //
+        // Entirely, not partly: someone dictating "put it in brackets (like this)" keeps their
+        // sentence, because only the segment as a whole counts.
+        if (IsWrapped(trimmed))
+            return true;
+
+        // The literal list stays for the unwrapped ones. "Vielen Dank fuers Zuschauen" arrives
+        // as an ordinary sentence with no decoration at all, so no shape rule can catch it.
+        string bare = trimmed.Trim(' ', '\t', '*', '_', '[', ']', '(', ')', '.', '!', '?', '-', '—');
+
+        return Boilerplate.Contains(bare.Trim());
+    }
+
+    /// <summary>Whether the whole segment sits inside one pair of annotation marks.</summary>
+    private static bool IsWrapped(string text)
+    {
+        (char Open, char Close)[] pairs =
+        [
+            ('[', ']'),
+            ('(', ')'),
+            ('*', '*'),
+            ('_', '_'),
+            ('<', '>'),
+        ];
+
+        foreach ((char open, char close) in pairs)
+        {
+            if (text.Length < 2 || text[0] != open || text[^1] != close)
+                continue;
+
+            string inside = text[1..^1];
+
+            // The closer must belong to the opener. "(a) and (b)" is a sentence, not an
+            // annotation, and it starts and ends with the same characters.
+            if (inside.Length > 0 && !inside.Contains(close))
+                return true;
+        }
+
+        return false;
     }
 
     private static readonly HashSet<string> Boilerplate = new(StringComparer.OrdinalIgnoreCase)
@@ -308,9 +360,17 @@ public sealed class WhisperRecognizer : IDisposable
         "Thanks for watching",
         "Thank you for watching",
         "Subtitles by the Amara.org community",
-        "[Musik]",
-        "[Music]",
         "Musik",
+        "Music",
+        "Applaus",
+        "Applause",
+        "Signalton",
+        "Piepton",
+        "Räuspern",
+        "Lachen",
+        "Stille",
+        "Geräusche",
+        "SPEAKER_00",
     };
 
     /// <summary>

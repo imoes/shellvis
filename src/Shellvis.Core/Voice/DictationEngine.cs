@@ -682,9 +682,18 @@ public sealed class DictationEngine : IDisposable
             utterance.Dispose();
         }
 
-        WhisperResult result = await whisper
-            .TranscribeAsync(pcm, _culture?.Name)
-            .ConfigureAwait(false);
+        // Judged on the RAW level, before the gain touched it.
+        //
+        // The recogniser has its own energy gate, but by the time audio reaches it the gain
+        // has already lifted whatever was there towards the target level -- that is the gain's
+        // whole job -- so downstream nothing can tell a spoken word from an amplified quiet
+        // room. Measured here it still can: speech into a headset peaks well above this,
+        // while an office at rest stays in the thousandths.
+        const double SpokeAtAll = 0.02;
+
+        WhisperResult result = _gain.LoudestRaw < SpokeAtAll
+            ? new WhisperResult(string.Empty, null)
+            : await whisper.TranscribeAsync(pcm, _culture?.Name).ConfigureAwait(false);
 
         lock (_gate)
         {

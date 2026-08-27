@@ -311,6 +311,31 @@ internal static class WhisperProbe
                 "a fragment too short to be speech is refused",
                 sliver.Text.Length == 0 && sliver.Problem is null);
 
+            // The annotation forms the model actually emitted in this project, each of which
+            // reached the prompt box once. A list of bare words did not stop them: the model
+            // brackets non-speech in whatever style its training subtitles used, so the
+            // decoration has to be stripped before matching rather than enumerated.
+            foreach (string annotation in new[]
+                { "* Musik *", "[Musik]", "*Signalton*", "( Applaus )", "_Lachen_", "-- Stille --",
+                  "[Stimmengewirr]", "[Tastaturgeklapper]", "(unverständlich)", "<inaudible>" })
+            {
+                failures += Check(
+                    $"the annotation {annotation} is recognised as non-speech",
+                    Shellvis.Core.Voice.WhisperRecognizer.LooksLikeNonSpeech(annotation));
+            }
+
+            // The other side of the shape rule, which matters as much: a sentence that merely
+            // contains brackets is speech. A rule that ate it would silently drop dictation
+            // the user actually spoke, which is worse than an annotation slipping through.
+            foreach (string sentence in new[]
+                { "Spiel bitte Musik im Wohnzimmer", "(a) und (b) vergleichen",
+                  "Setze das in Klammern (so wie hier)", "5 * 3 * 2 berechnen" })
+            {
+                failures += Check(
+                    $"and \"{sentence}\" is kept as speech",
+                    !Shellvis.Core.Voice.WhisperRecognizer.LooksLikeNonSpeech(sentence));
+            }
+
             failures += await SpeedChecks(whisper, pcm, spoken).ConfigureAwait(false);
         }
         finally

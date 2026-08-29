@@ -83,6 +83,35 @@ public sealed class OutlookClient(ComApartment apartment)
     /// <summary>Whether Outlook is installed and automatable.</summary>
     public static bool IsAvailable => Com.IsAvailable("Outlook.Application");
 
+    /// <summary>
+    /// Whether answering a request had to launch Outlook, because it was not running.
+    ///
+    /// Surfaced so the tool result can say it. COM activation starts Outlook on demand, which
+    /// is convenient and is also a visible act on the user's machine: a profile opens, mail
+    /// begins synchronising, reminders appear. Doing that in answer to "what is on today" is
+    /// defensible; doing it without a word is not.
+    ///
+    /// Latched rather than per-call: once it has been started it stays started, and repeating
+    /// the notice on every subsequent call would be noise.
+    /// </summary>
+    public bool WasStarted { get; private set; }
+
+    /// <summary>Whether Outlook is running right now, without starting it to find out.</summary>
+    public static bool IsRunning
+    {
+        get
+        {
+            try
+            {
+                return Com.TryGetActive("Outlook.Application") is not null;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+    }
+
     /// <summary>List messages from a folder, newest first.</summary>
     public Task<IReadOnlyList<MailSummary>> ListMailAsync(
         string folder = "inbox",
@@ -99,7 +128,10 @@ public sealed class OutlookClient(ComApartment apartment)
 
             try
             {
-                outlook = Com.GetOrCreate("Outlook.Application");
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
                 session = outlook.Session;
                 mapiFolder = session.GetDefaultFolder(FolderId(folder));
                 items = mapiFolder.Items;
@@ -155,7 +187,10 @@ public sealed class OutlookClient(ComApartment apartment)
 
             try
             {
-                outlook = Com.GetOrCreate("Outlook.Application");
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
                 session = outlook.Session;
                 item = session.GetItemFromID(entryId);
 
@@ -201,7 +236,10 @@ public sealed class OutlookClient(ComApartment apartment)
 
             try
             {
-                outlook = Com.GetOrCreate("Outlook.Application");
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
                 session = outlook.Session;
                 original = session.GetItemFromID(entryId);
 
@@ -237,7 +275,10 @@ public sealed class OutlookClient(ComApartment apartment)
 
             try
             {
-                outlook = Com.GetOrCreate("Outlook.Application");
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
 
                 // 0 is olMailItem.
                 mail = outlook.CreateItem(0);
@@ -274,7 +315,10 @@ public sealed class OutlookClient(ComApartment apartment)
 
             try
             {
-                outlook = Com.GetOrCreate("Outlook.Application");
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
                 session = outlook.Session;
                 calendar = session.GetDefaultFolder(FolderCalendar);
                 items = calendar.Items;
@@ -360,7 +404,10 @@ public sealed class OutlookClient(ComApartment apartment)
 
             try
             {
-                outlook = Com.GetOrCreate("Outlook.Application");
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
                 session = outlook.Session;
                 contacts = session.GetDefaultFolder(FolderContacts);
                 items = contacts.Items;

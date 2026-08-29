@@ -175,6 +175,33 @@ public static partial class Com
             ?? throw new InvalidOperationException($"{progId} could not be started.");
     }
 
+    /// <summary>
+    /// Attach to a running application, or start one, saying which happened.
+    ///
+    /// <see cref="GetOrCreate"/> does both and does not distinguish, which turned out to matter
+    /// for Outlook. Asking "what appointments do I have today" with Outlook closed launched the
+    /// user's mail client -- silently, and taking tens of seconds while it opened a profile and
+    /// began synchronising. That is a visible thing to do to somebody's machine in answer to a
+    /// read-only question, and doing it without saying so is the part that was wrong.
+    ///
+    /// The flag lets the caller say it. It does not decide anything here: whether starting the
+    /// application is acceptable is the caller's judgement, and it differs by application --
+    /// starting Word to render a PDF is routine, starting Outlook is not.
+    /// </summary>
+    public static dynamic GetOrStart(string progId, out bool started)
+    {
+        dynamic? running = TryGetActive(progId);
+
+        if (running is not null)
+        {
+            started = false;
+            return running;
+        }
+
+        started = true;
+        return GetOrCreate(progId);
+    }
+
     /// <summary>Whether a ProgID is registered at all, for capability checks.</summary>
     public static bool IsAvailable(string progId) =>
         Type.GetTypeFromProgID(progId, throwOnError: false) is not null;

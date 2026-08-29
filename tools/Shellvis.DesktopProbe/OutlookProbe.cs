@@ -126,7 +126,26 @@ internal static class OutlookProbe
             failures += Check("mail_list inbox", inbox);
             Console.WriteLine("       " + Summarise(inbox));
 
+            // The notice, when it applies. Launching the user's mail client to answer a
+            // read-only question is defensible; doing it silently is not, and it WAS silent
+            // until a harness run failed on a machine where Outlook happened to be closed and
+            // the cause had to be explained from outside.
+            if (!wasRunning)
+            {
+                failures += Check2(
+                    "the answer says Outlook had to be started",
+                    inbox.Contains("was not running", StringComparison.OrdinalIgnoreCase));
+            }
+
             string unread = await tools.ListMail("inbox", limit: 3, unreadOnly: true).ConfigureAwait(false);
+
+            // And only once. Repeating it on every call turns a useful notice into noise.
+            if (!wasRunning)
+            {
+                failures += Check2(
+                    "and says it only once",
+                    !unread.Contains("was not running", StringComparison.OrdinalIgnoreCase));
+            }
             failures += Check("mail_list unread", unread);
             Console.WriteLine("       " + Summarise(unread));
 
@@ -184,8 +203,62 @@ internal static class OutlookProbe
             Console.WriteLine("       " + Summarise(contacts));
         }
 
-        // Give the release a moment to take effect before judging the outcome.
-        await Task.Delay(2500).ConfigureAwait(false);
+        // Started by us because it was closed, so closed again by us.
+        //
+        // This is the correction to a real failure: on a machine where Outlook was not running,
+        // the probe's own calls launched it -- COM activation does that on demand -- and the
+        // leak check then reported the instance it had itself caused as a leak. The check was
+        // right that something was left behind and wrong about what to do: the answer is to put
+        // the machine back as it was found, not to call a legitimate launch a defect.
+        //
+        // Only ever an instance the probe caused. An Outlook the user had open is never touched,
+        // for the obvious reason.
+        if (!wasRunning && IsOutlookRunning())
+        {
+            Console.WriteLine();
+            Console.WriteLine("  ..   Outlook was not running and these calls started it; closing it again.");
+
+            using (var closer = new ComApartment("Shellvis probe teardown"))
+            {
+                await closer.InvokeAsync(() =>
+                {
+                    dynamic? outlook = null;
+
+                    try
+                    {
+                        outlook = Shellvis.Core.Office.Com.TryGetActive("Outlook.Application");
+                        outlook?.Quit();
+                    }
+                    catch (Exception)
+                    {
+                        // A refusal to quit is reported by the check below rather than thrown:
+                        // Outlook declines when it has an unsaved item open, which is a state
+                        // and not a fault in this code.
+                    }
+                    finally
+                    {
+                        Shellvis.Core.Office.Com.Release(outlook);
+                    }
+                }).ConfigureAwait(false);
+            }
+        }
+
+        // Polled, not slept. Outlook's Quit returns immediately and the process then spends
+        // seconds closing stores and flushing a profile -- a fixed 2.5 second wait declared a
+        // shutdown that was simply still in progress to be a leaked process. A fixed window for
+        // an asynchronous teardown is always a wager, and this project already lost it once on
+        // the Excel export path.
+        // Only for an instance the probe started. Waiting for the user's own Outlook to exit
+        // would be waiting for something that must not happen, for twenty seconds.
+        if (!wasRunning)
+        {
+            for (int waited = 0; waited < 20000 && IsOutlookRunning(); waited += 500)
+                await Task.Delay(500).ConfigureAwait(false);
+        }
+        else
+        {
+            await Task.Delay(2500).ConfigureAwait(false);
+        }
 
         bool stillRunning = IsOutlookRunning();
         bool leaked = stillRunning && !wasRunning;

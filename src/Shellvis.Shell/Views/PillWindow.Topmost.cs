@@ -92,6 +92,21 @@ public sealed partial class PillWindow
     {
         nint self = WinRT.Interop.WindowNative.GetWindowHandle(this);
 
+        // Docked is a different situation entirely, and treating it like the floating bar was a
+        // defect: the docked bar sits ON the taskbar strip, and the taskbar is itself a topmost
+        // window. Measured -- with the bar docked, dropping out of the topmost band put
+        // Shell_TrayWnd at the bar's own coordinates, so it did not step behind anything, it
+        // vanished. "Yielding is not hiding" is true for the floating bar and false here.
+        //
+        // It is also unnecessary: a bar inside the taskbar strip is not covering anyone's remote
+        // session, and a window that genuinely takes over the screen covers the taskbar and the
+        // bar with it.
+        if (_docked)
+        {
+            HoldAboveTaskbar(self);
+            return;
+        }
+
         bool yield = Interop.ForegroundState.ShouldYield(
             self, _yieldTo, out string? reason, out nint front);
 
@@ -129,6 +144,34 @@ public sealed partial class PillWindow
     }
 
     private string? _lastYieldReason;
+
+    /// <summary>
+    /// Keep the docked bar above the taskbar, re-asserting it rather than assuming it holds.
+    ///
+    /// Two windows are competing here and both are topmost: this bar and Shell_TrayWnd. Being
+    /// in the topmost band is not a position within it, so anything that raises the taskbar --
+    /// and the shell raises it readily -- puts the bar underneath, at which point it is
+    /// completely invisible because it occupies the taskbar's own strip.
+    ///
+    /// The style flag is deliberately NOT consulted. An earlier version tracked "am I topmost"
+    /// in a field and only acted on a change, which meant the bar could be covered and stay
+    /// covered indefinitely: the flag was still set, so by its own account nothing was wrong.
+    /// It was reported as Shellvis disappearing when you click elsewhere, and reproduced
+    /// exactly -- with the bar docked and the topmost band reordered, the window at the bar's
+    /// coordinates was Shell_TrayWnd and a full poll later it still was.
+    ///
+    /// Re-inserting at the top of the band every tick is cheap and does not activate anything.
+    /// Only while docked: doing it to the floating bar would be an application insisting on
+    /// being above every other topmost window for no reason.
+    /// </summary>
+    private void HoldAboveTaskbar(nint self)
+    {
+        _topmost = true;
+        _behind = 0;
+        _lastYieldReason = null;
+
+        Interop.ForegroundState.Raise(self);
+    }
 
     /// <summary>The window the bar is currently sitting behind, or zero when it is on top.</summary>
     private nint _behind;

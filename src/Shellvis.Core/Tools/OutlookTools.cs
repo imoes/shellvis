@@ -21,6 +21,32 @@ public sealed class OutlookTools(ComApartment apartment)
 {
     private readonly OutlookClient _outlook = new(apartment);
 
+    private bool _announcedStart;
+
+    /// <summary>
+    /// Say that Outlook had to be launched, once.
+    ///
+    /// COM activation starts Outlook on demand, so a question about the calendar answers
+    /// correctly whether or not Outlook was running. What it also does, when it was not, is
+    /// open the user's mail client: a profile loads, mail begins synchronising, reminders pop
+    /// up. That is a fair price for an answer and an unfair thing to do without a word, and it
+    /// went unsaid until a harness run failed for exactly this reason and the cause had to be
+    /// explained from outside.
+    ///
+    /// Once per session, not per call: the second notice would be noise, and the launch only
+    /// happens once anyway.
+    /// </summary>
+    private string StartNotice()
+    {
+        if (!_outlook.WasStarted || _announcedStart)
+            return string.Empty;
+
+        _announcedStart = true;
+
+        return Environment.NewLine
+            + "(Outlook was not running, so it was started to answer this.)";
+    }
+
     [ShellvisTool(
         "mail_list",
         SideEffect.ReadOnly,
@@ -60,7 +86,7 @@ public sealed class OutlookTools(ComApartment apartment)
                     sb.Append("      ").AppendLine(message.Preview);
             }
 
-            return sb.ToString();
+            return sb.ToString() + StartNotice();
         }
         catch (Exception ex)
         {
@@ -186,7 +212,7 @@ public sealed class OutlookTools(ComApartment apartment)
                 .ConfigureAwait(false);
 
             if (appointments.Count == 0)
-                return $"no appointments between {start:yyyy-MM-dd} and {lastDay:yyyy-MM-dd}.";
+                return $"no appointments between {start:yyyy-MM-dd} and {lastDay:yyyy-MM-dd}." + StartNotice();
 
             var sb = new StringBuilder();
             sb.Append(appointments.Count).Append(" appointment(s) from ")
@@ -197,7 +223,7 @@ public sealed class OutlookTools(ComApartment apartment)
             foreach (AppointmentSummary appointment in appointments)
                 sb.Append("  ").AppendLine(appointment.ToString());
 
-            return sb.ToString();
+            return sb.ToString() + StartNotice();
         }
         catch (Exception ex)
         {

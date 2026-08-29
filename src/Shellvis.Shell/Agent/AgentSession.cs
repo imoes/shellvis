@@ -1022,6 +1022,9 @@ internal sealed partial class AgentSession : IDisposable
         }
     }
 
+    /// <summary>Whether this is the conversation currently in progress.</summary>
+    public bool IsCurrentSession(string sessionId) => sessionId == _sessionId;
+
     /// <summary>Delete a stored conversation. Refuses to delete the one in progress.</summary>
     public string DeleteSession(string sessionId)
     {

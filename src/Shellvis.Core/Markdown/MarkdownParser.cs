@@ -88,6 +88,13 @@ public static class MarkdownParser
                 continue;
             }
 
+            if (IsRule(line))
+            {
+                FlushParagraph();
+                blocks.Add(new MarkdownBlock.Rule());
+                continue;
+            }
+
             if (Heading(line) is { } heading)
             {
                 FlushParagraph();
@@ -131,6 +138,25 @@ public static class MarkdownParser
         FlushParagraph();
 
         return new MarkdownDocument(blocks);
+    }
+
+    /// <summary>
+    /// Whether the line is a thematic break.
+    ///
+    /// Checked BEFORE the bullet rule, because "---" also begins with a dash and would
+    /// otherwise be read as a bullet with no text. Three or more of one character and
+    /// nothing else, which is the CommonMark rule and also what a model writes.
+    /// </summary>
+    private static bool IsRule(string line)
+    {
+        string text = line.Replace(" ", string.Empty, StringComparison.Ordinal);
+
+        if (text.Length < 3)
+            return false;
+
+        char first = text[0];
+
+        return first is '-' or '*' or '_' && text.All(c => c == first);
     }
 
     private static (int Level, string Text)? Heading(string line)

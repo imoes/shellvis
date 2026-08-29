@@ -70,6 +70,14 @@ public abstract record MarkdownBlock
 
     public sealed record Paragraph(IReadOnlyList<MarkdownSpan> Inlines) : MarkdownBlock;
 
+    /// <summary>A thematic break: three or more dashes, asterisks or underscores on a line.</summary>
+    /// <remarks>
+    /// Models emit these constantly to separate sections, and without a block for them the
+    /// line arrived as the literal text "---" sitting in the middle of an answer. Cheap to
+    /// support and conspicuous when missing.
+    /// </remarks>
+    public sealed record Rule : MarkdownBlock;
+
     /// <param name="Text">The fence's contents, line breaks intact.</param>
     /// <param name="Closed">
     /// False when the closing fence never arrived. Normal while streaming, and the reason

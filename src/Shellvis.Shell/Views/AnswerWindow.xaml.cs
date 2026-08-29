@@ -67,7 +67,17 @@ public sealed partial class AnswerWindow : Window
             // Above ordinary windows like the pill, and stepping aside for the same reasons:
             // ForegroundState is shared rather than reimplemented, so a full-screen window or
             // a remote session is not covered by this either.
-            presenter.IsAlwaysOnTop = true;
+            // NOT always on top, and this is a correction.
+            //
+            // It was on because the pill is, and that was the wrong analogy. The pill is a
+            // command bar: it has to be reachable from whatever is in front, which is the
+            // whole reason it floats. This is a document. A document that cannot be put
+            // behind the thing you are working on is a document that covers your work until
+            // you close it, and closing it is how you lose your place in it.
+            //
+            // Reaching it again costs nothing: the button in the console header raises it,
+            // and it has a taskbar button of its own.
+            presenter.IsAlwaysOnTop = false;
         }
 
         _shaper.TrySoftenEdges();

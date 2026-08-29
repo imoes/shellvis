@@ -93,6 +93,10 @@ internal static class MarkdownRenderer
                     target.Blocks.Add(RenderTable(table, palette));
                     break;
 
+                case MarkdownBlock.Rule:
+                    target.Blocks.Add(RenderRule(palette));
+                    break;
+
                 case MarkdownBlock.Paragraph text:
                     target.Blocks.Add(RenderParagraph(text, palette));
                     break;
@@ -165,6 +169,31 @@ internal static class MarkdownRenderer
             FontFamily = palette.Mono,
             FontSize = palette.Size - 1,
             Foreground = palette.Muted,
+        });
+
+        return block;
+    }
+
+    /// <summary>
+    /// A thematic break, as a hairline rather than as three dashes.
+    ///
+    /// An InlineUIContainer for the same reason the table needs one: a RichTextBlock takes
+    /// Paragraphs and nothing else, so a horizontal line has to be an element hosted inside
+    /// one.
+    /// </summary>
+    private static Paragraph RenderRule(Palette palette)
+    {
+        var block = new Paragraph { Margin = new Thickness(0, 8, 0, 8) };
+
+        block.Inlines.Add(new InlineUIContainer
+        {
+            Child = new Border
+            {
+                Height = 1,
+                Width = 420,
+                Background = palette.Muted,
+                Opacity = 0.3,
+            },
         });
 
         return block;

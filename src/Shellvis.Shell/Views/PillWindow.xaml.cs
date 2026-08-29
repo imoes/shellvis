@@ -394,7 +394,11 @@ public sealed partial class PillWindow : Window
         string prompt = PromptBox.Text.Trim();
         PromptBox.Text = string.Empty;
 
-        AddRow(GlyphPerson, prompt, string.Empty, isPrompt: true);
+        // Two places, two forms, and that is the rule now: the conversation window gets
+        // what was said, the console gets a log line saying that it was said. Rendering the
+        // prompt as prose in the console was half of what made the separation inconsistent.
+        RecordPrompt(prompt);
+        AddRow(GlyphPerson, Oneline(prompt), "asked");
 
         if (!_consoleOpen)
             ToggleConsole();
@@ -449,7 +453,7 @@ public sealed partial class PillWindow : Window
                 // The document goes to its own window; the log keeps a line saying it
                 // happened. A console that showed the tools running and then nothing would
                 // be a record with a hole in it.
-                ShowAnswer(Tidy(e.Text), streaming: false);
+                RecordAnswer(Tidy(e.Text));
                 _streamed.Clear();
 
                 AddRow(
@@ -539,6 +543,23 @@ public sealed partial class PillWindow : Window
     /// Tool output runs to hundreds of lines; the console is a trace of WHAT ran, not a
     /// viewer for the output. The model still sees the whole thing.
     /// </summary>
+    /// <summary>
+    /// A prompt as one line of log.
+    ///
+    /// The console is a trace of what happened, so what belongs in it is that a question
+    /// was asked and roughly which one. The question itself, in full and formatted, is in
+    /// the conversation window, which is where someone goes to read rather than to scan.
+    /// </summary>
+    private static string Oneline(string text)
+    {
+        string flat = text.ReplaceLineEndings(" ").Trim();
+
+        while (flat.Contains("  ", StringComparison.Ordinal))
+            flat = flat.Replace("  ", " ", StringComparison.Ordinal);
+
+        return flat.Length <= 110 ? flat : flat[..110] + "...";
+    }
+
     private static string FirstLine(string text)
     {
         foreach (string line in text.Split('\n'))
@@ -825,7 +846,7 @@ public sealed partial class PillWindow : Window
         // them was that a growing paragraph in the middle of a command log made both harder
         // to read.
         _streamed.Append(text);
-        ShowAnswer(Tidy(_streamed.ToString()), streaming: true);
+        StreamAnswer(Tidy(_streamed.ToString()));
     }
 
     /// <summary>Words in an answer, for the one line the log keeps about it.</summary>

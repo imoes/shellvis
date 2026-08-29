@@ -14,6 +14,9 @@ public sealed partial class PillWindow
 {
     private AnswerWindow? _answerWindow;
 
+    /// <summary>What has been said, which is what the message window shows.</summary>
+    private readonly Conversation _conversation = new();
+
     /// <summary>
     /// The answer window, created on first use.
     ///
@@ -32,13 +35,67 @@ public sealed partial class PillWindow
         return _answerWindow;
     }
 
-    /// <summary>Put the running answer in front of the reader as it arrives.</summary>
-    private void ShowAnswer(string markdown, bool streaming)
+    /// <summary>Add what the user just asked to the conversation.</summary>
+    private void RecordPrompt(string prompt)
     {
+        _conversation.Add(Said.User, prompt);
+        Redraw(streaming: false, reveal: false);
+    }
+
+    /// <summary>The answer as it streams in.</summary>
+    private void StreamAnswer(string markdown)
+    {
+        _conversation.Streaming(markdown);
+        Redraw(streaming: true, reveal: true);
+    }
+
+    /// <summary>The finished answer.</summary>
+    private void RecordAnswer(string markdown)
+    {
+        _conversation.Add(Said.Assistant, markdown);
+        Redraw(streaming: false, reveal: true);
+    }
+
+    /// <summary>Replace the whole conversation, for a resumed or a new session.</summary>
+    private void ShowConversation(IEnumerable<Turn> turns, bool reveal)
+    {
+        _conversation.Clear();
+
+        foreach (Turn turn in turns)
+            _conversation.Add(turn.By, turn.Text);
+
+        Redraw(streaming: false, reveal: reveal);
+    }
+
+    /// <summary>Start again with nothing said.</summary>
+    private void ClearConversation()
+    {
+        _conversation.Clear();
+        AnswerButton.IsEnabled = false;
+        _answerWindow?.Hide();
+    }
+
+    /// <summary>
+    /// Put the conversation on screen.
+    ///
+    /// <b>Revealing is not the same as drawing.</b> A prompt being recorded must NOT bring
+    /// the window forward: the user is typing into the bar and a window arriving in front of
+    /// them is the interruption this application has already argued itself out of once. An
+    /// answer may reveal, because an answer is the thing they asked for.
+    /// </summary>
+    private void Redraw(bool streaming, bool reveal)
+    {
+        if (_conversation.IsEmpty)
+            return;
+
         AnswerWindow window = Answer();
 
-        window.ShowAnswer(markdown, streaming ? "Answer (writing...)" : "Answer");
-        window.Reveal();
+        window.ShowAnswer(
+            _conversation.ToMarkdown(),
+            streaming ? "Conversation (writing...)" : "Conversation");
+
+        if (reveal)
+            window.Reveal();
 
         AnswerButton.IsEnabled = true;
     }

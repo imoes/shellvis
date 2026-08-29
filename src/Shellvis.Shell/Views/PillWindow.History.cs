@@ -129,8 +129,17 @@ public sealed partial class PillWindow
         Grid.SetColumn(resume, 1);
         grid.Children.Add(resume);
 
-        Button delete = IconButton(GlyphDelete, "Delete this conversation");
-        delete.IsEnabled = !row.IsCurrent;
+        Button delete = IconButton(GlyphDelete, row.IsCurrent
+            ? "Delete this conversation (a new one will be started)"
+            : "Delete this conversation");
+
+        // Enabled for the current conversation too. It was disabled because the store
+        // refuses to delete the live session -- correctly, since the agent would be writing
+        // into a row that no longer exists. But a greyed-out button on the one row the user
+        // is most likely to try is a dead end, not a safeguard: the whole complaint was that
+        // sessions cannot be deleted from the history. Leaving the conversation first is
+        // exactly what the refusal message told the user to do, so it is done for them.
+        delete.IsEnabled = true;
         delete.Click += (_, _) => OnDelete(info);
 
         // Marked handled BEFORE it reaches the row, or deleting a conversation would
@@ -186,22 +195,28 @@ public sealed partial class PillWindow
             $"Resuming \"{info.Title}\" ({messages.Count} messages).",
             string.Empty, isAnnouncement: true);
 
-        string? lastAnswer = null;
+        // The conversation goes to the conversation window; the console gets the log.
+        //
+        // This used to put the whole exchange into the console as prose AND the last answer
+        // into the window, while a live turn did neither of those things. Two paths giving
+        // two different answers to "where do messages appear" is what made the separation
+        // read as arbitrary. One rule now: what was said is in the window, what the machine
+        // did is in the console.
+        var said = new List<Turn>();
 
         foreach (StoredMessage message in messages)
         {
             switch (message.Role)
             {
                 case "user":
-                    AddRow(GlyphPerson, message.Content, string.Empty, isPrompt: true);
+                    said.Add(new Turn(Said.User, message.Content));
+                    AddRow(GlyphPerson, Oneline(message.Content), "asked");
                     break;
 
                 case "assistant":
-                    // isAnswer, not isAnnouncement. A replayed answer is still an answer, and
-                    // rendering it as one of Shellvis' own remarks put it in italic -- the same
-                    // wrong category that made live answers look unformatted.
-                    AddRow(GlyphSpeaker, message.Content, string.Empty, isAnswer: true);
-                    lastAnswer = message.Content;
+                    said.Add(new Turn(Said.Assistant, message.Content));
+                    AddRow(GlyphSpeaker, $"answered, {WordCount(message.Content)} words",
+                        "answer", isAnnouncement: true);
                     break;
 
                 case "tool":
@@ -220,14 +235,9 @@ public sealed partial class PillWindow
         ToggleHistory();
         StatusText.Text = ShellvisVoice.Standby;
 
-        // The document window gets the conversation too.
-        //
-        // Without this, opening a conversation from the history filled the console and left
-        // the answer window empty -- so "open this chat" and "where is the message console"
-        // were the same complaint arriving from two directions. What the user asked to see
-        // is the conversation, and the last answer is the part of it that is a document.
-        if (lastAnswer is { Length: > 0 })
-            ShowAnswer(Tidy(lastAnswer), streaming: false);
+        // Opening a conversation from the history means wanting to read it, so the window
+        // comes forward with the whole exchange in it rather than only the last answer.
+        ShowConversation(said, reveal: true);
     }
 
     private async void OnDelete(SessionInfo info)
@@ -242,7 +252,10 @@ public sealed partial class PillWindow
             XamlRoot = (Content as FrameworkElement)?.XamlRoot,
             Title = "Delete this conversation?",
             Content = $"\"{info.Title}\"\n{info.MessageCount} messages from "
-                + $"{info.StartedAt:dd.MM.yyyy HH:mm}. This cannot be undone.",
+                + $"{info.StartedAt:dd.MM.yyyy HH:mm}. This cannot be undone."
+                + (_session.IsCurrentSession(info.Id)
+                    ? "\n\nThis is the conversation you are in, so a new one will be started."
+                    : string.Empty),
             PrimaryButtonText = "Delete",
             CloseButtonText = "Keep",
             DefaultButton = ContentDialogButton.Close,
@@ -250,6 +263,19 @@ public sealed partial class PillWindow
 
         if (await dialog.ShowAsync() != ContentDialogResult.Primary)
             return;
+
+        // Leave it before removing it. The store still refuses to delete the live session,
+        // and that guard stays: this makes the session not-live rather than weakening it.
+        if (_session.IsCurrentSession(info.Id))
+        {
+            _session.StartNewSession();
+
+            Transcript.Items.Clear();
+            ClearConversation();
+
+            AddRow(GlyphSpeaker, "Shellvis has taken the stage again.",
+                string.Empty, isAnnouncement: true);
+        }
 
         string result = _session.DeleteSession(info.Id);
         RefreshSessionList();
@@ -266,6 +292,8 @@ public sealed partial class PillWindow
         _session.StartNewSession();
 
         Transcript.Items.Clear();
+        ClearConversation();
+
         AddRow(GlyphSpeaker, "Shellvis has taken the stage again.", string.Empty, isAnnouncement: true);
 
         ToggleHistory();

@@ -258,6 +258,49 @@ internal static class MarkdownProbe
             after.Blocks.OfType<MarkdownBlock.Paragraph>()
                 .Any(b => b.Inlines.Any(sp => sp.Text.Contains("Danach", StringComparison.Ordinal))));
 
+        Console.WriteLine("\nthematic breaks:");
+
+        // Models emit these constantly to separate sections. Without a block for them the
+        // line arrived as the literal text "---" sitting in the middle of an answer, which
+        // is how it was found: in a real reply, on screen.
+        MarkdownDocument broken = MarkdownParser.Parse("Oben\n\n---\n\nUnten");
+
+        Check("three dashes become a rule",
+            broken.Blocks.OfType<MarkdownBlock.Rule>().Count() == 1);
+        Check("and no dash survives as text",
+            !Plain(broken).Contains("-", StringComparison.Ordinal), Plain(broken));
+        Check("the prose on both sides is kept",
+            Plain(broken).Contains("Oben", StringComparison.Ordinal)
+            && Plain(broken).Contains("Unten", StringComparison.Ordinal));
+
+        Check("asterisks and underscores work too",
+            MarkdownParser.Parse("***").Blocks.OfType<MarkdownBlock.Rule>().Any()
+            && MarkdownParser.Parse("___").Blocks.OfType<MarkdownBlock.Rule>().Any());
+
+        Check("spaces between them are allowed",
+            MarkdownParser.Parse("- - -").Blocks.OfType<MarkdownBlock.Rule>().Any());
+
+        // The reason this is checked before the bullet rule: a dash starts both.
+        MarkdownDocument bullet = MarkdownParser.Parse("- ein Punkt");
+        Check("a real bullet is still a bullet",
+            bullet.Blocks.OfType<MarkdownBlock.Bullet>().Any()
+            && !bullet.Blocks.OfType<MarkdownBlock.Rule>().Any());
+
+        Check("two dashes are not a rule",
+            !MarkdownParser.Parse("--").Blocks.OfType<MarkdownBlock.Rule>().Any());
+        Check("a mixture is not a rule",
+            !MarkdownParser.Parse("-*-").Blocks.OfType<MarkdownBlock.Rule>().Any());
+
+        // A table separator also looks like dashes. It must not be eaten as a rule.
+        MarkdownDocument stillTable = MarkdownParser.Parse(
+            "| a | b |\n|---|---|\n| 1 | 2 |");
+        Check("a table separator is still a table",
+            stillTable.Blocks.OfType<MarkdownBlock.Table>().Any());
+
+        // Inside a fence a line of dashes is output, not a rule.
+        Check("dashes inside a fence stay text",
+            !MarkdownParser.Parse("```\n---\n```").Blocks.OfType<MarkdownBlock.Rule>().Any());
+
         Console.WriteLine("\nedges:");
 
         Check("null parses to an empty document", MarkdownParser.Parse(null).Blocks.Count == 0);

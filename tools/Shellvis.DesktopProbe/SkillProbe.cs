@@ -1,3 +1,4 @@
+using Shellvis.Core.Config;
 using Shellvis.Core.Skills;
 using Shellvis.Core.Tools;
 
@@ -148,6 +149,86 @@ internal static class SkillProbe
             noDescription.StartsWith("error:", StringComparison.Ordinal),
             "a skill without a description is refused");
 
+        // --------------------------------------------------- the shipped skill
+        //
+        // A skill ships with the product now, and a file that exists in the repository is
+        // not the same thing as a skill the agent can see. Three separate steps can lose
+        // it: the build may not copy it, the index may not be pointed at the copy, and the
+        // frontmatter may not parse. Each one is checked.
+        Console.WriteLine();
+        Console.WriteLine("the shipped secretary skill:");
+
+        string bundled = ShellvisPaths.BundledSkillsDirectory;
+
+        failures += Expect(Directory.Exists(bundled),
+            $"the build copied a skills folder next to the binary ({bundled})");
+
+        var shipped = new SkillIndex([bundled], Path.Combine(root, ".bundled.json"));
+
+        SkillDefinition? secretary = shipped.All
+            .FirstOrDefault(d => d.QualifiedName == "assistant/secretary");
+
+        failures += Expect(secretary is not null, "assistant/secretary is discovered");
+        failures += Expect(
+            secretary?.Description.Contains("triage", StringComparison.OrdinalIgnoreCase) == true,
+            "its frontmatter parsed, so it has a real description");
+
+        // It declares the tools it needs, so it is offered only where it can be followed.
+        failures += Expect(secretary?.RequiresTools.Count > 0,
+            "it declares the tools it depends on");
+        failures += Expect(
+            secretary?.ShouldShow(new HashSet<string>(StringComparer.Ordinal)) == false,
+            "and is hidden when those tools are absent");
+        failures += Expect(
+            secretary?.ShouldShow(new HashSet<string>(
+                secretary.RequiresTools, StringComparer.Ordinal)) == true,
+            "and offered when they are present");
+
+        // The body must NOT be in the prompt index: this skill is long, and the whole
+        // reason for three-tier disclosure is that it costs nothing until it is loaded.
+        string shippedPrompt = shipped.BuildPromptSection(
+            new HashSet<string>(secretary?.RequiresTools ?? [], StringComparer.Ordinal));
+
+        failures += Expect(
+            shippedPrompt.Contains("secretary", StringComparison.Ordinal),
+            "it appears in the prompt index by name");
+        failures += Expect(
+            !shippedPrompt.Contains("DISCRETION IS ABSOLUTE", StringComparison.Ordinal),
+            "but its body does not, so it costs a line and not a page");
+
+        // A user skill of the same name must win. What ships is a default, not a rule.
+        WriteSkill(root, "assistant/secretary", "secretary", "the user own version", "mine\n");
+
+        var both = new SkillIndex([root, bundled], Path.Combine(root, ".both.json"));
+
+        failures += Expect(
+            both.All.Count(d => d.QualifiedName == "assistant/secretary") == 1,
+            "a user skill of the same name does not double up");
+        failures += Expect(
+            both.Find("assistant/secretary")?.Description == "the user own version",
+            "and it is the user own that wins over the shipped one");
+
+        // And the check that actually matters for the product: the SHELL ships them. The
+        // block above runs against this harness own copy, which proves the skill parses and
+        // behaves, and would keep passing if the Shell stopped copying the folder entirely.
+        // Only reachable from a repository build; an installed copy has no sibling project,
+        // and the probe says so rather than passing silently.
+        string? shellOutput = FindShellOutput();
+
+        if (shellOutput is null)
+        {
+            Console.WriteLine(
+                "  ..   the Shell build output is not beside this harness, so whether the");
+            Console.WriteLine(
+                "       application itself ships the skills is NOT checked by this run.");
+        }
+        else
+        {
+            failures += Expect(
+                File.Exists(Path.Combine(shellOutput, "skills", "assistant", "secretary", "SKILL.md")),
+                "the application itself ships the skill, not just this harness");
+        }
+
         Console.WriteLine(failures == 0
             ? "\nVERIFIED: three-tier disclosure holds, and bodies never reach the prompt."
             : $"\n{failures} check(s) failed.");
@@ -181,6 +262,36 @@ internal static class SkillProbe
         File.WriteAllText(
             Path.Combine(folder, "SKILL.md"),
             string.Join("\n", frontmatter) + body);
+    }
+
+    /// <summary>
+    /// The Shell build output, when this harness is running from the repository.
+    ///
+    /// Walks up looking for the solution rather than assuming a fixed depth, because the
+    /// path from a probe binary to the repository root is exactly the kind of constant that
+    /// is wrong after the next reorganisation and fails in a way nobody reads.
+    /// </summary>
+    private static string? FindShellOutput()
+    {
+        var here = new DirectoryInfo(AppContext.BaseDirectory);
+
+        while (here is not null && !File.Exists(Path.Combine(here.FullName, "Shellvis.slnx")))
+            here = here.Parent;
+
+        if (here is null)
+            return null;
+
+        string shell = Path.Combine(here.FullName, "src", "Shellvis.Shell", "bin");
+
+        if (!Directory.Exists(shell))
+            return null;
+
+        // Whichever configuration was built most recently: the harness should report on the
+        // build that exists, not insist on one that may not have been made.
+        return Directory
+            .EnumerateDirectories(shell, "win-x64", SearchOption.AllDirectories)
+            .OrderByDescending(Directory.GetLastWriteTimeUtc)
+            .FirstOrDefault();
     }
 
     private static int Expect(bool condition, string what)

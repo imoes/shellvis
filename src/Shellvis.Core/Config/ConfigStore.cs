@@ -20,6 +20,21 @@ public static class ShellvisPaths
 
     public static string SkillsDirectory => Path.Combine(Home, "skills");
 
+    /// <summary>
+    /// Skills that ship with Shellvis, beside the executable.
+    ///
+    /// <b>Why a second directory rather than copying at install time.</b> A copy would be a
+    /// snapshot: the shipped skill would age against the tools it describes, an update would
+    /// either overwrite what the user edited or silently not update at all, and there is no
+    /// good answer to that. Read in place, a shipped skill is always the one that matches
+    /// this build.
+    ///
+    /// The user directory is listed FIRST everywhere it is used, so a skill of theirs with
+    /// the same name wins. What ships is a default, not a rule.
+    /// </summary>
+    public static string BundledSkillsDirectory =>
+        Path.Combine(AppContext.BaseDirectory, "skills");
+
     public static string SessionsDirectory => Path.Combine(Home, "sessions");
 
     public static string LogsDirectory => Path.Combine(Home, "logs");

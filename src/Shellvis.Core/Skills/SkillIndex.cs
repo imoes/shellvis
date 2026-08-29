@@ -169,10 +169,20 @@ public sealed class SkillIndex
 
         var skills = new List<SkillDefinition>();
 
+        // One skill per qualified name, first root wins.
+        //
+        // Roots are searched in the order they were given, and the caller lists the user own
+        // directory before the one that ships with the product. Without this the same name
+        // found in both appears TWICE in the prompt index, which spends context on a
+        // duplicate and asks the model to choose between two entries that look identical.
+        // Found by the harness the moment a skill started shipping with the application.
+        var claimed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         foreach (IndexFile file in files)
         {
             SkillDefinition? parsed = Parse(file);
-            if (parsed is not null)
+
+            if (parsed is not null && claimed.Add(parsed.QualifiedName))
                 skills.Add(parsed);
         }
 

@@ -4,6 +4,15 @@ using System.Text;
 namespace Shellvis.Core.Office;
 
 /// <summary>A mail item, flattened to what an agent needs to decide what to do.</summary>
+/// <param name="ConversationId">
+/// Outlook own thread key. It is what makes "what is this about between us" answerable at
+/// all: subjects get edited, prefixes accumulate, and matching on them finds the wrong
+/// thread as often as the right one.
+/// </param>
+/// <param name="SenderAddress">
+/// The address, which is the stable identity. Display names repeat across an organisation
+/// and change when someone marries; an address does neither.
+/// </param>
 public sealed record MailSummary(
     string EntryId,
     string Subject,
@@ -11,7 +20,9 @@ public sealed record MailSummary(
     DateTime Received,
     bool IsUnread,
     bool HasAttachments,
-    string Preview)
+    string Preview,
+    string ConversationId = "",
+    string SenderAddress = "")
 {
     public override string ToString()
     {
@@ -519,7 +530,73 @@ public sealed partial class OutlookClient(ComApartment apartment)
             Received: Date(() => item.ReceivedTime),
             IsUnread: Flag(() => item.UnRead),
             HasAttachments: Num(() => item.Attachments.Count) > 0,
-            Preview: body.Length <= 160 ? body.ReplaceLineEndings(" ") : body[..160].ReplaceLineEndings(" ") + "...");
+            Preview: body.Length <= 160 ? body.ReplaceLineEndings(" ") : body[..160].ReplaceLineEndings(" ") + "...",
+            ConversationId: Str(() => item.ConversationID),
+
+            // SMTP where Exchange will give it, and the raw address otherwise. Inside an
+            // Exchange organisation SenderEmailAddress is an X500 distinguished name, which
+            // is useless for matching against anything the user would recognise or type.
+            SenderAddress: SmtpOf(item));
+    }
+
+
+    /// <summary>
+    /// The sender SMTP address, whatever Outlook is willing to give.
+    ///
+    /// Three attempts in descending order of usefulness, because Exchange does not hand it
+    /// over the obvious way. SenderEmailType says EX for an internal sender and then
+    /// SenderEmailAddress is an X500 path like /O=.../CN=RECIPIENTS/CN=..., which matches
+    /// nothing a user would recognise. The Exchange user object carries the real one, and
+    /// PropertyAccessor is the fallback when it does not.
+    /// </summary>
+    private static string SmtpOf(dynamic item)
+    {
+        string address = Str(() => item.SenderEmailAddress);
+
+        if (!Str(() => item.SenderEmailType).Equals("EX", StringComparison.OrdinalIgnoreCase))
+            return address;
+
+        string resolved = Str(() =>
+        {
+            dynamic? sender = null;
+            dynamic? exchange = null;
+
+            try
+            {
+                sender = item.Sender;
+                exchange = sender?.GetExchangeUser();
+                return exchange?.PrimarySmtpAddress;
+            }
+            finally
+            {
+                Com.ReleaseAll(sender, exchange);
+            }
+        });
+
+        if (resolved.Length > 0)
+            return resolved;
+
+        // PR_SENT_REPRESENTING_SMTP_ADDRESS. Named rather than left as a bare string,
+        // because a MAPI property tag is unreadable and looks like a typo.
+        const string SmtpProperty =
+            "http://schemas.microsoft.com/mapi/proptag/0x5D01001F";
+
+        string viaProperty = Str(() =>
+        {
+            dynamic? accessor = null;
+
+            try
+            {
+                accessor = item.PropertyAccessor;
+                return accessor?.GetProperty(SmtpProperty);
+            }
+            finally
+            {
+                Com.Release(accessor);
+            }
+        });
+
+        return viaProperty.Length > 0 ? viaProperty : address;
     }
 
     private static int FolderId(string name) => name.Trim().ToLowerInvariant() switch

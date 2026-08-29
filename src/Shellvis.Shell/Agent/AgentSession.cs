@@ -165,7 +165,7 @@ internal sealed partial class AgentSession : IDisposable
         // Skills are discovered before the system prompt is built, because the prompt
         // carries their index -- names and one-line descriptions only.
         var skills = new SkillIndex(
-            new[] { ShellvisPaths.SkillsDirectory }.Concat(settings.SkillDirectories));
+            new[] { ShellvisPaths.SkillsDirectory, ShellvisPaths.BundledSkillsDirectory }.Concat(settings.SkillDirectories));
         registry.RegisterFrom(new SkillTools(skills));
 
         // Read before the prompt is built, because the prompt carries what is remembered.

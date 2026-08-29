@@ -26,4 +26,13 @@
     <PackageReference Include="NAudio" Version="2.2.1" />
   </ItemGroup>
 
+  <!--
+    The same shipped skills as the Shell, so this harness exercises the layout the product
+    uses rather than a mock of it. It does NOT prove the Shell copies them: the probe checks
+    that separately by looking at the Shell own output directory.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\skills\**\*" LinkBase="skills" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

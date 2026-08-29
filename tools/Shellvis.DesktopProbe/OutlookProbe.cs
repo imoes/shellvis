@@ -136,6 +136,8 @@ internal static class OutlookProbe
                 ("task_create", SideEffect.Mutating),
                 ("task_complete", SideEffect.Mutating),
                 ("mail_open", SideEffect.Mutating),
+                ("mail_thread", SideEffect.ReadOnly),
+                ("mail_history", SideEffect.ReadOnly),
             })
             {
                 var entry = registry.Tools.FirstOrDefault(t => t.Name == name);
@@ -192,6 +194,83 @@ internal static class OutlookProbe
                 string body = await tools.ReadMail(firstId).ConfigureAwait(false);
                 failures += Check("mail_read", body);
                 Console.WriteLine($"       returned {body.Length:N0} characters");
+
+                // ------------------------------------------------- thread and history
+                //
+                // The thread must contain the message it was asked about. That sounds
+                // trivial and is the check that catches the real failure: a conversation
+                // key that matches nothing comes back as an empty list, which reads
+                // exactly like an answer. The calendar filter failed that way for half the
+                // days of a month and nobody noticed.
+                string thread = await tools.ReadThread(firstId).ConfigureAwait(false);
+                failures += Check("mail_thread", thread);
+                Console.WriteLine("       " + Summarise(thread));
+
+                failures += Report("the thread contains the message it was asked about",
+                    thread.Contains(firstId, StringComparison.Ordinal));
+
+                // Oldest first: a conversation is read in the order it was said, unlike an
+                // inbox listing.
+                failures += Report("the thread is ordered oldest first", IsAscending(thread));
+
+                // A thread of one proves nothing about collecting a thread: the anchor is
+                // always in it. So the inbox is sampled for a conversation that really has
+                // several messages, and if the mailbox holds none the probe SAYS so rather
+                // than letting the trivial case stand in for the real one.
+                int widest = 1;
+                string widestThread = thread;
+
+                foreach (string candidate in AllIds(inbox).Take(5))
+                {
+                    string other = await tools.ReadThread(candidate).ConfigureAwait(false);
+                    int count = MessageCount(other);
+
+                    if (count > widest)
+                    {
+                        widest = count;
+                        widestThread = other;
+                    }
+                }
+
+                if (widest > 1)
+                {
+                    Console.WriteLine($"       widest conversation found: {widest} messages");
+                    failures += Report("a multi-message conversation is collected", true);
+                    failures += Report("and it too runs oldest first", IsAscending(widestThread));
+                }
+                else
+                {
+                    Console.WriteLine(
+                        "  ..   no conversation with more than one message in the sampled inbox;");
+                    Console.WriteLine(
+                        "       collecting across folders is therefore NOT proven by this run.");
+                }
+
+                string sender = SenderOf(inbox);
+                Console.WriteLine($"       history for: {sender}");
+
+                if (sender.Length > 0)
+                {
+                    string history = await tools.ReadHistory(sender).ConfigureAwait(false);
+                    failures += Check("mail_history", history);
+                    Console.WriteLine("       " + Summarise(history));
+
+                    failures += Report("the history names the person asked for",
+                        history.Contains(sender, StringComparison.OrdinalIgnoreCase));
+                }
+
+                string nobody = await tools.ReadHistory("zzz-nobody-by-this-name-zzz").ConfigureAwait(false);
+                failures += Report("an empty history says so instead of inventing one",
+                    nobody.Contains("no recent messages", StringComparison.Ordinal));
+                failures += Report("and tells the model not to fill it in",
+                    nobody.Contains("do not fill it in", StringComparison.Ordinal));
+
+                failures += Report("an empty person is refused",
+                    (await tools.ReadHistory("  ").ConfigureAwait(false))
+                        .StartsWith("error:", StringComparison.Ordinal));
+                failures += Report("an empty message id is refused",
+                    (await tools.ReadThread("").ConfigureAwait(false))
+                        .StartsWith("error:", StringComparison.Ordinal));
             }
             else
             {
@@ -383,6 +462,78 @@ internal static class OutlookProbe
 
     private static bool IsOutlookRunning() =>
         System.Diagnostics.Process.GetProcessesByName("OUTLOOK").Length > 0;
+
+    /// <summary>
+    /// Whether the timestamps in a rendered thread run forwards.
+    ///
+    /// Read off the rendered text rather than off the list, deliberately. The rendering is
+    /// what the model sees, and this project has already had a defect that lived entirely
+    /// between a correct data structure and what went out on the wire.
+    /// </summary>
+    private static bool IsAscending(string rendered)
+    {
+        var stamps = new List<DateTime>();
+
+        foreach (string line in rendered.ReplaceLineEndings("\n").Split("\n"))
+        {
+            string[] parts = line.Trim().Split("  ", StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length < 2)
+                continue;
+
+            // The rendered form is "Mon 2026-08-24 09:15  Sender", so the date sits after
+            // the weekday and before the two spaces that start the name.
+            string[] fields = parts[0].Split(" ", StringSplitOptions.RemoveEmptyEntries);
+
+            if (fields.Length >= 3 && DateTime.TryParse(
+                    $"{fields[1]} {fields[2]}",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime when))
+            {
+                stamps.Add(when);
+            }
+        }
+
+        // One message is trivially in order, and an unthreaded message is a real case.
+        return stamps.Count < 2 || stamps.Zip(stamps.Skip(1)).All(pair => pair.First <= pair.Second);
+    }
+
+    /// <summary>Every message id in a listing.</summary>
+    private static IEnumerable<string> AllIds(string listing)
+    {
+        foreach (string line in listing.ReplaceLineEndings("\n").Split("\n"))
+        {
+            string trimmed = line.Trim();
+
+            if (trimmed.StartsWith("id: ", StringComparison.Ordinal))
+                yield return trimmed[4..].Trim();
+        }
+    }
+
+    /// <summary>How many messages a rendered thread reports.</summary>
+    private static int MessageCount(string rendered)
+    {
+        string first = rendered.ReplaceLineEndings("\n").Split("\n")[0].Trim();
+        string[] parts = first.Split(" ", StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length > 0 && int.TryParse(parts[0], out int count) ? count : 0;
+    }
+
+    /// <summary>The display name on the first message of a listing, to ask a history about.</summary>
+    private static string SenderOf(string listing)
+    {
+        foreach (string line in listing.ReplaceLineEndings("\n").Split("\n"))
+        {
+            // A listing line is "  [UNREAD ]yyyy-MM-dd HH:mm  Sender  "subject"".
+            string[] parts = line.Split("  ", StringSplitOptions.RemoveEmptyEntries);
+
+            if (parts.Length >= 2 && parts[0].Any(char.IsAsciiDigit) && !parts[1].StartsWith("id ", StringComparison.Ordinal))
+                return parts[1].Trim();
+        }
+
+        return string.Empty;
+    }
 
     /// <summary>A plain assertion, in the same shape as Check so the output reads as one list.</summary>
     private static int Report(string what, bool passed)

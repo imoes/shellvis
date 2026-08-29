@@ -69,6 +69,16 @@
     <ProjectReference Include="..\Shellvis.Core\Shellvis.Core.csproj" />
   </ItemGroup>
 
+  <!--
+    Skills that ship with the product, read in place beside the executable rather than
+    copied into the user home at install time. A copy would age against the tools it
+    describes, and an update would have to choose between overwriting what the user edited
+    and silently not updating.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\skills\**\*" LinkBase="skills" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>

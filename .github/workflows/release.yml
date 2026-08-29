@@ -80,7 +80,7 @@ jobs:
 
           foreach ($harness in 'classify','config','skills','sessions','compaction',
                                'providers','endpoint','reflect','hooks','cron','thunderbird',
-                               'stream','mcp','hass','broker','topmost','speech','whisper') {
+                               'stream','mcp','hass','broker','topmost','speech','whisper','connectors') {
             Write-Host "--- $harness"
 
             # Captured as well as printed, so the reason survives into an annotation: run logs

@@ -1,0 +1,277 @@
+# Jira and the IT service desk, as tools.
+#
+# Written for a SELF-HOSTED Jira (Data Center or Server), not for *.atlassian.net:
+#   - the API is /rest/api/2, not v3
+#   - descriptions are Wiki markup, not ADF
+#   - authentication is HTTP Basic with a username and a password
+#
+# Nothing here is personal to one installation. The address is a variable, the account is
+# a variable, and the password is looked up by name. Set them like this:
+#
+#   setx JIRA_URL  https://jira.example.com
+#   setx JIRA_USER your.name
+#   ... and store the password under the name "jira" in the Shellvis secret store,
+#       or set a JIRA_PASSWORD environment variable.
+
+name: atlassian-jira
+kind: http
+title: Jira & Service Desk
+description: >
+  Read, search, comment on and create Jira issues, and see service desk queues and
+  SLA deadlines.
+
+baseUrl: ${JIRA_URL}
+
+auth:
+  scheme: basic
+  userVar: JIRA_USER
+  secret: JIRA_PASSWORD
+
+tools:
+  # ---------------------------------------------------------------- reading
+
+  - name: jira_search
+    method: GET
+    path: /rest/api/2/search
+    effect: read
+    preview: jql
+    description: >
+      Search issues with JQL. Two rules that come from real failures on this kind of
+      installation: use "statusCategory != Done" rather than a status name, because the
+      status names are localised and change per workflow; and use "summary ~ text"
+      rather than "summary = text", because a colon in a subject makes an "=" comparison
+      a JQL syntax error. Example:
+      project = IMIT AND statusCategory != Done ORDER BY priority DESC
+    params:
+      - name: jql
+        in: query
+        required: true
+        description: The JQL query.
+      - name: maxResults
+        in: query
+        default: "25"
+        description: How many issues to return. 25 by default.
+      - name: fields
+        in: query
+        default: "summary,status,priority,assignee,duedate,updated"
+        description: Which fields to fetch. Fewer fields, faster answer.
+    result:
+      items: issues
+      total: total
+      line: "{key}  [{fields.status.name}]  {fields.priority.name}  {fields.summary}  ({fields.assignee.displayName})"
+      empty: >
+        no issues match that JQL. That is the answer. If it was expected to match, check
+        the project key and remember that status names are localised -- use
+        statusCategory != Done.
+
+  - name: jira_issue
+    method: GET
+    path: /rest/api/2/issue/{key}
+    effect: read
+    preview: key
+    description: One issue in full, by key (for example IMIT-1234).
+    params:
+      - name: key
+        in: path
+        required: true
+        description: The issue key, such as IMIT-1234.
+    result:
+      line: |
+        {key}  {fields.summary}
+        status: {fields.status.name}   priority: {fields.priority.name}   type: {fields.issuetype.name}
+        reporter: {fields.reporter.displayName}   assignee: {fields.assignee.displayName}
+        created: {fields.created}   due: {fields.duedate}
+        {fields.description}
+
+  - name: jira_my_open
+    method: GET
+    path: /rest/api/2/search
+    effect: read
+    description: >
+      The issues assigned to the current user that are not done. The everyday question,
+      as one call rather than as a JQL the model has to get right.
+    params:
+      - name: jql
+        in: query
+        default: "assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC"
+        description: Leave this alone unless a different filter is wanted.
+      - name: maxResults
+        in: query
+        default: "25"
+      - name: fields
+        in: query
+        default: "summary,status,priority,duedate,updated"
+    result:
+      items: issues
+      total: total
+      line: "{key}  [{fields.status.name}]  {fields.priority.name}  due {fields.duedate}  {fields.summary}"
+      empty: "nothing is assigned to you that is still open."
+
+  - name: jira_transitions
+    method: GET
+    path: /rest/api/2/issue/{key}/transitions
+    effect: read
+    preview: key
+    description: >
+      Which status changes this issue allows right now, with the id each one needs.
+      Always call this before jira_transition -- the ids differ per workflow.
+    params:
+      - name: key
+        in: path
+        required: true
+    result:
+      items: transitions
+      line: "{id}  {name} -> {to.name}"
+      empty: "this issue offers no transitions to your account."
+
+  # ------------------------------------------------------- service desk
+
+  - name: jira_queues
+    method: GET
+    path: /rest/servicedeskapi/queues/{projectKey}
+    effect: read
+    preview: projectKey
+    description: The service desk queues of a project, with how many issues each holds.
+    headers:
+      X-ExperimentalApi: "true"
+    params:
+      - name: projectKey
+        in: path
+        required: true
+        description: The project key, for example IMIT.
+    result:
+      items: values
+      total: size
+      line: "{id}  {name}  ({issueCount} issues)"
+      empty: >
+        this project has no service desk queues, or the account cannot see them. A
+        project without the service desk enabled answers this way.
+
+  - name: jira_queue_issues
+    method: GET
+    path: /rest/servicedeskapi/queues/{projectKey}/{queueId}/issue
+    effect: read
+    preview: queueId
+    description: The issues waiting in one queue. Get the queue id from jira_queues.
+    headers:
+      X-ExperimentalApi: "true"
+    params:
+      - name: projectKey
+        in: path
+        required: true
+      - name: queueId
+        in: path
+        required: true
+      - name: limit
+        in: query
+        default: "25"
+    result:
+      items: values
+      total: size
+      line: "{key}  [{fields.status.name}]  {fields.summary}"
+      empty: "this queue is empty."
+
+  - name: jira_sla
+    method: GET
+    path: /rest/servicedeskapi/request/{key}/sla
+    effect: read
+    preview: key
+    description: >
+      The SLA clocks on one service desk request: what is running, what has breached and
+      when the next deadline falls. This is the call that answers "what runs out today".
+    params:
+      - name: key
+        in: path
+        required: true
+        description: The request key, such as IMIT-1234.
+    result:
+      items: values
+      line: "{name}: {ongoingCycle.remainingTime.friendly} remaining, breached={ongoingCycle.breached}, due {ongoingCycle.breachTime.friendly}"
+      empty: "this request carries no SLA, or it is already closed."
+
+  # ---------------------------------------------------------------- writing
+  #
+  # Everything below asks first, every time. The loader would force that anyway -- only a
+  # GET can be silent -- but it is written out here so that reading the file tells the
+  # truth about what it does.
+
+  - name: jira_comment
+    method: POST
+    path: /rest/api/2/issue/{key}/comment
+    effect: write
+    preview: key
+    description: >
+      Add a comment to an issue. The text is Wiki markup on this kind of installation,
+      not Markdown: *bold*, _italic_, {{code}}, and a list starts with "* ".
+    params:
+      - name: key
+        in: path
+        required: true
+      - name: body
+        in: body
+        required: true
+        description: The comment text, in Wiki markup.
+
+  - name: jira_transition
+    method: POST
+    path: /rest/api/2/issue/{key}/transitions
+    effect: write
+    preview: key
+    description: >
+      Move an issue to another status. Call jira_transitions first to learn the id; the
+      ids are per workflow and guessing one moves the wrong issue to the wrong place.
+    params:
+      - name: key
+        in: path
+        required: true
+      - name: transitionId
+        in: body
+        send: transition.id
+        required: true
+        description: The id from jira_transitions.
+      - name: comment
+        in: body
+        send: update.comment
+        description: >
+          Optional note to record with the change, as JSON, for example
+          [{"add":{"body":"done"}}].
+
+  - name: jira_create
+    method: POST
+    path: /rest/api/2/issue
+    effect: write
+    preview: summary
+    description: >
+      Create an issue. Search for an existing one first -- a duplicate ticket costs
+      somebody a merge. Created through the core API rather than the service desk
+      request API on purpose: the request API demands the custom fields of a request
+      type, while this path needs only project, type, summary and description.
+    params:
+      - name: project
+        in: body
+        send: fields.project
+        required: true
+        default: '{"key":"IMIT"}'
+        description: 'The project, as JSON: {"key":"IMIT"}'
+      - name: issuetype
+        in: body
+        send: fields.issuetype
+        required: true
+        default: '{"name":"Serviceanfrage"}'
+        description: >
+          The issue type, as JSON. "Serviceanfrage" is the one to use: the alternative
+          on this installation demands seven further mandatory fields.
+      - name: summary
+        in: body
+        send: fields.summary
+        required: true
+        description: The one-line subject.
+      - name: description
+        in: body
+        send: fields.description
+        required: true
+        description: The body, in Wiki markup.
+      - name: priority
+        in: body
+        send: fields.priority
+        description: 'Optional, as JSON: {"name":"Normal"}'

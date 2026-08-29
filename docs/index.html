@@ -322,8 +322,8 @@
 
 <section>
   <div class="wrap">
-    <h2>Ninety-two tools</h2>
-    <p class="sub">Eighty on a machine with no Home Assistant, no privileged service and no Thunderbird.</p>
+    <h2>Ninety-four tools, and room for more</h2>
+    <p class="sub">Eighty-two on a machine with no Home Assistant, no privileged service and no Thunderbird.</p>
 
     <div class="scroll">
       <table class="tools">
@@ -344,10 +344,18 @@
           A click that would land on a cookie banner is refused, not faked.</td></tr>
         <tr><td>Skills &amp; memory</td><td>What it has learned about this machine, disclosed in
           three tiers so it costs a line and not a page.</td></tr>
+        <tr><td>Connectors</td><td>A directory with one YAML file in it teaches Shellvis a REST
+          API it has never seen. Drop it in and its tools are there on the next start.</td></tr>
         <tr><td>Privileged</td><td>A separate service, six operations, every one of them asking
           first — even the ones that only read.</td></tr>
       </table>
     </div>
+
+    <p>Connectors are how that list grows without a rebuild. The manifest names the variable
+      holding a credential and can never hold its value; only a <code>GET</code> is allowed to
+      run without asking; and no package can shadow a built-in tool. Two ship with Shellvis,
+      for a self-hosted Jira and Confluence.
+      <a href="https://github.com/imoes/shellvis/blob/main/docs/connectors.md">How to build one →</a></p>
   </div>
 </section>
 

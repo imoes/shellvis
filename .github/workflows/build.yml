@@ -53,6 +53,20 @@ jobs:
           Write-Host "$($published.Count) shipped skill(s) in the published output:"
           $published | ForEach-Object { Write-Host "  $($_.FullName)" }
 
+          # The connectors ship the same way and fail the same way: a Jira connector that
+          # does not reach the published output leaves an installed Shellvis with no Jira
+          # tools, and nothing anywhere says so.
+          $connectors = Get-ChildItem -Recurse -Path src/Shellvis.Shell/bin/Release -Filter connector.yaml |
+                        Where-Object FullName -like '*publish*connectors*'
+
+          if (-not $connectors) {
+            Write-Host "::error title=shipped connectors::a published build contains no connector.yaml under connectors/"
+            exit 1
+          }
+
+          Write-Host "$($connectors.Count) shipped connector(s) in the published output:"
+          $connectors | ForEach-Object { Write-Host "  $($_.FullName)" }
+
       - name: Verify
         shell: pwsh
         run: |
@@ -76,7 +90,7 @@ jobs:
           foreach ($harness in 'classify','config','skills','sessions','compaction',
                                'providers','endpoint','reflect','hooks','cron','thunderbird',
                                'stream','mcp','hass','broker','topmost','speech','whisper',
-                               'clarify','markdown','glyphs','notes','teams','process','agenda') {
+                               'clarify','markdown','glyphs','notes','teams','process','agenda','connectors') {
             Write-Host "--- $harness"
 
             # Captured as well as printed, so the reason can be put in an annotation. Run logs

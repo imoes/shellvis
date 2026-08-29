@@ -79,6 +79,14 @@
     <Content Include="..\..\skills\**\*" LinkBase="skills" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    Connector packages, shipped the same way and for the same reason: a connector.yaml read
+    in place always matches this build, while a copy made at install time would not.
+  -->
+  <ItemGroup>
+    <Content Include="..\..\connectors\**\*" LinkBase="connectors" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
   </PropertyGroup>

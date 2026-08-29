@@ -5,6 +5,7 @@ using Shellvis.Core.Agent;
 using Shellvis.Core.Broker;
 using Shellvis.Core.Browser;
 using Shellvis.Core.Config;
+using Shellvis.Core.Connectors;
 using Shellvis.Core.HomeAssistant;
 using Shellvis.Core.Hooks;
 using Shellvis.Core.Mail;
@@ -193,6 +194,23 @@ internal sealed partial class AgentSession : IDisposable
                 Blocklist = settings.Browser.Blocklist,
                 AllowPrivate = settings.Browser.AllowPrivateUrls,
             }));
+
+        // Connectors are loaded before the skills, and that order is not incidental: a
+        // skill declares requires_tools, and the prompt section drops any skill whose
+        // tools are missing. Loading them afterwards would leave a machine with Jira
+        // configured and the Jira skill silently absent.
+        var connectors = new ConnectorLoader(registry);
+
+        foreach (ConnectorStatus status in connectors.LoadAll())
+        {
+            // A connector that is merely unconfigured is not a warning: most machines
+            // will have none of them, and a startup line per absent integration is how a
+            // status area stops being read.
+            if (!status.Ready && !status.Detail.Contains("not configured", StringComparison.Ordinal))
+                warnings.Add($"connector '{status.Name}' {status.Detail}");
+        }
+
+        registry.RegisterFrom(new ConnectorTools(connectors));
 
         // Skills are discovered before the system prompt is built, because the prompt
         // carries their index -- names and one-line descriptions only.

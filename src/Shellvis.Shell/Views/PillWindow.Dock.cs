@@ -2,6 +2,7 @@ using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
+using Shellvis.Core.Desktop;
 using Windows.Graphics;
 
 namespace Shellvis.Shell.Views;
@@ -242,17 +243,40 @@ public sealed partial class PillWindow
         // overlapping the taskbar's own buttons.
         int bandTop = taskbarTop + Math.Max(0, (taskbarHeight - bandHeight) / 2);
 
-        // Placed in the gap between the centred app icons and the notification area, not
-        // right of centre as a first attempt did: Windows 11 centres the app buttons, so
-        // "centre plus a bit" lands ON them -- the first screenshot showed taskbar icons
-        // peeking out from under the bar. The stretch before the tray is the one part of
-        // a default taskbar that is reliably empty.
+        // Where the taskbar is actually empty, asked rather than assumed. The arithmetic
+        // this replaces -- a fixed offset from the right, never left of centre -- is right
+        // on an empty taskbar and wrong on a working one: Windows 11 centres the app
+        // buttons, so the cluster grows outward as windows open and eventually reaches under
+        // a bar parked at a fixed offset, while the stretch beside Start sits empty.
         int trayReserve = (int)Math.Round(230 * scale);
-        int x = work.X + work.Width - trayReserve - width;
+        int x;
 
-        // Never left of the middle, whatever the reserve arithmetic says: a bar drifting
-        // towards Start would cover the app icons from the other side.
-        x = Math.Max(x, work.X + (work.Width / 2));
+        TaskbarLayout.Span? free = TaskbarLayout.FindFreeSpan(
+            stripTop: taskbarTop,
+            stripBottom: outer.Y + outer.Height,
+            stripLeft: work.X,
+            stripRight: work.X + work.Width,
+            needed: width);
+
+        if (free is { } span)
+        {
+            // Against the side the icons are on, so the bar reads as part of the row rather
+            // than as something adrift in the middle of an empty stretch. The left-hand gap
+            // is bounded on its right by the cluster, so the bar tucks in beside Start.
+            x = span.Left <= work.X
+                ? span.Right - width - (int)Math.Round(12 * scale)
+                : span.Left + (int)Math.Round(12 * scale);
+
+            x = Math.Clamp(x, span.Left, Math.Max(span.Left, span.Right - width));
+        }
+        else
+        {
+            // The taskbar could not be read -- Explorer restarting, a shell that no longer
+            // publishes its buttons. The old arithmetic, which has been on screen for
+            // months, is a better answer than an invented one.
+            x = work.X + work.Width - trayReserve - width;
+            x = Math.Max(x, work.X + (work.Width / 2));
+        }
 
         // The band is the bottom of the window, so the top is the band's top minus
         // everything above it.

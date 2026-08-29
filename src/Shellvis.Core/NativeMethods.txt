@@ -29,3 +29,4 @@ SYSTEM_METRICS_INDEX
 GetDpiForWindow
 SetProcessDpiAwarenessContext
 DPI_AWARENESS_CONTEXT
+FindWindowW

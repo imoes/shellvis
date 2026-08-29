@@ -35,6 +35,13 @@ public static class ShellvisPaths
     public static string BundledSkillsDirectory =>
         Path.Combine(AppContext.BaseDirectory, "skills");
 
+    /// <summary>Connector packages the user installed.</summary>
+    public static string ConnectorsDirectory => Path.Combine(Home, "connectors");
+
+    /// <summary>Connectors that ship with Shellvis, beside the executable. Read in place.</summary>
+    public static string BundledConnectorsDirectory =>
+        Path.Combine(AppContext.BaseDirectory, "connectors");
+
     public static string SessionsDirectory => Path.Combine(Home, "sessions");
 
     public static string LogsDirectory => Path.Combine(Home, "logs");

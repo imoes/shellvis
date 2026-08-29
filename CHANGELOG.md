@@ -4,6 +4,25 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.6.0
+
+- **Shellvis learns an API from a YAML file.** A connector is one directory holding a
+  `connector.yaml` that describes a REST API — its endpoints, their arguments, and how an
+  answer should read. Drop it in `%USERPROFILE%\.shellvis\connectors` and its tools are
+  there on the next start; no build, no plugin, no code. `connector_list` says what is
+  installed and which variable a connector is still waiting for. A credential is never in
+  the package: the manifest names a variable, and one that holds a value instead is
+  refused rather than quietly cleaned up. [How to build one](docs/connectors.md).
+- **Jira, the IT service desk and Confluence come with it.** Search issues, read one,
+  see your open ones, work the service desk queues and — the part your own scripts never
+  reached — read the SLA clocks, which is what answers "what runs out today". Commenting,
+  moving an issue and creating one ask first, every time. Confluence is read-only on
+  purpose.
+- **The docked bar looks for a free spot on the taskbar** instead of sitting at a fixed
+  offset from the right. It used to cover the app icons once enough windows were open,
+  because Windows 11 grows the centred cluster outwards; now it measures the strip and
+  tucks in beside Start, where the space does not move when you open something.
+
 ## 0.4.0
 
 The release that turns Shellvis from something that operates a machine into something that

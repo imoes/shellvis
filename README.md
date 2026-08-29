@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.5.2-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.6.0-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -91,7 +91,7 @@ dictation, and the sentence "recognition runs on this machine" is not printed. K
 the DPAPI secret store or in `AZURE_SPEECH_KEY` / `GOOGLE_SPEECH_KEY`, never in `config.yaml`.
 Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 
-### 92 tools
+### 94 tools
 
 | Area | Tools |
 |---|---|
@@ -109,11 +109,19 @@ Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 | Thunderbird | five `mail_*` tools behind the same abstraction |
 | Browser | 15 `browser_*` tools |
 | Home Assistant | `ha_list_entities` `ha_get_state` `ha_list_services` `ha_call_service` |
+| Connectors | `connector_list` `connector_install`, plus whatever the installed packages add |
 | Skills & memory | `skills_list` `skill_view` `skill_manage` `memory` |
 | Asking | `clarify` |
 | Privileged | six `broker_*` tools, only when the service is installed |
 
-Eighty of them on a machine with no Home Assistant, no privileged service and no
+**Connectors** are how the list grows without a rebuild. A connector is one directory
+holding a `connector.yaml` that declares a REST API — endpoints, arguments, and how an
+answer should read. Drop it in `%USERPROFILE%\.shellvis\connectors` and its tools are there
+on the next start. Credentials are named, never held; only a `GET` can run without asking;
+and no package can shadow a built-in tool. Two ship with Shellvis, for a self-hosted Jira
+and Confluence. **[How to build one →](docs/connectors.md)**
+
+Eighty-two of them on a machine with no Home Assistant, no privileged service and no
 Thunderbird. Home Assistant appears only when a token is configured, and the broker tools
 only when the service is actually listening. A tool that is offered is a promise; one that fails on first
 use costs a round and reads as a broken agent rather than as an unconfigured integration.
@@ -387,9 +395,11 @@ src/
   Shellvis.Contracts/  IPC DTOs
   Shellvis.Setup/      single-file installer
   Shellvis.Thunderbird.Host/   native messaging relay
+connectors/            declarative API packages, read in place beside the executable
+skills/                the skills that ship with the product, likewise
 ext/thunderbird-bridge/        the MailExtension
 tools/
-  Shellvis.DesktopProbe/       20 verification harnesses
+  Shellvis.DesktopProbe/       38 verification harnesses
   Shellvis.TestMcpServer/      a deliberately hostile MCP server
 ```
 

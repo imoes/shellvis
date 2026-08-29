@@ -37,6 +37,9 @@ internal static class Program
                 "clarify" => await ClarifyProbe.RunAsync().ConfigureAwait(false),
                 "markdown" => MarkdownProbe.Run(),
                 "glyphs" => GlyphProbe.Run(),
+                "taskbar" => TaskbarProbe.Run(),
+                "connectors" => await ConnectorProbe.RunAsync().ConfigureAwait(false),
+                "jira" => await ConnectorProbe.RunAsync().ConfigureAwait(false),
                 "notes" => NoteProbe.Run(),
                 "teams" => TeamsProbe.Run(),
                 "process" => await ProcessProbe.RunAsync().ConfigureAwait(false),
@@ -105,7 +108,7 @@ internal static class Program
     private static int Usage()
     {
         Console.WriteLine(
-            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | whisper [--fetch] | mic | topmost | speech | stream | officelive]");
+            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | whisper [--fetch] | mic | topmost | connectors | taskbar | speech | stream | officelive]");
         return 2;
     }
 

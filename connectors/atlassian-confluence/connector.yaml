@@ -1,0 +1,94 @@
+# Confluence, as read-only tools.
+#
+# Read-only on purpose. Every tool here is a GET, so none of them can ask for approval and
+# none of them needs to: writing a page is a decision about a shared knowledge base, and a
+# page written by an agent that nobody reviewed is worse than no page.
+#
+# Self-hosted Confluence: /rest/api (v1), not the Cloud /wiki/rest/api. Configure with:
+#
+#   setx CONFLUENCE_URL  https://confluence.example.com
+#   setx CONFLUENCE_USER your.name
+#   ... and store the password under "CONFLUENCE_PASSWORD" in the secret store,
+#       or set an environment variable of that name.
+
+name: atlassian-confluence
+kind: http
+title: Confluence
+description: Search and read Confluence pages and spaces.
+
+baseUrl: ${CONFLUENCE_URL}
+
+auth:
+  scheme: basic
+  userVar: CONFLUENCE_USER
+  secret: CONFLUENCE_PASSWORD
+
+tools:
+  - name: confluence_search
+    method: GET
+    path: /rest/api/content/search
+    effect: read
+    preview: cql
+    description: >
+      Search content with CQL. Examples:
+      text ~ "vpn" AND space = 002IT
+      title ~ "onboarding" AND type = page
+      Quote a phrase; an unquoted multi-word text search matches each word separately.
+    params:
+      - name: cql
+        in: query
+        required: true
+        description: The CQL query.
+      - name: limit
+        in: query
+        default: "20"
+      - name: expand
+        in: query
+        default: "space,version"
+    result:
+      items: results
+      total: size
+      line: "{id}  [{space.key}]  {title}"
+      empty: >
+        nothing matches that CQL. If a match was expected, try a broader text ~ term
+        before concluding the page does not exist.
+
+  - name: confluence_page
+    method: GET
+    path: /rest/api/content/{id}
+    effect: read
+    preview: id
+    description: >
+      One page with its body. The id comes from confluence_search. The body arrives as
+      storage format, which is XHTML with Confluence macros in it.
+    params:
+      - name: id
+        in: path
+        required: true
+        description: The content id.
+      - name: expand
+        in: query
+        default: "body.storage,space,version"
+    result:
+      line: |
+        {title}   (space {space.key}, version {version.number}, updated {version.when})
+        {body.storage.value}
+
+  - name: confluence_spaces
+    method: GET
+    path: /rest/api/space
+    effect: read
+    description: The spaces this account can see, with their keys for use in CQL.
+    params:
+      - name: limit
+        in: query
+        default: "50"
+      - name: type
+        in: query
+        default: "global"
+        description: global or personal.
+    result:
+      items: results
+      total: size
+      line: "{key}  {name}"
+      empty: "this account can see no spaces, which usually means the credential is wrong."

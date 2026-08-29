@@ -301,10 +301,21 @@ internal static class SkillProbe
         if (!Directory.Exists(shell))
             return null;
 
-        // Whichever configuration was built most recently: the harness should report on the
-        // build that exists, not insist on one that may not have been made.
+        // The directory that holds the EXECUTABLE, not the newest one that happens to be
+        // called win-x64.
+        //
+        // This is a correction to a check that passed here and failed on the build server.
+        // A published build contains two directories with that name: the output itself, and
+        // runtimes\win-x64, which carries native assets and no skills. Ordering by write
+        // time picked between them by a one-second margin -- locally the real one won, on
+        // the runner the other did, and the harness reported that the application ships no
+        // skills when it ships them perfectly well.
+        //
+        // A timestamp was never the property being looked for. "The build output" means the
+        // place the application was built to, and the executable is what says so.
         return Directory
             .EnumerateDirectories(shell, "win-x64", SearchOption.AllDirectories)
+            .Where(d => File.Exists(Path.Combine(d, "Shellvis.Shell.exe")))
             .OrderByDescending(Directory.GetLastWriteTimeUtc)
             .FirstOrDefault();
     }

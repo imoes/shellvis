@@ -51,8 +51,23 @@ jobs:
                                'providers','endpoint','reflect','hooks','cron','thunderbird',
                                'stream','mcp','hass','broker','topmost','speech','whisper') {
             Write-Host "--- $harness"
-            & $probe $harness
-            if ($LASTEXITCODE -ne 0) { $failed += $harness }
+
+            # Captured as well as printed, so the reason can be put in an annotation. Run logs
+            # need an authenticated download; annotations do not, and a failure nobody can read
+            # is a failure nobody can fix.
+            $output = & $probe $harness 2>&1 | ForEach-Object { "$_" }
+            $output | ForEach-Object { Write-Host $_ }
+
+            if ($LASTEXITCODE -ne 0) {
+              $failed += $harness
+
+              $why = ($output | Where-Object { $_ -match 'FAIL|failed|not found|Exception|SKIPPED' } |
+                      Select-Object -Last 4) -join ' | '
+
+              if (-not $why) { $why = ($output | Select-Object -Last 3) -join ' | ' }
+
+              Write-Host "::error title=probe $harness::$why"
+            }
           }
 
           if ($failed.Count -gt 0) { throw "harnesses failed: $($failed -join ', ')" }

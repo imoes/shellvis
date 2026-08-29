@@ -19,5 +19,14 @@
     <Project Path="tools/Shellvis.DesktopProbe/Shellvis.DesktopProbe.csproj">
       <Platform Project="x64" />
     </Project>
+
+    <!--
+      The stdio MCP server the mcp harness talks to. It was outside the solution, which meant
+      it only existed on a machine where somebody had once built it by hand: a clean checkout
+      built everything, ran the harness, and failed because the server was not there. The
+      local run did not show it either, because the resolver found a Debug copy left over from
+      that hand-build while the harness was supposedly running against Release.
+    -->
+    <Project Path="tools/Shellvis.TestMcpServer/Shellvis.TestMcpServer.csproj" />
   </Folder>
 </Solution>

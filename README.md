@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.2.11-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.3.0-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -66,8 +66,8 @@ free-form dictation goes through Microsoft's online service — so it is not an 
 local-only feature.
 
 The model is chosen **during setup** and downloaded once, to
-`%LOCALAPPDATA%\Shellvis\Models`: `tiny` 74 MB, `base` 141 MB, **`small` 465 MB
-(recommended)**, `medium` 1.5 GB, or none. It is deliberately not shipped inside the
+`%LOCALAPPDATA%\Shellvis\Models`: `tiny` 74 MB, `base` 141 MB, `small` 465 MB,
+**`medium` 1.5 GB (recommended)**, or none. It is deliberately not shipped inside the
 installer — it would be paid for by everyone including those who never dictate, and it
 exceeds GitHub's 100 MB asset limit. Until a model is present, dictation falls back to the
 Windows engine rather than being unavailable, and the console says which one it is using.
@@ -77,7 +77,9 @@ with `voice.engine: sapi`.
 **Hosted recognition, if you want it.** `voice.engine: azure` or `voice.engine: google` sends
 each recording to that service instead. Both are more accurate than the largest local model
 and faster than the smallest, which is a combination no local model offers today: `medium`
-measured 11.5 seconds for three seconds of speech on this machine against `small`'s 3.8.
+measured 11.5 seconds for three seconds of speech on this machine against `small`'s 3.8 --
+and `medium` is the default because `small` guesses German word endings, turning "diese
+Woche noch an" into "diese Woche nach dem".
 
 **This is the one place where audio leaves the machine, and it is off by default.** `auto`
 never reaches it — a hosted provider has to be named explicitly, and a key has to be present.
@@ -217,13 +219,13 @@ feature tree, or from the command line:
 
 ```powershell
 # Everything, including the service. From an elevated prompt.
-msiexec /i Shellvis-0.2.11-machine.msi ADDLOCAL=Application,BrokerService
+msiexec /i Shellvis-0.3.0-machine.msi ADDLOCAL=Application,BrokerService
 
 # Application only, service left out.
-msiexec /i Shellvis-0.2.11-machine.msi ADDLOCAL=Application
+msiexec /i Shellvis-0.3.0-machine.msi ADDLOCAL=Application
 
 # Silent, with a log worth reading if it goes wrong.
-msiexec /i Shellvis-0.2.11-user.msi /qn /l*v install.log
+msiexec /i Shellvis-0.3.0-user.msi /qn /l*v install.log
 ```
 
 The packages contain no custom actions. The one thing that would have needed native code is
@@ -243,13 +245,13 @@ foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','
     dotnet publish $p -c Release -r win-x64 --self-contained false -o artifacts/stage
 }
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.11 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.3.0 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext -d PerUser=1 `
-    -o artifacts/Shellvis-0.2.11-user.msi
+    -o artifacts/Shellvis-0.3.0-user.msi
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.11 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.3.0 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
-    -o artifacts/Shellvis-0.2.11-machine.msi
+    -o artifacts/Shellvis-0.3.0-machine.msi
 ```
 
 **WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee

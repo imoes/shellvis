@@ -106,4 +106,23 @@
         <Setter Property="Foreground" Value="{ThemeResource PillGlyphBrush}" />
     </Style>
 
+    <!--
+        The same button, one size down.
+
+        BasedOn rather than a second definition. The history rows built their buttons in code
+        with their own numbers (28x26, font 12, no corner radius), and therefore got WinUI's
+        default button chrome, while every other icon button in the application came from
+        the style above. They read as belonging to a different program, and that is exactly
+        how it was reported. Only what has to differ is overridden: a list row cannot carry a
+        36px button, but it can carry the same shape and colour.
+    -->
+    <Style x:Key="PillIconButtonSmallStyle" TargetType="Button"
+           BasedOn="{StaticResource PillIconButtonStyle}">
+        <Setter Property="Width" Value="28" />
+        <Setter Property="Height" Value="26" />
+        <Setter Property="CornerRadius" Value="13" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Foreground" Value="{ThemeResource ConsoleTextBrush}" />
+    </Style>
+
 </ResourceDictionary>

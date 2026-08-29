@@ -389,7 +389,9 @@ public static class ConfigStore
           #
           #   engine: auto        # auto = whisper when its model is here, else Windows
           #                       # whisper = insist on whisper; sapi = the Windows engine
-          #   whisperModel: small # tiny 74 MB | base 141 MB | small 465 MB | medium 1.5 GB
+          #   whisperModel: medium  # tiny 74 MB | base 141 MB | small 465 MB | medium 1.5 GB
+          #                         # medium is the default: small guesses German word
+          #                         # endings, medium gets them right for three times the CPU
           #
           # Unset, whisperModel follows what was chosen during setup. Set it here to
           # override that.

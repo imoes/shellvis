@@ -160,7 +160,10 @@ public sealed partial class PillWindow
                     break;
 
                 case "assistant":
-                    AddRow(GlyphSpeaker, message.Content, string.Empty, isAnnouncement: true);
+                    // isAnswer, not isAnnouncement. A replayed answer is still an answer, and
+                    // rendering it as one of Shellvis' own remarks put it in italic -- the same
+                    // wrong category that made live answers look unformatted.
+                    AddRow(GlyphSpeaker, message.Content, string.Empty, isAnswer: true);
                     break;
 
                 case "tool":
@@ -224,14 +227,13 @@ public sealed partial class PillWindow
 
     private static Button IconButton(string glyph, string tooltip)
     {
+        // Every value comes from the shared style now. Building a button in code with its
+        // own size, font and chrome is how these ended up looking like a different
+        // application from every other icon button in the pill.
         var button = new Button
         {
             Content = glyph,
-            FontFamily = new FontFamily("Segoe Fluent Icons"),
-            FontSize = 12,
-            Width = 28,
-            Height = 26,
-            Padding = new Thickness(0),
+            Style = (Style)Application.Current.Resources["PillIconButtonSmallStyle"],
             VerticalAlignment = VerticalAlignment.Center,
         };
 

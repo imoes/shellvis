@@ -442,13 +442,13 @@ public sealed partial class PillWindow : Window
                 // awkwardly. If nothing streamed, this creates the row as before.
                 if (_streamingBody is not null)
                 {
-                    RenderProse(_streamingBody, Tidy(e.Text), isAnnouncement: true);
+                    RenderProse(_streamingBody, Tidy(e.Text), ProseKind.Answer);
                     _streamingBody = null;
                     ScrollToEnd();
                 }
                 else
                 {
-                    AddRow(GlyphSpeaker, e.Text.Trim(), string.Empty, isAnnouncement: true);
+                    AddRow(GlyphSpeaker, e.Text.Trim(), string.Empty, isAnswer: true);
                 }
 
                 break;
@@ -781,7 +781,7 @@ public sealed partial class PillWindow : Window
         if (_streamingBody is null)
         {
             _streamed.Clear();
-            AddRow(GlyphSpeaker, string.Empty, string.Empty, isAnnouncement: true);
+            AddRow(GlyphSpeaker, string.Empty, string.Empty, isAnswer: true);
 
             // The body is the second child by construction in AddRow. Reached that way
             // rather than by threading a return value through every call site, which
@@ -803,7 +803,7 @@ public sealed partial class PillWindow : Window
             // downward as the answer arrives, which is what makes streaming visible at
             // all. ScrollToEnd on every chunk keeps the newest text in view while the
             // row is still getting taller.
-            RenderProse(_streamingBody, Tidy(_streamed.ToString()), isAnnouncement: true);
+            RenderProse(_streamingBody, Tidy(_streamed.ToString()), ProseKind.Answer);
             ScrollToEnd();
         }
     }
@@ -831,6 +831,7 @@ public sealed partial class PillWindow : Window
         string trailing,
         bool isPrompt = false,
         bool isAnnouncement = false,
+        bool isAnswer = false,
         bool isPending = false)
     {
         var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
@@ -856,9 +857,13 @@ public sealed partial class PillWindow : Window
         // included. Tool results deliberately do NOT go through the renderer: an asterisk
         // in a command line and a backtick in a PowerShell string are data, and a console
         // that italicises them is no longer showing what happened.
-        if (isPrompt || isAnnouncement)
+        if (isPrompt || isAnnouncement || isAnswer)
         {
-            FrameworkElement prose = ProseBody(text, isAnnouncement);
+            FrameworkElement prose = ProseBody(
+                text,
+                isAnswer ? ProseKind.Answer
+                    : isAnnouncement ? ProseKind.Announcement
+                    : ProseKind.Prompt);
             Grid.SetColumn(prose, 1);
             row.Children.Add(prose);
             AddTrailing(row, trailing);
@@ -905,7 +910,7 @@ public sealed partial class PillWindow : Window
     /// spans need separate runs, and because it carries text selection the same way -- the
     /// ability to copy a path out of the transcript is not given up for formatting.
     /// </summary>
-    private RichTextBlock ProseBody(string text, bool isAnnouncement)
+    private RichTextBlock ProseBody(string text, ProseKind kind)
     {
         var body = new RichTextBlock
         {
@@ -913,15 +918,37 @@ public sealed partial class PillWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        RenderProse(body, text, isAnnouncement);
+        RenderProse(body, text, kind);
         return body;
+    }
+
+    /// <summary>
+    /// Which voice a prose row is in.
+    ///
+    /// The distinction matters more than it looks. Every model answer used to be rendered as
+    /// an ANNOUNCEMENT, a category meant for Shellvis speaking about itself -- and
+    /// announcements are set in italic. So a correctly parsed Markdown answer arrived as a
+    /// uniform slanted paragraph in which bold and bullets barely registered, and it was
+    /// reported as "the output is still not Markdown". The parser was never the problem; the
+    /// answer was simply wearing the wrong clothes.
+    /// </summary>
+    private enum ProseKind
+    {
+        /// <summary>What the user typed.</summary>
+        Prompt,
+
+        /// <summary>What the model answered. The main thing anyone reads.</summary>
+        Answer,
+
+        /// <summary>Shellvis about itself: started, switched, learned.</summary>
+        Announcement,
     }
 
     /// <summary>
     /// Render Markdown into an existing prose body. Shared with the streaming path, which
     /// re-renders the whole answer on every delta.
     /// </summary>
-    private void RenderProse(RichTextBlock body, string text, bool isAnnouncement)
+    private void RenderProse(RichTextBlock body, string text, ProseKind kind)
     {
         MarkdownRenderer.Render(
             body,
@@ -931,14 +958,19 @@ public sealed partial class PillWindow : Window
             // single answer.
             prose: new FontFamily("Segoe UI Variable Text"),
             mono: new FontFamily("Cascadia Mono"),
-            size: 13,
+            // An answer gets a point more than the rest. It is the thing being read; the
+            // prompt above it and the announcements around it are context.
+            size: kind == ProseKind.Answer ? 14 : 13,
             foreground: ThemeBrush("ConsoleTextBrush"),
             muted: ThemeBrush("ConsoleMutedBrush"));
 
-        // Announcements are Shellvis speaking, so they get slant rather than another
-        // colour -- the transcript already uses colour for severity. Applied to the block
-        // rather than inside the renderer, so the renderer stays about Markdown.
-        body.FontStyle = isAnnouncement ? FontStyle.Italic : FontStyle.Normal;
+        // Only announcements slant. They are Shellvis speaking about itself, and slant
+        // rather than another colour because colour is already spoken for by severity.
+        // Answers are upright: an italic paragraph flattens headings, bold and bullets into
+        // one texture, which is exactly how correctly rendered Markdown came to be reported
+        // as no Markdown at all. Applied to the block rather than inside the renderer, so
+        // the renderer stays about Markdown and nothing else.
+        body.FontStyle = kind == ProseKind.Announcement ? FontStyle.Italic : FontStyle.Normal;
     }
 
     private void AddTrailing(Grid row, string trailing)

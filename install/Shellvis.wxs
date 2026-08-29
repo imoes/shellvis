@@ -75,12 +75,12 @@
       want the same one. Secure="yes" so it also works from the command line for an
       unattended install: msiexec /i Shellvis.msi WHISPERMODEL=medium
 
-      The model is NOT shipped inside the MSI. At 465 MB it would be paid for by every user
-      including those who never dictate, and GitHub refuses release assets over 100 MB, so
+      The model is NOT shipped inside the MSI. At up to 1.5 GB it would be paid for by every
+      user including those who never dictate, and GitHub refuses release assets over 100 MB, so
       the package could not carry it even if that were wanted. Shellvis fetches the chosen
       model on first use and says so in its console while it does.
     -->
-    <Property Id="WHISPERMODEL" Value="small" Secure="yes" />
+    <Property Id="WHISPERMODEL" Value="medium" Secure="yes" />
 
     <UI>
       <Dialog Id="WhisperDlg" Width="370" Height="270" Title="[ProductName] Setup">
@@ -116,10 +116,10 @@
       </Dialog>
 
       <RadioButtonGroup Property="WHISPERMODEL">
-        <RadioButton Value="small" X="0" Y="0" Width="320" Height="16"
-                     Text="Whisper small - 465 MB. Recommended: the sweet spot for German." />
-        <RadioButton Value="medium" X="0" Y="20" Width="320" Height="16"
-                     Text="Whisper medium - 1.5 GB. Most accurate, about three times the CPU time." />
+        <RadioButton Value="medium" X="0" Y="0" Width="320" Height="16"
+                     Text="Whisper medium - 1.5 GB. Recommended: gets German word endings right." />
+        <RadioButton Value="small" X="0" Y="20" Width="320" Height="16"
+                     Text="Whisper small - 465 MB. Three times faster, but guesses word endings." />
         <RadioButton Value="base" X="0" Y="40" Width="320" Height="16"
                      Text="Whisper base - 141 MB. Fast and small, stumbles on names." />
         <RadioButton Value="tiny" X="0" Y="60" Width="320" Height="16"

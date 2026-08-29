@@ -20,8 +20,8 @@ public sealed record WhisperModel(string Id, string File, long Bytes, string Not
 /// Where the Whisper models live, and how one arrives.
 ///
 /// <b>Why a download at all.</b> The models are between 74 MB and 1.5 GB, and shipping one
-/// inside the installer would put a 465 MB payload in front of every user including the
-/// ones who never dictate. GitHub also refuses files over 100 MB, so the release artefact
+/// inside the installer would put a payload of up to 1.5 GB in front of every user
+/// including the ones who never dictate. GitHub also refuses files over 100 MB, so the release artefact
 /// could not carry it even if that were desirable. So the model is fetched once, to a
 /// per-user directory, and the choice of which one is asked rather than assumed.
 ///
@@ -50,12 +50,12 @@ public static class WhisperModelStore
         new("base", "ggml-base.bin", 147_951_465,
             "clearly better than the Windows engine, still stumbles on names"),
         new("small", "ggml-small.bin", 487_601_967,
-            "the sweet spot for German: a second or two per utterance on CPU"),
+            "quick, but guesses unstressed word endings: \"noch an\" came back as \"nach dem\""),
         new("medium", "ggml-medium.bin", 1_533_763_059,
-            "the best that is realistic locally, about three times the CPU time"),
+            "recommended: gets the endings right, about three times the CPU time"),
     ];
 
-    public const string DefaultModelId = "small";
+    public const string DefaultModelId = "medium";
 
     /// <summary>Resolve a configured name, falling back to the default with a reason.</summary>
     public static WhisperModel Resolve(string? id, out string? warning)

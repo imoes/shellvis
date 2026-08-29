@@ -440,16 +440,17 @@ public sealed partial class PillWindow : Window
                 // the final text replaces the incrementally built string with the
                 // authoritative one, which also fixes any whitespace the chunking split
                 // awkwardly. If nothing streamed, this creates the row as before.
-                if (_streamingBody is not null)
-                {
-                    RenderProse(_streamingBody, Tidy(e.Text), ProseKind.Answer);
-                    _streamingBody = null;
-                    ScrollToEnd();
-                }
-                else
-                {
-                    AddRow(GlyphSpeaker, e.Text.Trim(), string.Empty, isAnswer: true);
-                }
+                // The document goes to its own window; the log keeps a line saying it
+                // happened. A console that showed the tools running and then nothing would
+                // be a record with a hole in it.
+                ShowAnswer(Tidy(e.Text), streaming: false);
+                _streamed.Clear();
+
+                AddRow(
+                    GlyphSpeaker,
+                    $"answered, {WordCount(e.Text)} words",
+                    "answer",
+                    isAnnouncement: true);
 
                 break;
 
@@ -488,10 +489,10 @@ public sealed partial class PillWindow : Window
                 break;
 
             case AgentEvent.TurnFinished e:
-                // Released here as well as on AssistantMessage: an interrupted or failed
-                // turn never produces a final message, and a stale reference would let
-                // the NEXT turn's first delta overwrite this turn's last row.
-                _streamingBody = null;
+                // Cleared here as well as on AssistantMessage: an interrupted or failed turn
+                // never produces a final message, and leftover text would make the next
+                // turn's first delta continue this turn's sentence.
+                _streamed.Clear();
 
                 StatusText.Text = e.Reason switch
                 {
@@ -654,7 +655,12 @@ public sealed partial class PillWindow : Window
         _tray?.Dispose();
         _dictation?.Dispose();
         _hotkey?.Dispose();
+        _spaceHook?.Dispose();
         _session?.Dispose();
+
+        // The answer window is a second top-level window and does not close with this one.
+        // Left open, it keeps the process alive with no way left to reach it.
+        CloseAnswerWindow();
     }
 
     // ---------------------------------------------------------------- transcript
@@ -759,11 +765,6 @@ public sealed partial class PillWindow : Window
         TranscriptScroller.ChangeView(null, TranscriptScroller.ScrollableHeight, null, true);
     }
 
-    /// <summary>
-    /// The text block of the answer currently streaming in, so deltas can extend it.
-    /// </summary>
-    private RichTextBlock? _streamingBody;
-
     private readonly System.Text.StringBuilder _streamed = new();
 
     /// <summary>
@@ -778,35 +779,17 @@ public sealed partial class PillWindow : Window
         if (text.Length == 0)
             return;
 
-        if (_streamingBody is null)
-        {
-            _streamed.Clear();
-            AddRow(GlyphSpeaker, string.Empty, string.Empty, isAnswer: true);
-
-            // The body is the second child by construction in AddRow. Reached that way
-            // rather than by threading a return value through every call site, which
-            // would touch a dozen places for one feature.
-            if (Transcript.Items.Count > 0
-                && Transcript.Items[^1] is Grid row
-                && row.Children.Count > 1
-                && row.Children[1] is RichTextBlock body)
-            {
-                _streamingBody = body;
-            }
-        }
-
+        // Straight into the answer window. There is no row in the transcript any more: the
+        // console is the log and the answer is a document, and the whole point of separating
+        // them was that a growing paragraph in the middle of a command log made both harder
+        // to read.
         _streamed.Append(text);
-
-        if (_streamingBody is not null)
-        {
-            // Blank lines are collapsed but the text is allowed to wrap: the row grows
-            // downward as the answer arrives, which is what makes streaming visible at
-            // all. ScrollToEnd on every chunk keeps the newest text in view while the
-            // row is still getting taller.
-            RenderProse(_streamingBody, Tidy(_streamed.ToString()), ProseKind.Answer);
-            ScrollToEnd();
-        }
+        ShowAnswer(Tidy(_streamed.ToString()), streaming: true);
     }
+
+    /// <summary>Words in an answer, for the one line the log keeps about it.</summary>
+    private static int WordCount(string text) =>
+        text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
 
     /// <summary>
     /// Collapse runs of blank lines, keeping the line structure the model wrote.

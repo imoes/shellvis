@@ -119,12 +119,18 @@ internal static class MarkdownRenderer
             {
                 Flush(target, ref paragraph);
 
+                // Hanging indent, so a wrapped bullet lines up under its own text rather
+                // than under the marker. The left margin has to be at LEAST the indent, or
+                // the marker is drawn outside the block and clipped by whatever padding the
+                // container has. That is not hypothetical: in the answer window the markers
+                // were invisible for exactly that reason, leaving lines that looked indented
+                // for no stated reason.
+                const double Hang = 14;
+
                 var block = new Paragraph
                 {
-                    // Hanging indent, so a wrapped bullet lines up under its own text
-                    // rather than under the marker.
-                    Margin = new Thickness(bullet.Depth * 14, 0, 0, 0),
-                    TextIndent = -10,
+                    Margin = new Thickness(Hang + (bullet.Depth * Hang), 1, 0, 1),
+                    TextIndent = -Hang,
                 };
 
                 block.Inlines.Add(new Run

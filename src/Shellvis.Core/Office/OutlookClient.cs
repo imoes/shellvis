@@ -33,12 +33,23 @@ public sealed record MailSummary(
 }
 
 /// <summary>A calendar entry.</summary>
+/// <param name="EntryId">
+/// Outlook's id for this entry, so a later call can act on it. Empty for an occurrence of a
+/// recurring series that Outlook expanded rather than stored.
+/// </param>
+/// <param name="JoinUrl">
+/// The Teams join link, when the body carries one. Detected on the way out rather than left
+/// for a caller to find: the body is tens of thousands of characters and would sit in the
+/// context of every later round, while the link is the one line anybody wants from it.
+/// </param>
 public sealed record AppointmentSummary(
     string Subject,
     DateTime Start,
     DateTime End,
     string Location,
-    bool IsAllDay)
+    bool IsAllDay,
+    string EntryId = "",
+    string JoinUrl = "")
 {
     /// <summary>
     /// The weekday is spelled out, and that is not decoration.
@@ -64,7 +75,14 @@ public sealed record AppointmentSummary(
             : string.Create(CultureInfo.InvariantCulture,
                 $"{Start:ddd yyyy-MM-dd HH:mm}-{End:HH:mm}  \"{Subject}\"{Where()}");
 
-    private string Where() => Location.Length > 0 ? $"  @ {Location}" : string.Empty;
+    private string Where()
+    {
+        string place = Location.Length > 0 ? $"  @ {Location}" : string.Empty;
+
+        // Said out loud, because "is this one online?" is the question a calendar line has
+        // to answer before anyone can decide whether to walk anywhere.
+        return JoinUrl.Length > 0 ? place + "  [Teams]" : place;
+    }
 }
 
 /// <summary>
@@ -426,7 +444,9 @@ public sealed partial class OutlookClient(ComApartment apartment)
                                 Start: Date(() => appointment.Start),
                                 End: Date(() => appointment.End),
                                 Location: Str(() => appointment.Location),
-                                IsAllDay: Flag(() => appointment.AllDayEvent)));
+                                IsAllDay: Flag(() => appointment.AllDayEvent),
+                                EntryId: Str(() => appointment.EntryID),
+                                JoinUrl: Teams.TeamsLinks.JoinUrlIn(Str(() => appointment.Body)) ?? string.Empty));
                         }
                         finally
                         {

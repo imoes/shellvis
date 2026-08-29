@@ -88,6 +88,41 @@ public sealed partial class OutlookClient
     }
 
     /// <summary>
+    /// The Teams join link on one appointment, if it has one.
+    ///
+    /// Read on demand rather than carried in every listing: the body it comes from is tens
+    /// of thousands of characters, and reading it for forty appointments to answer "what is
+    /// on this week" would cost that for nothing. The listing detects the link because it
+    /// already has the body open; this exists for an entry addressed by id.
+    /// </summary>
+    public Task<string?> JoinUrlAsync(string entryId, CancellationToken cancellationToken = default)
+    {
+        return apartment.InvokeAsync<string?>(() =>
+        {
+            dynamic? outlook = null;
+            dynamic? session = null;
+            dynamic? item = null;
+
+            try
+            {
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
+
+                session = outlook.Session;
+                item = session.GetItemFromID(entryId);
+
+                return Teams.TeamsLinks.JoinUrlIn(Str(() => item.Body));
+            }
+            finally
+            {
+                Com.ReleaseAll(outlook, session, item);
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
     /// The recent correspondence with one person, both directions.
     ///
     /// Matched on address rather than on display name. Names repeat across an organisation

@@ -133,6 +133,12 @@ internal sealed partial class AgentSession : IDisposable
 
         registry.RegisterFrom(new OutlookTools(comApartment, notes));
 
+        // Teams through the deep links it registers with Windows. Registered
+        // unconditionally: without Teams the launcher refuses the scheme with a sentence
+        // rather than raising the "choose an app" dialog, so an absent client is an answer
+        // and not a hang.
+        registry.RegisterFrom(new TeamsTools(comApartment));
+
         // Asking the user is a capability, so it is a tool. The flag behind it is what
         // keeps a scheduled run from opening a dialog at three in the morning: the
         // registry is shared with cron, so the choice cannot be made when it is

@@ -37,6 +37,7 @@ internal static class Program
                 "clarify" => await ClarifyProbe.RunAsync().ConfigureAwait(false),
                 "markdown" => MarkdownProbe.Run(),
                 "notes" => NoteProbe.Run(),
+                "teams" => TeamsProbe.Run(),
                 "remote" => await RemoteProbe.RunAsync().ConfigureAwait(false),
                 "endpoint" => EndpointProbe.Run(),
                 "audiobridge" => StreamedAudioProbe.Run(),

@@ -34,6 +34,7 @@ internal static class Program
                 "drive" => await DriveNotepadAsync().ConfigureAwait(false),
                 "launch" => await LaunchProbe.RunAsync().ConfigureAwait(false),
                 "reflect" => await ReflectProbe.RunAsync().ConfigureAwait(false),
+                "clarify" => await ClarifyProbe.RunAsync().ConfigureAwait(false),
                 "remote" => await RemoteProbe.RunAsync().ConfigureAwait(false),
                 "endpoint" => EndpointProbe.Run(),
                 "audiobridge" => StreamedAudioProbe.Run(),

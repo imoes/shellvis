@@ -122,6 +122,17 @@ internal sealed partial class AgentSession : IDisposable
         registry.RegisterFrom(new OfficeTools());
         registry.RegisterFrom(new OutlookTools(comApartment));
 
+        // Asking the user is a capability, so it is a tool. The flag behind it is what
+        // keeps a scheduled run from opening a dialog at three in the morning: the
+        // registry is shared with cron, so the choice cannot be made when it is
+        // registered, only per call.
+        var unattended = new System.Runtime.CompilerServices.StrongBox<bool>(false);
+
+        registry.RegisterFrom(new ClarifyTools(
+            new UnattendedClarifier(
+                approvals as IClarifier ?? new NobodyHome(),
+                () => unattended.Value)));
+
         // The live-Office tools share the STA apartment with Outlook. Registered
         // unconditionally: unlike Home Assistant there is nothing to configure, and
         // office_open_documents answering "nothing is open" is a useful answer rather
@@ -225,6 +236,7 @@ internal sealed partial class AgentSession : IDisposable
             HomeAssistant = homeAssistant,
             Browser = browser,
             Hooks = hooks,
+            _unattended = unattended,
         };
 
         // Held separately from the loop so a scheduled run is not affected by an
@@ -270,6 +282,15 @@ internal sealed partial class AgentSession : IDisposable
 
     /// <summary>Whether to run the post-turn reflection at all.</summary>
     private bool _learnFromTurns = true;
+
+    /// <summary>
+    /// True while a scheduled job is running, read by the clarify tool.
+    ///
+    /// A box rather than a plain field because the tool is registered before this
+    /// session exists, so the two have to share one cell rather than a value.
+    /// Serialised by the turn gate, so it cannot be true and false at once.
+    /// </summary>
+    private System.Runtime.CompilerServices.StrongBox<bool> _unattended = new(false);
 
     /// <summary>
     /// Ask, after a finished turn, whether it taught anything worth keeping.

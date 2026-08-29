@@ -16,7 +16,7 @@ namespace Shellvis.Shell.Agent;
 /// Timeout resolves to Deny, never to Allow. An unattended machine must not accumulate
 /// approvals just because nobody was watching.
 /// </summary>
-internal sealed class PillApprovalGate(DispatcherQueue dispatcher, Func<XamlRoot?> xamlRoot)
+internal sealed partial class PillApprovalGate(DispatcherQueue dispatcher, Func<XamlRoot?> xamlRoot)
     : IApprovalGate, Shellvis.Core.Hooks.IHookConsent
 {
     /// <summary>

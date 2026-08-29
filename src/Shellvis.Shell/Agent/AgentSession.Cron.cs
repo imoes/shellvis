@@ -81,6 +81,11 @@ internal sealed partial class AgentSession
 
         try
         {
+            // Nobody is watching, so clarify answers "nobody is here" instead of
+            // opening a dialog that would hang the job until its own timeout. Set
+            // inside the gate, which is what makes one flag safe for two loops.
+            _unattended.Value = true;
+
             string prompt = BuildCronPrompt(job);
 
             // A loop of its own over the SAME tool registry. The registry is shared
@@ -126,6 +131,7 @@ internal sealed partial class AgentSession
         }
         finally
         {
+            _unattended.Value = false;
             _turnGate.Release();
         }
     }

@@ -14,6 +14,28 @@
             <SolidColorBrush x:Key="ConsoleTintBrush" Color="#F7FBFBFE" />
             <SolidColorBrush x:Key="ConsoleTextBrush" Color="#FF25252B" />
             <SolidColorBrush x:Key="ConsoleMutedBrush" Color="#FF6B6B78" />
+            <!--
+              Severity, and the ONLY thing colour means in this console. A tick and a cross
+              carry whether something worked, because shape survives a colour-blind reader
+              and a second meaning on the colour channel would make both unreadable. This is
+              for the case where something went wrong and should be noticed.
+            -->
+            <SolidColorBrush x:Key="ConsoleWarningBrush" Color="#FFB4331F" />
+
+            <!--
+              Paper, five colours, as in Windows 7.
+
+              Not a palette: the point of the colours is that a glance across the desktop
+              separates one kind of note from another, and that works with five and stops
+              working with a hundred. The ink is one colour for all five, dark enough to
+              read on every one of them.
+            -->
+            <SolidColorBrush x:Key="StickyYellowBrush" Color="#FFFDF3A8" />
+            <SolidColorBrush x:Key="StickyBlueBrush" Color="#FFBEE3F8" />
+            <SolidColorBrush x:Key="StickyGreenBrush" Color="#FFC9EFC0" />
+            <SolidColorBrush x:Key="StickyPinkBrush" Color="#FFFAC8DA" />
+            <SolidColorBrush x:Key="StickyPurpleBrush" Color="#FFDCCBF2" />
+            <SolidColorBrush x:Key="StickyInkBrush" Color="#FF33332B" />
             <SolidColorBrush x:Key="MicButtonBrush" Color="#FFE6E1F6" />
             <SolidColorBrush x:Key="SeparatorBrush" Color="#22000000" />
 
@@ -36,6 +58,21 @@
             <SolidColorBrush x:Key="ConsoleTintBrush" Color="#E01C1C22" />
             <SolidColorBrush x:Key="ConsoleTextBrush" Color="#FFE8E8F0" />
             <SolidColorBrush x:Key="ConsoleMutedBrush" Color="#FF9A9AA8" />
+            <!-- Lighter and less saturated: the same red on a dark ground glows. -->
+            <SolidColorBrush x:Key="ConsoleWarningBrush" Color="#FFE8896F" />
+
+            <!--
+              Deliberately NOT darkened for the dark theme. A sticky note sits on the
+              desktop rather than inside this application, and paper that turns grey at
+              dusk stops looking like paper. The ink stays dark for the same reason: it is
+              on paper, not on a screen.
+            -->
+            <SolidColorBrush x:Key="StickyYellowBrush" Color="#FFF6E68F" />
+            <SolidColorBrush x:Key="StickyBlueBrush" Color="#FFA8D5EE" />
+            <SolidColorBrush x:Key="StickyGreenBrush" Color="#FFB6E3AC" />
+            <SolidColorBrush x:Key="StickyPinkBrush" Color="#FFF3B6CB" />
+            <SolidColorBrush x:Key="StickyPurpleBrush" Color="#FFCDB8EA" />
+            <SolidColorBrush x:Key="StickyInkBrush" Color="#FF2A2A24" />
             <SolidColorBrush x:Key="MicButtonBrush" Color="#FF3A3550" />
             <SolidColorBrush x:Key="SeparatorBrush" Color="#22FFFFFF" />
 

@@ -40,6 +40,9 @@ internal static class Program
                 "teams" => TeamsProbe.Run(),
                 "process" => await ProcessProbe.RunAsync().ConfigureAwait(false),
                 "agenda" => await AgendaProbe.RunAsync().ConfigureAwait(false),
+                "stick" => StickySeed.Run(
+                    args.Length > 1 ? args[1] : null,
+                    args.Length > 2 ? args[2] : null),
                 "remote" => await RemoteProbe.RunAsync().ConfigureAwait(false),
                 "endpoint" => EndpointProbe.Run(),
                 "audiobridge" => StreamedAudioProbe.Run(),

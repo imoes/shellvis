@@ -67,3 +67,7 @@ GetMonitorInfo
 MONITORINFO
 GetWindowThreadProcessId
 GetWindowRect
+GetWindowLongPtr
+SetWindowLongPtr
+WINDOW_LONG_PTR_INDEX
+WINDOW_EX_STYLE

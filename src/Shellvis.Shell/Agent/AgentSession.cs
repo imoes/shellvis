@@ -316,6 +316,14 @@ internal sealed partial class AgentSession : IDisposable
     /// <summary>The memory store, shared with the tool and the reflection.</summary>
     private Shellvis.Core.Memory.MemoryStore? _memory;
 
+    /// <summary>
+    /// The note database, reachable from the shell.
+    ///
+    /// Internal rather than private because sticky notes are windows: the store holds where
+    /// each one sits and what is written on it, and only the shell can put a window there.
+    /// </summary>
+    internal Shellvis.Core.Notes.NoteStore? Notes => _notes;
+
     /// <summary>Background children, killed when this session goes away.</summary>
     private BackgroundProcesses? _processes;
 

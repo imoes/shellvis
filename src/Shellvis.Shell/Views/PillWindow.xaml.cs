@@ -459,20 +459,29 @@ public sealed partial class PillWindow : Window
                 // that ran a command with no visible trace would be worse than the
                 // opacity this console exists to remove.
                 RevealConsoleIfDocked();
-                AddRow(GlyphTool, e.Preview, "running", isPending: true);
+                StartToolCard(e.Tool, e.Preview);
                 break;
 
             case AgentEvent.ToolCompleted e:
-                // Replace the pending row rather than appending: a transcript that
-                // shows every call twice becomes unreadable within a few turns.
-                ReplaceLastPending(
-                    e.Succeeded ? GlyphTool : GlyphWarning,
-                    FirstLine(e.Result),
+                // The same card is rewritten rather than removed and replaced. Replacing
+                // loses the scroll position and any selection the reader had made in it,
+                // which for a long result is the difference between reading it and
+                // watching it jump away.
+                FinishToolCard(
+                    e.Succeeded,
+                    e.Result,
                     $"{e.Duration.TotalMilliseconds:F0}ms");
+
+                // A note the model just wrote should appear now, not at the next start.
+                // Driven from the result rather than from the tool, because the tool lives
+                // in Core and Core has no windows.
+                if (e.Succeeded && e.Tool == "note_stick")
+                    ShowNewStickies();
+
                 break;
 
             case AgentEvent.ToolRefused e:
-                ReplaceLastPending(GlyphWarning, $"{e.Tool} - {e.Reason}", "denied");
+                FinishToolCard(succeeded: false, e.Reason, "denied");
                 break;
 
             case AgentEvent.Compacted e:
@@ -485,7 +494,7 @@ public sealed partial class PillWindow : Window
                 break;
 
             case AgentEvent.Failure e:
-                AddRow(GlyphWarning, e.Message, "failed");
+                AddRow(GlyphWarning, e.Message, "failed", isWarning: true);
                 break;
 
             case AgentEvent.TurnFinished e:
@@ -494,12 +503,23 @@ public sealed partial class PillWindow : Window
                 // turn's first delta continue this turn's sentence.
                 _streamed.Clear();
 
+                // Every reason named separately, including the two that shared the
+                // catch-all. Refused and Failed are different endings and reading the same
+                // sentence for both tells the user nothing about which happened: one means
+                // they said no, the other means the provider broke.
+                //
+                // Noticed because "Shellvis hit a snag" appeared after a turn whose answer
+                // had arrived. That reading was correct rather than wrong -- prose can be
+                // emitted alongside tool calls and the turn can fail afterwards -- but a
+                // status line that says only "a snag" leaves no way to tell the two apart.
                 StatusText.Text = e.Reason switch
                 {
                     TurnEndReason.Answered => ShellvisVoice.Standby,
                     TurnEndReason.Interrupted => "Shellvis stepped off the stage.",
                     TurnEndReason.BudgetExhausted => "Shellvis ran out of encores.",
-                    _ => "Shellvis hit a snag.",
+                    TurnEndReason.Refused => "Shellvis needed a yes and did not get one.",
+                    TurnEndReason.Failed => "Shellvis hit a snag.",
+                    _ => ShellvisVoice.Standby,
                 };
                 break;
         }
@@ -661,6 +681,10 @@ public sealed partial class PillWindow : Window
         // The answer window is a second top-level window and does not close with this one.
         // Left open, it keeps the process alive with no way left to reach it.
         CloseAnswerWindow();
+
+        // Same for the notes, and the distinction matters here: closing them is not
+        // throwing them away, so what is stored is left exactly as it is.
+        CloseStickies();
     }
 
     // ---------------------------------------------------------------- transcript
@@ -705,6 +729,11 @@ public sealed partial class PillWindow : Window
             // config file and are only known now.
             RefreshModeChip();
             RefreshModelLabel();
+
+            // Whatever was on the desktop when the application last closed goes back before
+            // anything else is reported. A restart that quietly clears the desktop is the
+            // single worst thing a sticky note program can do.
+            RestoreStickies();
 
             foreach (string warning in session.Warnings)
                 AddRow(GlyphWarning, warning, "config");
@@ -815,7 +844,8 @@ public sealed partial class PillWindow : Window
         bool isPrompt = false,
         bool isAnnouncement = false,
         bool isAnswer = false,
-        bool isPending = false)
+        bool isPending = false,
+        bool isWarning = false)
     {
         var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
@@ -877,7 +907,11 @@ public sealed partial class PillWindow : Window
             IsTextSelectionEnabled = true,
 
             VerticalAlignment = VerticalAlignment.Center,
-            Foreground = ThemeBrush("ConsoleMutedBrush"),
+
+            // The one place colour is spent, and only on things that went wrong. Everything
+            // else is muted, so a warning is the only line that catches the eye when the
+            // reader is scanning rather than reading.
+            Foreground = ThemeBrush(isWarning ? "ConsoleWarningBrush" : "ConsoleMutedBrush"),
         };
         Grid.SetColumn(body, 1);
         row.Children.Add(body);

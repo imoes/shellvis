@@ -6,9 +6,9 @@ namespace Shellvis.Core.Markdown;
 /// Turns the Markdown a model actually writes into a document that can be drawn.
 ///
 /// <b>Why hand-written.</b> A Markdown package brings a parser, a styling system and a
-/// dependency that has to keep up with WinUI, to handle six constructs; and it would style
-/// the text its own way, where this console has already decided that prose is proportional
-/// and machine output is monospace.
+/// dependency that has to keep up with WinUI, to handle a handful of constructs; and it
+/// would style the text its own way, where this console has already decided that prose is
+/// proportional and machine output is monospace.
 ///
 /// <b>Why it lives in Core, away from the renderer.</b> It was inside the WinUI renderer,
 /// which meant it could not be instantiated without a XAML app and so was the one piece of
@@ -35,6 +35,8 @@ public static class MarkdownParser
         if (string.IsNullOrEmpty(markdown))
             return MarkdownDocument.Empty;
 
+        string[] lines = markdown.ReplaceLineEndings("\n").Split('\n');
+
         var blocks = new List<MarkdownBlock>();
         var paragraph = new List<MarkdownSpan>();
         var fence = new List<string>();
@@ -50,9 +52,12 @@ public static class MarkdownParser
             paragraph.Clear();
         }
 
-        foreach (string raw in markdown.ReplaceLineEndings("\n").Split('\n'))
+        // Indexed rather than foreach, because a table is only a table if the NEXT line is
+        // its separator. Without that lookahead a single row of pipes, which is ordinary
+        // prose about a shell pipeline, would open a table.
+        for (int index = 0; index < lines.Length; index++)
         {
-            string line = raw.TrimEnd();
+            string line = lines[index].TrimEnd();
 
             // Fences first, because inside one nothing is Markdown: a leading dash there is
             // a command-line switch, not a bullet.
@@ -71,7 +76,7 @@ public static class MarkdownParser
 
             if (inFence)
             {
-                fence.Add(raw);
+                fence.Add(lines[index]);
                 continue;
             }
 
@@ -87,6 +92,14 @@ public static class MarkdownParser
             {
                 FlushParagraph();
                 blocks.Add(new MarkdownBlock.Heading(heading.Level, Inlines(heading.Text)));
+                continue;
+            }
+
+            if (TryTable(lines, index, out MarkdownBlock.Table? table, out int consumed))
+            {
+                FlushParagraph();
+                blocks.Add(table!);
+                index += consumed - 1;
                 continue;
             }
 
@@ -159,6 +172,156 @@ public static class MarkdownParser
     }
 
     /// <summary>
+    /// A GitHub-flavoured table, if this line starts one.
+    ///
+    /// <b>The separator row is what makes it a table</b>, not the pipes. A pipe is the most
+    /// common character in this domain: every second answer contains a PowerShell pipeline,
+    /// and treating one of those as a table row would swallow the sentence around it. So a
+    /// header is only a header when the line under it is dashes and colons and nothing else.
+    ///
+    /// A table that is still arriving is NOT rendered as a table: while streaming, the
+    /// separator may not have landed yet, and the header line stays ordinary prose until it
+    /// does. That is one re-render later, and it avoids showing a one-column table that then
+    /// reshapes itself.
+    /// </summary>
+    private static bool TryTable(string[] lines, int start, out MarkdownBlock.Table? table, out int consumed)
+    {
+        table = null;
+        consumed = 0;
+
+        if (start + 1 >= lines.Length)
+            return false;
+
+        string header = lines[start].Trim();
+
+        if (!header.Contains('|', StringComparison.Ordinal))
+            return false;
+
+        string[] separators = SplitRow(lines[start + 1]);
+        string[] headings = SplitRow(header);
+
+        if (separators.Length == 0 || headings.Length == 0)
+            return false;
+
+        var alignment = new List<ColumnAlignment>(separators.Length);
+
+        foreach (string cell in separators)
+        {
+            if (Alignment(cell) is not { } column)
+                return false;
+
+            alignment.Add(column);
+        }
+
+        // A separator with a different number of columns than the header is not a table
+        // anyone meant to write, and guessing which side is right would reshape their data.
+        if (alignment.Count != headings.Length)
+            return false;
+
+        var rows = new List<MarkdownRow>();
+        int index = start + 2;
+
+        while (index < lines.Length)
+        {
+            string line = lines[index].Trim();
+
+            if (line.Length == 0 || !line.Contains('|', StringComparison.Ordinal))
+                break;
+
+            rows.Add(Row(SplitRow(lines[index]), headings.Length));
+            index++;
+        }
+
+        table = new MarkdownBlock.Table(Row(headings, headings.Length), alignment, rows);
+        consumed = index - start;
+
+        return true;
+    }
+
+    /// <summary>The cells of one row, with the optional leading and trailing pipes removed.</summary>
+    private static string[] SplitRow(string line)
+    {
+        string text = line.Trim();
+
+        if (text.StartsWith('|'))
+            text = text[1..];
+
+        if (text.EndsWith('|'))
+            text = text[..^1];
+
+        if (text.Length == 0)
+            return [];
+
+        // An escaped pipe is a pipe: a cell may legitimately mention one, which in this
+        // domain it often does.
+        var cells = new List<string>();
+        var cell = new StringBuilder();
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (text[i] == '\\' && i + 1 < text.Length && text[i + 1] == '|')
+            {
+                cell.Append('|');
+                i++;
+                continue;
+            }
+
+            if (text[i] == '|')
+            {
+                cells.Add(cell.ToString().Trim());
+                cell.Clear();
+                continue;
+            }
+
+            cell.Append(text[i]);
+        }
+
+        cells.Add(cell.ToString().Trim());
+
+        return [.. cells];
+    }
+
+    /// <summary>The alignment a separator cell asks for, or null if it is not one.</summary>
+    private static ColumnAlignment? Alignment(string cell)
+    {
+        string text = cell.Trim();
+
+        if (text.Length == 0)
+            return null;
+
+        bool left = text.StartsWith(':');
+        bool right = text.EndsWith(':');
+
+        string dashes = text.Trim(':');
+
+        if (dashes.Length == 0 || dashes.Any(c => c != '-'))
+            return null;
+
+        return (left, right) switch
+        {
+            (true, true) => ColumnAlignment.Center,
+            (false, true) => ColumnAlignment.Right,
+            _ => ColumnAlignment.Left,
+        };
+    }
+
+    /// <summary>
+    /// One row, squared off to the header's width.
+    ///
+    /// Short rows are padded and long ones trimmed rather than refused. A model miscounting
+    /// pipes in one row of a ten-row table should cost that row's last cell, not the table.
+    /// </summary>
+    private static MarkdownRow Row(string[] cells, int width)
+    {
+        var built = new List<MarkdownCell>(width);
+
+        for (int i = 0; i < width; i++)
+            built.Add(new MarkdownCell(i < cells.Length ? Inlines(cells[i]) : []));
+
+        return new MarkdownRow(built);
+    }
+
+    /// <summary>
     /// Turn one line's inline markup into spans.
     ///
     /// A hand-rolled scanner rather than a regex sweep, because the delimiters nest and
@@ -166,7 +329,9 @@ public static class MarkdownParser
     /// miss it or match across the whole line. A single left-to-right pass with state flags
     /// is both shorter and correct for the cases that occur.
     /// </summary>
-    public static IReadOnlyList<MarkdownSpan> Inlines(string text)
+    public static IReadOnlyList<MarkdownSpan> Inlines(string text) => Inlines(text, href: null);
+
+    private static IReadOnlyList<MarkdownSpan> Inlines(string text, string? href)
     {
         var spans = new List<MarkdownSpan>();
         var buffer = new StringBuilder();
@@ -191,7 +356,10 @@ public static class MarkdownParser
             if (strike)
                 style |= SpanStyle.Strike;
 
-            spans.Add(new MarkdownSpan(buffer.ToString(), style));
+            if (href is not null)
+                style |= SpanStyle.Link;
+
+            spans.Add(new MarkdownSpan(buffer.ToString(), style, href));
             buffer.Clear();
         }
 
@@ -200,10 +368,24 @@ public static class MarkdownParser
             char c = text[i];
 
             // A backslash escape, so a model that means a literal asterisk can say so.
-            if (c == '\\' && i + 1 < text.Length && "*_`~\\".Contains(text[i + 1]))
+            if (c == '\\' && i + 1 < text.Length && "*_`~\\[]".Contains(text[i + 1]))
             {
                 buffer.Append(text[i + 1]);
                 i++;
+                continue;
+            }
+
+            // A link. Nested links are not a thing, so this only runs at the top level;
+            // inside one, a bracket is a bracket.
+            if (c == '[' && href is null && TryLink(text, i, out string? label, out string? target, out int end))
+            {
+                Emit();
+
+                // The label is parsed in full, because a model writes bold and code inside
+                // link text and it would be odd for the markup to stop working there.
+                spans.AddRange(Inlines(label!, target));
+
+                i = end;
                 continue;
             }
 
@@ -214,7 +396,11 @@ public static class MarkdownParser
                 if (close > i)
                 {
                     Emit();
-                    spans.Add(new MarkdownSpan(text[(i + 1)..close], SpanStyle.Code));
+                    spans.Add(new MarkdownSpan(
+                        text[(i + 1)..close],
+                        href is null ? SpanStyle.Code : SpanStyle.Code | SpanStyle.Link,
+                        href));
+
                     i = close;
                     continue;
                 }
@@ -275,6 +461,68 @@ public static class MarkdownParser
         Emit();
 
         return spans;
+    }
+
+    /// <summary>
+    /// A link starting at <paramref name="open"/>, if there is one.
+    ///
+    /// Deliberately strict: the closing bracket must be followed immediately by a
+    /// parenthesised target with no whitespace between them. A model writes prose containing
+    /// brackets, and "[see note] (below)" is a sentence, not a link.
+    /// </summary>
+    private static bool TryLink(
+        string text, int open, out string? label, out string? target, out int end)
+    {
+        label = null;
+        target = null;
+        end = open;
+
+        int close = -1;
+        int depth = 0;
+
+        for (int i = open; i < text.Length; i++)
+        {
+            if (text[i] == '\\')
+            {
+                i++;
+                continue;
+            }
+
+            if (text[i] == '[')
+            {
+                depth++;
+            }
+            else if (text[i] == ']')
+            {
+                depth--;
+
+                if (depth == 0)
+                {
+                    close = i;
+                    break;
+                }
+            }
+        }
+
+        if (close < 0 || close + 1 >= text.Length || text[close + 1] != '(')
+            return false;
+
+        int stop = text.IndexOf(')', close + 2);
+
+        if (stop < 0)
+            return false;
+
+        string href = text[(close + 2)..stop].Trim();
+
+        // An empty target is not a link, and neither is a label nobody can click.
+        if (href.Length == 0 || close == open + 1)
+            return false;
+
+        label = text[(open + 1)..close];
+        target = href;
+        end = stop;
+
+        return true;
     }
 
     /// <summary>Whether a matching delimiter appears later in the line.</summary>

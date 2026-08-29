@@ -25,7 +25,7 @@ public sealed partial class PillWindow
     {
         if (_answerWindow is null)
         {
-            _answerWindow = new AnswerWindow();
+            _answerWindow = new AnswerWindow { OnLink = OnLinkActivated };
             _answerWindow.PlaceBeside(WinRT.Interop.WindowNative.GetWindowHandle(this));
         }
 

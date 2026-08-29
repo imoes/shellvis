@@ -945,7 +945,8 @@ public sealed partial class PillWindow : Window
             // prompt above it and the announcements around it are context.
             size: kind == ProseKind.Answer ? 14 : 13,
             foreground: ThemeBrush("ConsoleTextBrush"),
-            muted: ThemeBrush("ConsoleMutedBrush"));
+            muted: ThemeBrush("ConsoleMutedBrush"),
+            onLink: OnLinkActivated);
 
         // Only announcements slant. They are Shellvis speaking about itself, and slant
         // rather than another colour because colour is already spoken for by severity.

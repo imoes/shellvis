@@ -176,6 +176,52 @@ public sealed class OutlookClient(ComApartment apartment)
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Put one message in front of the user, in Outlook.
+    ///
+    /// <b>Why this exists rather than a summary being enough.</b> An answer that says "X
+    /// wrote to you about Y" is a claim the user has to take on trust unless they can get
+    /// to the message itself. The link back is what makes the claim checkable, and it is
+    /// also what a secretary hands over: the mail, not a retelling of it.
+    ///
+    /// Outlook is started if it is not running, which is the case this was asked for. The
+    /// notice that it had to be started is the one already used elsewhere, so the user
+    /// learns it once rather than per call.
+    /// </summary>
+    public Task<string> OpenMailAsync(string entryId, CancellationToken cancellationToken = default)
+    {
+        return apartment.InvokeAsync(() =>
+        {
+            dynamic? outlook = null;
+            dynamic? session = null;
+            dynamic? item = null;
+
+            try
+            {
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
+
+                session = outlook.Session;
+                item = session.GetItemFromID(entryId);
+
+                string subject = Str(() => item.Subject);
+
+                // Modal: false, so the window belongs to the user rather than blocking the
+                // apartment thread until they close it. A modal Display would hold the one
+                // STA thread every Office call in this application shares.
+                item.Display(false);
+
+                return $"opened \"{subject}\" in Outlook.";
+            }
+            finally
+            {
+                Com.ReleaseAll(outlook, session, item);
+            }
+        }, cancellationToken);
+    }
+
     /// <summary>Full text of one message, addressed by its Outlook entry id.</summary>
     public Task<string> ReadMailAsync(string entryId, CancellationToken cancellationToken = default)
     {

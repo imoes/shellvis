@@ -73,6 +73,14 @@ public sealed partial class AnswerWindow : Window
         Closed += (_, args) => { };
     }
 
+    /// <summary>
+    /// What to do when a link in the answer is clicked.
+    ///
+    /// Set by the pill, which owns the transcript a link writes into and knows what a
+    /// shellvis: target means. This window only draws.
+    /// </summary>
+    public Action<string>? OnLink { get; set; }
+
     /// <summary>Show an answer, creating or reusing the window.</summary>
     public void ShowAnswer(string markdown, string heading)
     {
@@ -85,7 +93,8 @@ public sealed partial class AnswerWindow : Window
             mono: new FontFamily("Cascadia Mono"),
             size: 14,
             foreground: Brush("ConsoleTextBrush"),
-            muted: Brush("ConsoleMutedBrush"));
+            muted: Brush("ConsoleMutedBrush"),
+            onLink: OnLink);
     }
 
     /// <summary>Put the window beside the pill the first time, then leave it where it is.</summary>

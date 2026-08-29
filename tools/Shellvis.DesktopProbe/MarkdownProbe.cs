@@ -172,6 +172,92 @@ internal static class MarkdownProbe
         Check("and does not open emphasis",
             Spans(escaped).All(s => !s.Has(SpanStyle.Emphasis)));
 
+        Console.WriteLine("\nlinks:");
+
+        MarkdownDocument link = MarkdownParser.Parse(
+            "Siehe [Angebot Q3](shellvis:mail/000000012A) von Frau Meier.");
+
+        var linked = Spans(link).Where(sp => sp.Has(SpanStyle.Link)).ToList();
+
+        Check("a link becomes a link span", linked.Count == 1);
+        Check("its text is the label, not the target",
+            linked.FirstOrDefault()?.Text == "Angebot Q3", linked.FirstOrDefault()?.Text ?? "");
+        Check("the target is carried",
+            linked.FirstOrDefault()?.Href == "shellvis:mail/000000012A",
+            linked.FirstOrDefault()?.Href ?? "");
+        Check("no brackets leak into the text",
+            !Plain(link).Any(c => c is '[' or ']' or '(' or ')'), Plain(link));
+        Check("the prose around it is untouched",
+            Plain(link).Contains("von Frau Meier.", StringComparison.Ordinal));
+
+        // Markup keeps working inside a label, because a model writes it there.
+        MarkdownDocument richLabel = MarkdownParser.Parse("[**Wichtig** und `code`](https://x/y)");
+        Check("a label keeps its own markup",
+            Spans(richLabel).Any(sp => sp.Text == "Wichtig" && sp.Has(SpanStyle.Strong)));
+        Check("and every part of it stays one target",
+            Spans(richLabel).All(sp => sp.Href == "https://x/y"));
+
+        // The reason the parser is strict about the parenthesis: prose contains brackets.
+        MarkdownDocument notLink = MarkdownParser.Parse("Siehe [Anmerkung 1] (weiter unten).");
+        Check("a bracket followed by a space is not a link",
+            !Spans(notLink).Any(sp => sp.Has(SpanStyle.Link)), Plain(notLink));
+        Check("and its text survives unchanged",
+            Plain(notLink).Contains("[Anmerkung 1] (weiter unten).", StringComparison.Ordinal));
+
+        MarkdownDocument emptyTarget = MarkdownParser.Parse("[Label]()");
+        Check("a link with no target is not a link",
+            !Spans(emptyTarget).Any(sp => sp.Has(SpanStyle.Link)), Plain(emptyTarget));
+
+        MarkdownDocument escapedBracket = MarkdownParser.Parse("Ein \\[Wert\\](kein Link)");
+        Check("an escaped bracket does not open a link",
+            !Spans(escapedBracket).Any(sp => sp.Has(SpanStyle.Link)), Plain(escapedBracket));
+
+        Console.WriteLine("\ntables:");
+
+        MarkdownDocument table = MarkdownParser.Parse(
+            "| Tag | Termin | Ort |\n"
+            + "|-----|:------:|----:|\n"
+            + "| Mo  | **JF** | R1  |\n"
+            + "| Di  | Mobil  |     |");
+
+        var grid = table.Blocks.OfType<MarkdownBlock.Table>().FirstOrDefault();
+
+        Check("a header plus a separator makes a table", grid is not null);
+        Check("three header cells", grid?.Header.Cells.Count == 3);
+        Check("two body rows", grid?.Rows.Count == 2);
+        Check("alignment is read from the separator",
+            grid?.Alignment.SequenceEqual(
+                [ColumnAlignment.Left, ColumnAlignment.Center, ColumnAlignment.Right]) == true,
+            string.Join(",", grid?.Alignment ?? []));
+        Check("cell markup is parsed",
+            grid?.Rows[0].Cells[1].Inlines.Any(sp => sp.Text == "JF" && sp.Has(SpanStyle.Strong)) == true);
+        Check("an empty cell is empty, not missing", grid?.Rows[1].Cells.Count == 3);
+
+        // The reason the separator is required: this domain is full of pipes.
+        MarkdownDocument pipeline = MarkdownParser.Parse(
+            "Nimm Get-Process | Where-Object { $_.CPU -gt 10 } | Sort-Object.");
+
+        Check("a pipeline in prose is not a table",
+            !pipeline.Blocks.OfType<MarkdownBlock.Table>().Any(), Plain(pipeline));
+
+        MarkdownDocument mismatch = MarkdownParser.Parse("| a | b |\n|---|\n| 1 | 2 |");
+        Check("a separator of the wrong width is not a table",
+            !mismatch.Blocks.OfType<MarkdownBlock.Table>().Any());
+
+        MarkdownDocument shortRow = MarkdownParser.Parse("| a | b | c |\n|---|---|---|\n| 1 |");
+        var squared = shortRow.Blocks.OfType<MarkdownBlock.Table>().First();
+        Check("a short row is padded rather than dropping the table",
+            squared.Rows.Count == 1 && squared.Rows[0].Cells.Count == 3);
+
+        MarkdownDocument arriving = MarkdownParser.Parse("| Tag | Termin |");
+        Check("a header with no separator yet stays prose",
+            !arriving.Blocks.OfType<MarkdownBlock.Table>().Any(), Plain(arriving));
+
+        MarkdownDocument after = MarkdownParser.Parse("| a |\n|---|\n| 1 |\n\nDanach.");
+        Check("prose after a table is a separate block",
+            after.Blocks.OfType<MarkdownBlock.Paragraph>()
+                .Any(b => b.Inlines.Any(sp => sp.Text.Contains("Danach", StringComparison.Ordinal))));
+
         Console.WriteLine("\nedges:");
 
         Check("null parses to an empty document", MarkdownParser.Parse(null).Blocks.Count == 0);
@@ -180,7 +266,9 @@ internal static class MarkdownProbe
 
         // Streaming re-parses the whole answer on every delta, so every prefix of an answer
         // has to parse without throwing. A crash here would take the window down mid-answer.
-        const string Whole = "## Ergebnis\n\n- **Eins**: `a`\n- Zwei\n\n```ps\nGet-Date\n```\n";
+        const string Whole = "## Ergebnis\n\n- **Eins**: `a`\n- Zwei\n\n"
+            + "| Tag | Ort |\n|-----|----:|\n| Mo  | R1  |\n\n"
+            + "Siehe [Angebot](shellvis:mail/12A).\n\n```ps\nGet-Date\n```\n";
         bool everyPrefix = true;
 
         for (int i = 0; i <= Whole.Length; i++)

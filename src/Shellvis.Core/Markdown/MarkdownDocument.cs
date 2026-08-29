@@ -3,9 +3,9 @@ namespace Shellvis.Core.Markdown;
 /// <summary>How a run of text is set.</summary>
 /// <remarks>
 /// Flags rather than a hierarchy, because the markers combine freely and a model writes
-/// them combined: <c>**bold `code`**</c> is ordinary. A tree of nested span types would
-/// have to be walked; a flag per marker is what the renderer actually needs to build one
-/// run.
+/// them combined: <c>**bold `code`**</c> is ordinary, and a link's text can be bold. A tree
+/// of nested span types would have to be walked; a flag per marker is what the renderer
+/// actually needs to build one run.
 /// </remarks>
 [Flags]
 public enum SpanStyle
@@ -22,13 +22,35 @@ public enum SpanStyle
     /// quoted machine text that should read as machine text whatever surrounds it.
     /// </remarks>
     Code = 8,
+
+    /// <summary>Part of a link. The target is in <see cref="MarkdownSpan.Href"/>.</summary>
+    Link = 16,
 }
 
 /// <summary>One run of text with one style.</summary>
-public sealed record MarkdownSpan(string Text, SpanStyle Style)
+/// <param name="Href">
+/// Where the run leads, when <see cref="SpanStyle.Link"/> is set. Kept beside the flag
+/// rather than replacing it so a link can also be bold or code, which is how a model writes
+/// one.
+/// </param>
+public sealed record MarkdownSpan(string Text, SpanStyle Style, string? Href = null)
 {
     public bool Has(SpanStyle flag) => (Style & flag) != 0;
 }
+
+/// <summary>Where a table column's text sits.</summary>
+public enum ColumnAlignment
+{
+    Left,
+    Center,
+    Right,
+}
+
+/// <summary>One table cell.</summary>
+public sealed record MarkdownCell(IReadOnlyList<MarkdownSpan> Inlines);
+
+/// <summary>One table row.</summary>
+public sealed record MarkdownRow(IReadOnlyList<MarkdownCell> Cells);
 
 /// <summary>One block of an answer.</summary>
 /// <remarks>
@@ -55,6 +77,13 @@ public abstract record MarkdownBlock
     /// last three characters landed would flicker into existence at the end of every answer.
     /// </param>
     public sealed record Code(string Text, bool Closed) : MarkdownBlock;
+
+    /// <param name="Alignment">One entry per header cell.</param>
+    /// <param name="Rows">Body rows. Short rows are padded and long ones trimmed by the parser.</param>
+    public sealed record Table(
+        MarkdownRow Header,
+        IReadOnlyList<ColumnAlignment> Alignment,
+        IReadOnlyList<MarkdownRow> Rows) : MarkdownBlock;
 }
 
 /// <summary>A parsed answer, in the order it should be drawn.</summary>

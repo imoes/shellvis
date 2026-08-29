@@ -95,6 +95,42 @@ public sealed class OutlookTools(ComApartment apartment)
     }
 
     [ShellvisTool(
+        "mail_open",
+        SideEffect.Mutating,
+        Description =
+            "Show one Outlook message to the user, by the id from mail_list. Outlook is "
+            + "started if it is not running. Use this when the user should look at the "
+            + "message itself rather than at your summary of it; also mention the message "
+            + "as a shellvis:mail/<id> link so they can open it from your answer.",
+        PreviewParameter = "messageId",
+        Glyph = "mail")]
+    public async Task<string> OpenMail(
+        string messageId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!OutlookClient.IsAvailable)
+            return Unavailable;
+
+        if (string.IsNullOrWhiteSpace(messageId))
+            return "error: a message id is required. Get one from mail_list.";
+
+        try
+        {
+            // Mutating rather than read-only, and the reason is not the mailbox: it takes
+            // the foreground. A window appearing over whatever the user is doing is a thing
+            // they should have agreed to, even though nothing in the mailbox changes.
+            string opened = await _outlook.OpenMailAsync(messageId, cancellationToken)
+                .ConfigureAwait(false);
+
+            return opened + StartNotice();
+        }
+        catch (Exception ex)
+        {
+            return Failure(ex);
+        }
+    }
+
+    [ShellvisTool(
         "mail_read",
         SideEffect.ReadOnly,
         Description =

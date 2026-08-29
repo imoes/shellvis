@@ -516,7 +516,14 @@ internal sealed partial class AgentSession : IDisposable
     /// <summary>MCP servers to connect once the window is up.</summary>
     private IReadOnlyList<McpServerConfig> McpServers { get; init; } = [];
 
-    private ToolRegistry? Registry { get; init; }
+    /// <summary>
+    /// The tool catalog, reachable from the shell.
+    ///
+    /// Internal rather than private because a clicked link runs a tool: the front door for
+    /// the model and the front door for a click are deliberately the same one, so a mail
+    /// opened from an answer and a mail opened by the model behave identically.
+    /// </summary>
+    internal ToolRegistry? Registry { get; init; }
 
     /// <summary>The Home Assistant connection, when one was configured.</summary>
     private HomeAssistantClient? HomeAssistant { get; init; }
@@ -1190,9 +1197,15 @@ internal sealed partial class AgentSession : IDisposable
 
         Formatting: every answer is Markdown, always, whether or not anyone asked for it.
         The console renders it. What it renders is headings, bullet and numbered lists,
-        **bold**, *italic*, `inline code` and ```fenced code blocks```. Tables, images,
-        links and block quotes are NOT rendered and would reach the user as raw
-        punctuation, so use a list where you were reaching for a table.
+        **bold**, *italic*, `inline code`, ```fenced code blocks```, [links](target) and
+        GitHub-style tables. Use a table when the answer really is a grid, and a list
+        otherwise. Images and block quotes are NOT rendered and would reach the user as raw
+        punctuation.
+
+        Link back to what you are talking about. When you name a mail, write it as
+        [subject](shellvis:mail/<the id from mail_list>) so the user can open it in Outlook
+        from your answer. A claim about a message the user cannot get to is a claim they
+        have to take on trust.
 
         You drive the graphical desktop, not only the shell. desktop_analyze returns the
         full element tree of any window with a reference for every item in it; ui_click,

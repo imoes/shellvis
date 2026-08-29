@@ -116,6 +116,20 @@ public sealed class CronStore
         {
             if (!File.Exists(Path))
             {
+                // Write the two secretarial jobs, switched OFF, and return them as the
+                // empty list they effectively are.
+                //
+                // Discoverability, not presumption. A user who never opens this file never
+                // notices; one who wonders whether Shellvis can remind them finds the two
+                // jobs already written and flips a flag, instead of having to learn the
+                // schedule syntax from documentation to try the feature at all. The same
+                // argument as the commented default config.yaml, which exists for the same
+                // reason.
+                //
+                // Enabled would be presumption: scheduled runs touch the calendar and the
+                // mailbox on a timer, and that is a thing to opt into.
+                WriteTemplate();
+
                 Warnings = warnings;
                 return [];
             }
@@ -181,6 +195,42 @@ public sealed class CronStore
     }
 
     /// <summary>Write the jobs back, atomically.</summary>
+    /// <summary>
+    /// Write the starter file, once, when there is none.
+    ///
+    /// Failure is silent and harmless: without the file the store returns an empty list,
+    /// which is exactly what it did before. A read-only home directory should not produce a
+    /// warning about a convenience.
+    /// </summary>
+    private void WriteTemplate()
+    {
+        try
+        {
+            Save(
+            [
+                new CronJob(
+                    Name: "reminders",
+                    Prompt: "Load the assistant/daily-briefing skill and follow the reminder "
+                        + "half: call agenda_due and say nothing at all unless it returns "
+                        + "something.",
+                    Schedule: "5m",
+                    Enabled: false,
+                    Skills: ["daily-briefing"]),
+
+                new CronJob(
+                    Name: "morning-briefing",
+                    Prompt: "Load the assistant/daily-briefing skill and give the morning "
+                        + "briefing for today.",
+                    Schedule: "0 7 * * 1-5",
+                    Enabled: false,
+                    Skills: ["daily-briefing"]),
+            ]);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
     public void Save(IReadOnlyList<CronJob> jobs)
     {
         ShellvisPaths.EnsureCreated();

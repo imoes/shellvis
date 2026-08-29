@@ -39,6 +39,7 @@ internal static class Program
                 "notes" => NoteProbe.Run(),
                 "teams" => TeamsProbe.Run(),
                 "process" => await ProcessProbe.RunAsync().ConfigureAwait(false),
+                "agenda" => await AgendaProbe.RunAsync().ConfigureAwait(false),
                 "remote" => await RemoteProbe.RunAsync().ConfigureAwait(false),
                 "endpoint" => EndpointProbe.Run(),
                 "audiobridge" => StreamedAudioProbe.Run(),

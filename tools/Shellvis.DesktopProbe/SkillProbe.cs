@@ -196,6 +196,21 @@ internal static class SkillProbe
             !shippedPrompt.Contains("DISCRETION IS ABSOLUTE", StringComparison.Ordinal),
             "but its body does not, so it costs a line and not a page");
 
+        // Every shipped skill, not just the one this block names. A second one was added
+        // without touching these checks, and a file that ships but never parses is exactly
+        // the failure the secretary skill already had once: an unquoted colon in its
+        // description silently dropped ALL its metadata.
+        foreach (SkillDefinition definition in shipped.All)
+        {
+            failures += Expect(
+                definition.Description != "(no description)",
+                $"{definition.QualifiedName} has a description, so its frontmatter parsed");
+        }
+
+        failures += Expect(
+            shipped.All.Any(d => d.QualifiedName == "assistant/daily-briefing"),
+            "assistant/daily-briefing ships too");
+
         // A user skill of the same name must win. What ships is a default, not a rule.
         WriteSkill(root, "assistant/secretary", "secretary", "the user own version", "mine\n");
 

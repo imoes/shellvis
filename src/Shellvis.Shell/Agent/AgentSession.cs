@@ -146,6 +146,14 @@ internal sealed partial class AgentSession : IDisposable
         // and not a hang.
         registry.RegisterFrom(new TeamsTools(comApartment));
 
+        // What is coming, with what has already been said left out. The suppression lives
+        // in the tool because a scheduled run is a fresh session every time: there is
+        // nothing for the model to remember with, so "you already mentioned that" cannot be
+        // its job.
+        registry.RegisterFrom(new AgendaTools(
+            new Shellvis.Core.Office.OutlookClient(comApartment),
+            notes));
+
         // Asking the user is a capability, so it is a tool. The flag behind it is what
         // keeps a scheduled run from opening a dialog at three in the morning: the
         // registry is shared with cron, so the choice cannot be made when it is

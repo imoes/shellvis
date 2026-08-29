@@ -66,7 +66,7 @@ public sealed record Note(
 /// of the model's hands. The same applies here: the relevant notes are attached to the tool
 /// results that mention a person, so the model does not have to remember to look.
 /// </summary>
-public sealed class NoteStore : IDisposable
+public sealed partial class NoteStore : IDisposable
 {
     private readonly SqliteConnection _connection;
 
@@ -139,6 +139,8 @@ public sealed class NoteStore : IDisposable
                 VALUES (new.id, new.person, new.topic, new.body);
             END;
             """);
+
+        InitialiseStickies();
     }
 
     /// <summary>Write one note down.</summary>
@@ -319,6 +321,9 @@ public sealed class NoteStore : IDisposable
 
         return string.Join(" ", tokens.Select(t => $"\"{t}\""));
     }
+
+    /// <summary>The open connection, shared with the sticky half of this class.</summary>
+    private SqliteConnection Connection => _connection;
 
     private void Execute(string sql)
     {

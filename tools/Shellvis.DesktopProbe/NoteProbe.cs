@@ -188,6 +188,110 @@ internal static class NoteProbe
                 tools.SearchNotes(person: "Weber, Dr. Klaus")
                     .Contains("[from appointment", StringComparison.Ordinal));
 
+            Console.WriteLine("\nstuck to the desktop:");
+
+            // The half of the Vista feature that is state rather than pixels: a note comes
+            // back where it was put, in the colour it was, after a restart. A note that has
+            // to be saved is a document, so every change writes immediately.
+            Check("nothing is stuck to begin with", store.Stickies().Count == 0);
+
+            Sticky yellow = store.Stick("Rosen kaufen!");
+
+            Check("a note goes up", store.Stickies().Count == 1);
+            Check("yellow by default", yellow.Colour == StickyColour.Yellow);
+            Check("with a usable size, not zero",
+                yellow.Width > 100 && yellow.Height > 100,
+                $"{yellow.Width}x{yellow.Height}");
+
+            Sticky blue = store.Stick("Weber anrufen", StickyColour.Blue, x: -1400, y: 260);
+
+            Check("a colour is kept", blue.Colour == StickyColour.Blue);
+
+            // Negative coordinates are a monitor to the left of the main one, which is where
+            // this machine has one. Clamping them to zero would move every note on that
+            // screen onto the middle one after a restart.
+            Check("a position on a monitor left of the main one survives",
+                blue.X == -1400 && blue.Y == 260, $"{blue.X},{blue.Y}");
+
+            Check("moving it is saved without being asked",
+                store.Update(blue.Id, x: -1200, y: 300));
+
+            Check("and the new position is what comes back",
+                store.Sticky(blue.Id)?.X == -1200);
+
+            Check("editing the text keeps the colour",
+                store.Update(blue.Id, text: "Weber um 14:00 anrufen")
+                && store.Sticky(blue.Id)?.Colour == StickyColour.Blue);
+
+            Check("and moving it keeps the text",
+                store.Update(blue.Id, y: 320)
+                && store.Sticky(blue.Id)?.Text == "Weber um 14:00 anrufen");
+
+            Check("resizing is saved too",
+                store.Update(blue.Id, width: 320, height: 260)
+                && store.Sticky(blue.Id)?.Width == 320);
+
+            Check("updating an id that does not exist is false, not an exception",
+                !store.Update(999_999, text: "nowhere"));
+
+            // A sticky written from a note keeps the link, so "where did this come from"
+            // stays answerable.
+            long source = store.Add("er mag Rosen", person: "Weber");
+            Sticky linked = store.Stick("Rosen!", StickyColour.Pink, noteId: source);
+
+            Check("a sticky can point back at the note it came from",
+                store.Sticky(linked.Id)?.NoteId == source);
+
+            Check("throwing one away removes it", store.Unstick(yellow.Id));
+            Check("and it is gone from the desktop",
+                store.Stickies().All(x => x.Id != yellow.Id));
+            Check("unsticking twice is false, not an exception", !store.Unstick(yellow.Id));
+
+            Check("the note it came from is untouched",
+                store.Search("Rosen").Any(x => x.Id == source));
+
+            // A colour that no longer parses must cost the colour, not the note.
+            Check("an unknown colour name falls back to yellow",
+                NoteStore.ParseColour("chartreuse") == StickyColour.Yellow);
+            Check("and so does none at all",
+                NoteStore.ParseColour(null) == StickyColour.Yellow);
+            Check("but a real one is read whatever its case",
+                NoteStore.ParseColour("PURPLE") == StickyColour.Purple);
+
+            Console.WriteLine("\nand they survive a restart:");
+
+            IReadOnlyList<Sticky> before = store.Stickies();
+
+            using (var reopened = new NoteStore(file))
+            {
+                IReadOnlyList<Sticky> after = reopened.Stickies();
+
+                Check("the same notes are there", after.Count == before.Count,
+                    $"{before.Count} then {after.Count}");
+
+                Check("with their positions, sizes and colours",
+                    after.Zip(before).All(pair =>
+                        pair.First.X == pair.Second.X
+                        && pair.First.Width == pair.Second.Width
+                        && pair.First.Colour == pair.Second.Colour));
+            }
+
+            Console.WriteLine("\nthrough the tools:");
+
+            Check("note_stick refuses an empty note",
+                tools.StickNote("  ").StartsWith("error:", StringComparison.Ordinal));
+
+            Check("note_stick refuses a document",
+                tools.StickNote(new string('x', 400)).StartsWith("error:", StringComparison.Ordinal));
+
+            string stuck = tools.StickNote("Milch holen", "green");
+
+            Check("note_stick accepts a good one",
+                stuck.StartsWith("stuck a green note", StringComparison.Ordinal), stuck);
+
+            Check("note_stickies lists what is up",
+                tools.ListStickies().Contains("Milch holen", StringComparison.Ordinal));
+
             Console.WriteLine("\nin the catalog:");
 
             var registry = new ToolRegistry();
@@ -199,6 +303,11 @@ internal static class NoteProbe
                 ("note_search", SideEffect.ReadOnly),
                 ("note_due", SideEffect.ReadOnly),
                 ("note_close", SideEffect.Mutating),
+
+                // Mutating, and the reason is not the database: it puts a window on the
+                // user own desktop, on top of whatever they are looking at.
+                ("note_stick", SideEffect.Mutating),
+                ("note_stickies", SideEffect.ReadOnly),
             })
             {
                 ToolEntry? entry = registry.Tools.FirstOrDefault(t => t.Name == name);

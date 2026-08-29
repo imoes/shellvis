@@ -184,6 +184,90 @@ public sealed class NoteTools(NoteStore notes)
         }
     }
 
+    /// <summary>The most characters that belong on a square of paper.</summary>
+    /// <remarks>
+    /// A sticky note is a reminder, not a document. Past a few lines it stops being readable
+    /// at a glance, which is the only thing it is for, and starts covering the desktop it is
+    /// stuck to.
+    /// </remarks>
+    private const int MaxSticky = 300;
+
+    [ShellvisTool(
+        "note_stick",
+        SideEffect.Mutating,
+        Description =
+            "Put a note on the desktop as a sticky note: a small window that stays on top, "
+            + "can be dragged anywhere, and survives a restart. Use it when the user should "
+            + "SEE something rather than be told it once -- a phone number to use in a "
+            + "minute, what to buy on the way home. Keep it to a line or two. Colours: "
+            + "yellow, blue, green, pink, purple.",
+        PreviewParameter = "text",
+        Glyph = "note")]
+    public string StickNote(
+        string text,
+        string? colour = null,
+        long? fromNoteId = null)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return "error: a sticky note needs something written on it.";
+
+        if (text.Length > MaxSticky)
+        {
+            return $"error: that is {text.Length} characters. A sticky note is a reminder, "
+                + $"not a document; keep it under {MaxSticky} or use note_add instead.";
+        }
+
+        // Mutating, and the reason is not the database: it puts a window on the user own
+        // desktop, on top of whatever they are looking at. That is a thing to agree to,
+        // which is exactly why note_add next to it is silent and this one is not.
+        try
+        {
+            Sticky stuck = notes.Stick(
+                text,
+                NoteStore.ParseColour(colour),
+                noteId: fromNoteId);
+
+            return $"stuck a {stuck.Colour.ToString().ToLowerInvariant()} note to the desktop "
+                + $"(id {stuck.Id}). The user can drag it, edit it, and close it from its own "
+                + "corner.";
+        }
+        catch (Exception ex)
+        {
+            return $"the note could not be stuck up: {ex.Message}";
+        }
+    }
+
+    [ShellvisTool(
+        "note_stickies",
+        SideEffect.ReadOnly,
+        Description =
+            "What is currently stuck to the desktop. Use it before adding another, so the "
+            + "same reminder does not go up twice.",
+        Glyph = "note")]
+    public string ListStickies()
+    {
+        try
+        {
+            IReadOnlyList<Sticky> stuck = notes.Stickies();
+
+            if (stuck.Count == 0)
+                return "nothing is stuck to the desktop.";
+
+            var sb = new StringBuilder();
+            sb.Append(stuck.Count).AppendLine(" sticky note(s):");
+
+            foreach (Sticky sticky in stuck)
+                sb.Append("  ").Append(sticky).Append("   id ").AppendLine(
+                    sticky.Id.ToString(CultureInfo.InvariantCulture));
+
+            return sb.ToString();
+        }
+        catch (Exception ex)
+        {
+            return $"the desktop notes could not be read: {ex.Message}";
+        }
+    }
+
     private static string Render(IReadOnlyList<Note> found, string heading)
     {
         var sb = new StringBuilder();

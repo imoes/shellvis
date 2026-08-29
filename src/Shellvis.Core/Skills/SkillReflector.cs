@@ -28,11 +28,24 @@ public sealed record TurnDigest(string Prompt, IReadOnlyList<string> Steps, stri
 /// mean two schemas in one prompt and a model picking between them before it has decided
 /// what it wants to say -- the choice of store follows from the content, so it is a field.
 /// </summary>
-/// <param name="Kind">"skill" for a procedure, "memory" or "user" for a fact.</param>
+/// <param name="Kind">
+/// "skill" for a procedure, "memory" or "user" for a fact about the machine or the person,
+/// "note" for an observation about someone else or a date that needs acting on.
+/// </param>
 /// <param name="Name">Skill name. Ignored for a fact.</param>
 /// <param name="Description">One line saying when the skill applies. Ignored for a fact.</param>
-/// <param name="Body">The skill's instructions, or the fact itself.</param>
-public sealed record LearnedNote(string? Kind, string? Name, string? Description, string? Body);
+/// <param name="Body">The skill's instructions, the fact, or the observation.</param>
+/// <param name="Person">Who a note is about. Notes only.</param>
+/// <param name="Topic">What a note is about. Notes only.</param>
+/// <param name="Due">When a note needs acting on, as yyyy-MM-dd. Notes only.</param>
+public sealed record LearnedNote(
+    string? Kind,
+    string? Name,
+    string? Description,
+    string? Body,
+    string? Person = null,
+    string? Topic = null,
+    string? Due = null);
 
 /// <summary>
 /// Asks, after a turn, whether anything was learned worth keeping.
@@ -50,7 +63,11 @@ public sealed record LearnedNote(string? Kind, string? Name, string? Description
 /// the model calling a tool, which moves the reliability from the model's attention to a
 /// parser.
 /// </summary>
-public sealed class SkillReflector(IChatClient client, SkillIndex index, Memory.MemoryStore? memory = null)
+public sealed class SkillReflector(
+    IChatClient client,
+    SkillIndex index,
+    Memory.MemoryStore? memory = null,
+    Notes.NoteStore? notes = null)
 {
     /// <summary>
     /// The reflection is a courtesy, not part of the answer. If it takes longer than this
@@ -186,6 +203,21 @@ public sealed class SkillReflector(IChatClient client, SkillIndex index, Memory.
         sb.AppendLine("  {\"kind\":\"memory\",\"body\":\"one factual sentence\"}");
         sb.AppendLine("  {\"kind\":\"user\",\"body\":\"one factual sentence about the person\"}");
 
+        // The fourth shape, and the one with the narrowest brief. Memory is read on every
+        // turn and is capped, so it is for what is true of this machine and this person. An
+        // observation about a THIRD party, or something with a date on it, belongs in the
+        // note database, where it is produced when it is relevant instead of being carried
+        // in the header of every request.
+        sb.AppendLine(
+            "  {\"kind\":\"note\",\"person\":\"who it is about\",\"topic\":\"short label\",");
+        sb.AppendLine(
+            "   \"body\":\"the observation\",\"due\":\"yyyy-MM-dd or omitted\"}");
+        sb.AppendLine();
+        sb.AppendLine(
+            "Use 'note' for a lasting observation about someone else or a commitment with a");
+        sb.AppendLine(
+            "date: what a colleague prefers, what somebody is owed, when something falls due.");
+
         return sb.ToString();
     }
 
@@ -250,6 +282,45 @@ public sealed class SkillReflector(IChatClient client, SkillIndex index, Memory.
             return result.Message.Contains("already remembered", StringComparison.Ordinal)
                 ? null
                 : $"{kind}: {result.Message}";
+        }
+
+        // An observation about a third party or a dated commitment. Refused rather than
+        // filed as something else when there is no store: a note written into memory would
+        // eat the per-turn budget, and one written as a skill would only ever be read if
+        // the model happened to load it.
+        if (kind == "note")
+        {
+            if (notes is null)
+                return null;
+
+            DateTime? due = null;
+
+            if (!string.IsNullOrWhiteSpace(note.Due)
+                && DateTime.TryParseExact(
+                    note.Due.Trim(),
+                    "yyyy-MM-dd",
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.None,
+                    out DateTime parsed))
+            {
+                due = parsed;
+            }
+
+            // A malformed date drops the date and keeps the note. The observation is the
+            // valuable part; refusing the whole thing over a badly written date would throw
+            // away what was learned in order to punish the formatting.
+            long id = notes.Add(
+                note.Body.Trim(),
+                note.Person?.Trim() ?? string.Empty,
+                note.Topic?.Trim() ?? string.Empty,
+                due,
+                sourceKind: "turn");
+
+            string who = string.IsNullOrWhiteSpace(note.Person)
+                ? string.Empty
+                : $" about {note.Person.Trim()}";
+
+            return $"note{who} (id {id})";
         }
 
         // Anything else is treated as a skill, including a missing kind: a proposal with a

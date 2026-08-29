@@ -165,6 +165,65 @@ internal static class ReflectProbe
                 store.Entries(Shellvis.Core.Memory.MemoryTarget.Memory).Count == 1,
                 "and lands in the machine store");
 
+            Console.WriteLine();
+            Console.WriteLine("-- an observation about a third party goes to the notes --");
+
+            string noteFile = Path.Combine(root, "reflect-notes.db");
+            using (var notes = new Shellvis.Core.Notes.NoteStore(noteFile))
+            {
+                string observation =
+                    "{\"kind\":\"note\",\"person\":\"Weber, Dr. Klaus\",\"topic\":\"deadline\","
+                    + "\"body\":\"wants the Q3 figures before the board meeting\","
+                    + "\"due\":\"" + DateTime.Today.AddDays(3).ToString("yyyy-MM-dd") + "\"}";
+
+                string? noted = await Reflect(observation, digest, store, notes).ConfigureAwait(false);
+
+                failures += Expect(
+                    noted is not null && noted.StartsWith("note", StringComparison.Ordinal),
+                    "a note-kind observation is written down");
+
+                failures += Expect(notes.Count() == 1, "and lands in the note database");
+
+                failures += Expect(
+                    notes.About("Weber").Count == 1,
+                    "filed under the person, so a mail from them will surface it");
+
+                failures += Expect(
+                    notes.Due(DateTime.Today.AddDays(3)).Count == 1,
+                    "and with its due date, so it can be reminded about");
+
+                // The separation the plan requires: this is private material about a third
+                // party and must not travel in the header of every request.
+                failures += Expect(
+                    store.Entries(Shellvis.Core.Memory.MemoryTarget.Memory).Count == 1,
+                    "a note does NOT also land in memory, which is read every turn");
+
+                // A badly written date must not cost the observation. The content is the
+                // valuable part; refusing it over formatting throws away what was learned.
+                string badDate =
+                    "{\"kind\":\"note\",\"person\":\"Schulz\","
+                    + "\"body\":\"handled the escalation well\",\"due\":\"01.09.2026\"}";
+
+                await Reflect(badDate, digest, store, notes).ConfigureAwait(false);
+
+                failures += Expect(notes.Count() == 2, "an unreadable due date keeps the note");
+                failures += Expect(
+                    notes.About("Schulz").All(x => x.Due is null),
+                    "and simply drops the date rather than guessing at it");
+
+                // With nowhere to put it, a note is dropped rather than filed as something
+                // else: in memory it would eat the per-turn budget, as a skill it would only
+                // be read if the model happened to load it.
+                string? homeless = await Reflect(observation, digest, store, notes: null)
+                    .ConfigureAwait(false);
+
+                failures += Expect(homeless is null, "with no note store, a note is dropped");
+                failures += Expect(
+                    !Directory.Exists(Path.Combine(
+                        Shellvis.Core.Config.ShellvisPaths.SkillsDirectory, "learned", "weber-dr-klaus")),
+                    "and is NOT filed as a skill instead");
+            }
+
             string about = "{\"kind\":\"user\",\"body\":\"The user works in German and prefers "
                 + "short answers.\"}";
 
@@ -289,8 +348,9 @@ internal static class ReflectProbe
     private static async Task<string?> Reflect(
         string reply,
         TurnDigest digest,
-        Shellvis.Core.Memory.MemoryStore? memory = null) =>
-        await new SkillReflector(new CountingClient(reply), Index(), memory)
+        Shellvis.Core.Memory.MemoryStore? memory = null,
+        Shellvis.Core.Notes.NoteStore? notes = null) =>
+        await new SkillReflector(new CountingClient(reply), Index(), memory, notes)
             .ReflectAsync(digest, CancellationToken.None)
             .ConfigureAwait(false);
 

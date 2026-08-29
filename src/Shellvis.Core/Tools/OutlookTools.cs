@@ -17,7 +17,9 @@ namespace Shellvis.Core.Tools;
 /// draft is mutating and prompts, because it puts something into the user's mailbox
 /// even if it does not transmit it.
 /// </summary>
-public sealed partial class OutlookTools(ComApartment apartment)
+public sealed partial class OutlookTools(
+    ComApartment apartment,
+    Shellvis.Core.Notes.NoteStore? notes = null)
 {
     private readonly OutlookClient _outlook = new(apartment);
 
@@ -86,7 +88,7 @@ public sealed partial class OutlookTools(ComApartment apartment)
                     sb.Append("      ").AppendLine(message.Preview);
             }
 
-            return sb.ToString() + StartNotice();
+            return sb.ToString() + NotesAbout(PeopleIn(mail)) + StartNotice();
         }
         catch (Exception ex)
         {
@@ -259,7 +261,7 @@ public sealed partial class OutlookTools(ComApartment apartment)
             foreach (AppointmentSummary appointment in appointments)
                 sb.Append("  ").AppendLine(appointment.ToString());
 
-            return sb.ToString() + StartNotice();
+            return sb.ToString() + NotesDueBy(lastDay) + StartNotice();
         }
         catch (Exception ex)
         {

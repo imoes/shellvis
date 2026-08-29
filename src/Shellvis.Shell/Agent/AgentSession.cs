@@ -10,6 +10,7 @@ using Shellvis.Core.Hooks;
 using Shellvis.Core.Mail;
 using Shellvis.Core.Mcp;
 using Shellvis.Core.Memory;
+using Shellvis.Core.Notes;
 using Shellvis.Core.Office;
 using Shellvis.Core.Permissions;
 using Shellvis.Core.Providers;
@@ -120,7 +121,17 @@ internal sealed partial class AgentSession : IDisposable
         // same session it was fetched into.
         registry.RegisterFrom(new GalleryTools(host));
         registry.RegisterFrom(new OfficeTools());
-        registry.RegisterFrom(new OutlookTools(comApartment));
+        // The notes an assistant keeps about people and dates. A store of its own rather
+        // than more memory: memory is capped and injected into every prompt, and what goes
+        // in here is private material about third parties that must surface when it is
+        // relevant and not travel with every unrelated question.
+        //
+        // Opened here rather than beside the memory store because the Outlook tools take it:
+        // a mail listing carries what is already known about the people who sent it, so the
+        // model does not have to remember to go and look.
+        var notes = new NoteStore();
+
+        registry.RegisterFrom(new OutlookTools(comApartment, notes));
 
         // Asking the user is a capability, so it is a tool. The flag behind it is what
         // keeps a scheduled run from opening a dialog at three in the morning: the
@@ -171,6 +182,8 @@ internal sealed partial class AgentSession : IDisposable
         // Read before the prompt is built, because the prompt carries what is remembered.
         var memory = new MemoryStore();
         registry.RegisterFrom(new MemoryTools(memory));
+
+        registry.RegisterFrom(new NoteTools(notes));
 
         IReadOnlyList<HookDefinition> hookDefinitions = HookLoader.Load(settings.Hooks, warnings);
 
@@ -230,6 +243,7 @@ internal sealed partial class AgentSession : IDisposable
             _requestTimeoutSeconds = settings.Agent.RequestTimeoutSeconds,
             _skills = skills,
             _memory = memory,
+            _notes = notes,
             _learnFromTurns = settings.Agent.LearnFromTurns,
             McpServers = ToMcpConfigs(settings),
             Registry = registry,
@@ -280,6 +294,9 @@ internal sealed partial class AgentSession : IDisposable
     /// <summary>The memory store, shared with the tool and the reflection.</summary>
     private Shellvis.Core.Memory.MemoryStore? _memory;
 
+    /// <summary>The note database, shared with the tools and the reflection.</summary>
+    private Shellvis.Core.Notes.NoteStore? _notes;
+
     /// <summary>Whether to run the post-turn reflection at all.</summary>
     private bool _learnFromTurns = true;
 
@@ -306,7 +323,7 @@ internal sealed partial class AgentSession : IDisposable
         if (!_learnFromTurns || _skills is null || !digest.WorthReflecting)
             return;
 
-        var reflector = new SkillReflector(_loop.Client, _skills, _memory);
+        var reflector = new SkillReflector(_loop.Client, _skills, _memory, _notes);
 
         string? note = await reflector
             .ReflectAsync(digest, CancellationToken.None)

@@ -43,7 +43,9 @@ public sealed partial class OutlookTools
                 .ReadThreadAsync(messageId.Trim(), Math.Clamp(limit, 1, 50), cancellationToken)
                 .ConfigureAwait(false);
 
-            return OutlookClient.Render(thread, "in this conversation") + StartNotice();
+            return OutlookClient.Render(thread, "in this conversation")
+                + NotesAbout(PeopleIn(thread))
+                + StartNotice();
         }
         catch (Exception ex)
         {
@@ -88,7 +90,9 @@ public sealed partial class OutlookTools
                     + StartNotice();
             }
 
-            return OutlookClient.Render(history, $"with '{person.Trim()}'") + StartNotice();
+            return OutlookClient.Render(history, $"with '{person.Trim()}'")
+                + NotesAbout(PeopleIn(history).Append(person.Trim()))
+                + StartNotice();
         }
         catch (Exception ex)
         {

@@ -17,7 +17,7 @@ namespace Shellvis.Core.Tools;
 /// draft is mutating and prompts, because it puts something into the user's mailbox
 /// even if it does not transmit it.
 /// </summary>
-public sealed class OutlookTools(ComApartment apartment)
+public sealed partial class OutlookTools(ComApartment apartment)
 {
     private readonly OutlookClient _outlook = new(apartment);
 

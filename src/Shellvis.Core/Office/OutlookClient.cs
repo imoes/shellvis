@@ -71,7 +71,7 @@ public sealed record AppointmentSummary(
 /// Classic Outlook only. The "New Outlook" store app exposes no COM surface at all;
 /// this machine has the classic one, which is what makes this path viable.
 /// </summary>
-public sealed class OutlookClient(ComApartment apartment)
+public sealed partial class OutlookClient(ComApartment apartment)
 {
     /// <summary>Outlook folder constants, so the numbers are not scattered as magic values.</summary>
     private const int FolderInbox = 6;

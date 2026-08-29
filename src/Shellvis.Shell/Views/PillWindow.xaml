@@ -53,6 +53,28 @@
                     BorderThickness="1.5"
                     BorderBrush="{ThemeResource PillRingBrush}" />
 
+            <!--
+                There is something new.
+
+                Everything about this is chosen to be noticeable without being an
+                interruption: it does not move, does not make a sound, does not take focus,
+                and covers nothing: it sits in the bar's own left margin, where no control
+                is. A person writing a mail is not disturbed by it; a person who glances at
+                the bar sees it immediately.
+
+                Six pixels. Large enough to register at a glance, too small to read as an
+                error. Collapsed until there is something, and cleared the moment the
+                console is opened, because opening the console IS reading them.
+            -->
+            <Ellipse x:Name="UnreadDot"
+                     Width="6" Height="6"
+                     Margin="7,0,0,0"
+                     HorizontalAlignment="Left"
+                     VerticalAlignment="Center"
+                     Visibility="Collapsed"
+                     Fill="{ThemeResource PillAccentBrush}"
+                     ToolTipService.ToolTip="Something new is in the console" />
+
             <Grid Padding="16,0,14,0" ColumnSpacing="6">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto" />

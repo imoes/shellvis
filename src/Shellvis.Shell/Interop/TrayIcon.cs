@@ -114,6 +114,41 @@ internal sealed class TrayIcon : IDisposable
     }
 
     /// <summary>
+    /// Change the tooltip on an icon that is already there.
+    ///
+    /// The quietest channel this application has. It says how much is waiting without
+    /// showing anything, making a sound or taking focus -- the user finds it when they
+    /// point at the icon, which is when they were asking anyway.
+    ///
+    /// NIM_MODIFY with only NIF_TIP set: the icon and the callback message stay as they
+    /// are. Sending the full flag set again would work and would also re-send the icon
+    /// handle on every reminder, for nothing.
+    /// </summary>
+    public unsafe bool UpdateTooltip(string tooltip)
+    {
+        if (!_added)
+            return false;
+
+        var data = new NOTIFYICONDATAW
+        {
+            cbSize = (uint)sizeof(NOTIFYICONDATAW),
+            hWnd = _hwnd,
+            uID = IconId,
+            uFlags = NOTIFY_ICON_DATA_FLAGS.NIF_TIP,
+        };
+
+        // Same fixed 128-char inline buffer as TryAdd, truncated here where the limit is
+        // written down rather than silently by the shell.
+        ReadOnlySpan<char> tip = tooltip.Length > 126 ? tooltip.AsSpan(0, 126) : tooltip;
+
+        Span<char> buffer = data.szTip.AsSpan();
+        tip.CopyTo(buffer);
+        buffer[tip.Length] = '\0';
+
+        return PInvoke.Shell_NotifyIcon(NOTIFY_ICON_MESSAGE.NIM_MODIFY, in data);
+    }
+
+    /// <summary>
     /// Load the icon from a file.
     ///
     /// LR_LOADFROMFILE with an explicit small-icon size: passing 0,0 asks for the

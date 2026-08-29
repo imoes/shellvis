@@ -48,6 +48,12 @@
                 <GradientStop Offset="0.70" Color="#FFD46BC8" />
                 <GradientStop Offset="1.00" Color="#FF7C6BF5" />
             </LinearGradientBrush>
+            <!--
+              The unread dot. One colour from the ring, taken solid.
+              Not red: nothing has gone wrong, there is merely something to look at, and a
+              red mark on a bar reads as an error and gets treated as one.
+            -->
+            <SolidColorBrush x:Key="PillAccentBrush" Color="#FF7C6BF5" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
@@ -82,6 +88,8 @@
                 <GradientStop Offset="0.70" Color="#FFE585DA" />
                 <GradientStop Offset="1.00" Color="#FF9A8BFF" />
             </LinearGradientBrush>
+            <!-- Lighter, to hold its own against a dark bar. -->
+            <SolidColorBrush x:Key="PillAccentBrush" Color="#FF9A8BFF" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>

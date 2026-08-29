@@ -312,6 +312,11 @@ public sealed partial class PillWindow : Window
     {
         _consoleOpen = !_consoleOpen;
 
+        // Opening the console IS reading what is waiting, because the lines are already in
+        // it. Anything else would leave a dot on a bar whose console the user is looking at.
+        if (_consoleOpen)
+            MarkRead();
+
         // Start from wherever the animation currently sits, so a mid-flight toggle
         // reverses smoothly instead of snapping.
         _consoleFrom = ConsoleHost.Height;
@@ -762,8 +767,14 @@ public sealed partial class PillWindow : Window
             // Started after MCP, so a job whose prompt needs an MCP tool finds it. Every
             // run reports into the transcript: a scheduled agent touching the machine
             // invisibly is the opposite of what this console is for.
+            //
+            // Quietly, though. A scheduled run is the one thing here that speaks without
+            // being asked, so it is the one thing that must never take the screen: it
+            // writes its line and raises a dot, and the user reads it when they look. The
+            // plan for this feature originally had a reminder OPEN the console by itself,
+            // which is exactly the window-in-your-face this must not be.
             session.StartCron((message, isProblem) =>
-                AddRow(isProblem ? GlyphWarning : GlyphTool, message, "cron"));
+                NoteQuietly(message, "cron", isProblem));
         }
         catch (Exception ex)
         {

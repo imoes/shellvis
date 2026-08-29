@@ -36,6 +36,7 @@ internal static class Program
                 "reflect" => await ReflectProbe.RunAsync().ConfigureAwait(false),
                 "clarify" => await ClarifyProbe.RunAsync().ConfigureAwait(false),
                 "markdown" => MarkdownProbe.Run(),
+                "glyphs" => GlyphProbe.Run(),
                 "notes" => NoteProbe.Run(),
                 "teams" => TeamsProbe.Run(),
                 "process" => await ProcessProbe.RunAsync().ConfigureAwait(false),

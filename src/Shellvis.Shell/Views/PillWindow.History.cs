@@ -18,9 +18,21 @@ namespace Shellvis.Shell.Views;
 /// </summary>
 public sealed partial class PillWindow
 {
-    private const string GlyphHistory = ""; // U+E81C
-    private const string GlyphDelete = ""; // U+E74D
-    private const string GlyphResume = ""; // U+E768
+    // Escaped rather than written as the character itself, and that is the whole point.
+    //
+    // These three were literal private-use characters and every one of them was EMPTY: the
+    // glyph had been lost by some file rewrite along the way, leaving an empty string. The
+    // buttons were still there and still clickable, so nothing failed and no test noticed --
+    // there was simply nothing drawn on them. That is why the history looked like a list
+    // with no controls, and why "you cannot open a chat by clicking" and "where is the
+    // delete button" were both true at once.
+    //
+    // The eight glyph constants elsewhere in this application all use unicode escapes and
+    // all survived. A character that cannot be typed, cannot be read back, and vanishes
+    // silently has no business being stored as itself.
+    private const string GlyphHistory = "\uE81C";
+    private const string GlyphDelete = "\uE74D";
+    private const string GlyphResume = "\uE768";
 
     private bool _historyVisible;
 

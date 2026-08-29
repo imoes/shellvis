@@ -46,6 +46,12 @@ public sealed class PowerShellRiskAssessor : IToolRiskAssessor
     {
         ["powershell_run"] = "script",
 
+        // The 5.1 fallback is the same language and gets the same reading. Left out, every
+        // provable read against a legacy module would raise a prompt, which is how a user
+        // learns to click Allow without looking -- the exact failure the classifier exists
+        // to prevent.
+        ["powershell_run_winps"] = "script",
+
         // A remote script is the same language and gets the same reading. What differs is
         // the consequence of getting it wrong, which is handled below rather than by
         // refusing to look at it: a provable read on a server should not raise a prompt any

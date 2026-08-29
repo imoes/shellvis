@@ -114,6 +114,13 @@ internal sealed partial class AgentSession : IDisposable
         registry.RegisterFrom(shellTools);
         registry.RegisterFrom(new WslTools());
 
+        // The 5.1 fallback and background processes: the two tools the original PowerShell
+        // step listed and never built. The process manager is held on the session so it can
+        // be disposed with it -- a background child left running with nothing able to show
+        // or stop it is worse than losing the run.
+        var processes = new BackgroundProcesses();
+        registry.RegisterFrom(new ProcessTools(processes));
+
         // Remoting shares the runspace, which is what lets a PSSession survive between
         // turns: a variable set on the remote host is still there in the next call.
         registry.RegisterFrom(new RemoteTools(host));
@@ -256,6 +263,7 @@ internal sealed partial class AgentSession : IDisposable
             HomeAssistant = homeAssistant,
             Browser = browser,
             Hooks = hooks,
+            _processes = processes,
             _unattended = unattended,
         };
 
@@ -299,6 +307,9 @@ internal sealed partial class AgentSession : IDisposable
 
     /// <summary>The memory store, shared with the tool and the reflection.</summary>
     private Shellvis.Core.Memory.MemoryStore? _memory;
+
+    /// <summary>Background children, killed when this session goes away.</summary>
+    private BackgroundProcesses? _processes;
 
     /// <summary>The note database, shared with the tools and the reflection.</summary>
     private Shellvis.Core.Notes.NoteStore? _notes;
@@ -1315,6 +1326,15 @@ internal sealed partial class AgentSession : IDisposable
         _shell.Dispose();
         _desktop.Dispose();
         HomeAssistant?.Dispose();
+
+        // Background children go with the window. One left running with nothing able to
+        // show or stop it -- still holding a port or a file -- is worse than losing the
+        // run, because the user has no way to find out it is there. Same reasoning as the
+        // MCP stdio children above.
+        _processes?.Dispose();
+
+        // The note database, whose write-ahead log needs closing like the session store's.
+        _notes?.Dispose();
 
         // Closes a browser Shellvis launched; one it merely attached to is the user's
         // and keeps running.

@@ -33,6 +33,26 @@ jobs:
         shell: pwsh
         run: dotnet build Shellvis.slnx -c Release
 
+      # What ships is not what builds. The skills that come with the product are read from
+      # beside the executable, so a change to how they are copied would leave an installed
+      # Shellvis with no secretary skill and nothing failing anywhere -- the harness has its
+      # own copy and would stay green. Publishing is the only place that answers this.
+      - name: The shipped skills reach a published build
+        shell: pwsh
+        run: |
+          dotnet publish src/Shellvis.Shell/Shellvis.Shell.csproj -c Release -r win-x64 --self-contained false | Out-Null
+
+          $published = Get-ChildItem -Recurse -Path src/Shellvis.Shell/bin/Release -Filter SKILL.md |
+                       Where-Object FullName -like '*publish*skills*'
+
+          if (-not $published) {
+            Write-Host "::error title=shipped skills::a published build contains no SKILL.md under skills/"
+            exit 1
+          }
+
+          Write-Host "$($published.Count) shipped skill(s) in the published output:"
+          $published | ForEach-Object { Write-Host "  $($_.FullName)" }
+
       - name: Verify
         shell: pwsh
         run: |
@@ -46,10 +66,17 @@ jobs:
 
           # 'launch' is deliberately absent. It starts real programs and needs a desktop, and
           # it has already been observed to be flaky under automation in this project -- a gate
-          # that fails at random teaches people to ignore the gate.
+          # that fails at random teaches people to ignore the gate. 'outlook' and 'officelive'
+          # are absent for a plainer reason: they need Office installed and a real mailbox.
+          #
+          # Everything else runs. Six harnesses had been added without being added here --
+          # clarify, markdown, notes, teams, process and agenda -- so a regression in the note
+          # database, the Markdown parser or the reminder debounce would have sailed through
+          # the gate. A harness that exists and is not gated is a harness that stops being run.
           foreach ($harness in 'classify','config','skills','sessions','compaction',
                                'providers','endpoint','reflect','hooks','cron','thunderbird',
-                               'stream','mcp','hass','broker','topmost','speech','whisper') {
+                               'stream','mcp','hass','broker','topmost','speech','whisper',
+                               'clarify','markdown','notes','teams','process','agenda') {
             Write-Host "--- $harness"
 
             # Captured as well as printed, so the reason can be put in an annotation. Run logs

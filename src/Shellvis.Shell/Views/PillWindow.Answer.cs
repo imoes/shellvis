@@ -39,6 +39,27 @@ public sealed partial class PillWindow
 
         window.ShowAnswer(markdown, streaming ? "Answer (writing...)" : "Answer");
         window.Reveal();
+
+        AnswerButton.IsEnabled = true;
+    }
+
+    /// <summary>
+    /// Bring the answer back, from the console header.
+    ///
+    /// The whole reason this exists: the answer moved into a window of its own and nothing
+    /// could reopen it. Closing it made the document unreachable until the next reply, and
+    /// the question that surfaced was simply "how do I open the message console?" -- which
+    /// is the right question to ask of an interface with no answer to it.
+    ///
+    /// It also raises a window that is merely behind something, so the same button covers
+    /// hidden, minimised and buried.
+    /// </summary>
+    private void OnShowAnswer()
+    {
+        if (_answerWindow is null)
+            return;
+
+        Answer().Reveal();
     }
 
     /// <summary>Close the answer window when the pill closes, or the process outlives it.</summary>

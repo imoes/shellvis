@@ -217,6 +217,7 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <!-- The model, in the slot the word "Console" used to occupy.
@@ -266,8 +267,28 @@
                          The chevron collapses the console; the power symbol quits. The
                          glyphs are deliberately not both close-shaped: two X-like icons
                          side by side would just move the mistake one pixel to the left. -->
-                    <Button x:Name="CollapseButton"
+                    <!-- The way back to the answer.
+                         The answer moved into a window of its own, and nothing anywhere
+                         opened it again: once it was closed the document was gone until
+                         the next reply, which is how "how do I open the message console?"
+                         came to be asked. Here rather than on the pill, because the pill
+                         is 720 wide and every button on it comes out of the input field.
+                         Disabled until there is an answer to come back to. -->
+                    <Button x:Name="AnswerButton"
                             Grid.Column="2"
+                            Width="26"
+                            Height="22"
+                            Padding="0"
+                            IsEnabled="False"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="11"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Content="&#xE8BD;"
+                            ToolTipService.ToolTip="Show the answer" />
+
+                    <Button x:Name="CollapseButton"
+                            Grid.Column="3"
                             Width="26"
                             Height="22"
                             Padding="0"
@@ -279,7 +300,7 @@
                             ToolTipService.ToolTip="Hide the console" />
 
                     <Button x:Name="CloseButton"
-                            Grid.Column="3"
+                            Grid.Column="4"
                             Width="26"
                             Height="22"
                             Padding="0"

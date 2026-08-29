@@ -1,3 +1,4 @@
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -124,14 +125,48 @@ public sealed partial class PillWindow
         Button resume = IconButton(GlyphResume, "Resume this conversation");
         resume.IsEnabled = !row.IsCurrent;
         resume.Click += (_, _) => OnResume(info);
+        resume.Tapped += (_, e) => e.Handled = true;
         Grid.SetColumn(resume, 1);
         grid.Children.Add(resume);
 
         Button delete = IconButton(GlyphDelete, "Delete this conversation");
         delete.IsEnabled = !row.IsCurrent;
         delete.Click += (_, _) => OnDelete(info);
+
+        // Marked handled BEFORE it reaches the row, or deleting a conversation would
+        // also open it -- the confirmation would appear over a transcript that was just
+        // replaced, which is the worst possible moment to ask "are you sure".
+        delete.Tapped += (_, e) => e.Handled = true;
         Grid.SetColumn(delete, 2);
         grid.Children.Add(delete);
+
+        // The whole row opens the conversation, not only the small arrow at its end.
+        //
+        // Reported as "you cannot open a chat from the history by clicking", and the
+        // report was right: a list of conversations that does not respond to being
+        // clicked is a list that looks broken. Every other list of this shape -- a mail
+        // client, a browser history, a chat application -- opens on the row, and a
+        // twenty-six pixel target at the far right is not a discoverable substitute.
+        //
+        // The buttons keep working and take precedence: a click that lands on Delete
+        // must not also resume. Tapped bubbles, so the handlers below mark it handled.
+        if (!row.IsCurrent)
+        {
+            // Background rather than none, or the gaps between the label and the buttons
+            // are not part of the row for hit-testing purposes and the click falls
+            // through. Transparent still receives input; null does not.
+            grid.Background = new SolidColorBrush(Colors.Transparent);
+
+            grid.Tapped += (_, e) =>
+            {
+                e.Handled = true;
+                OnResume(info);
+            };
+
+            // Says so, because a click target with no pointer feedback is one nobody
+            // tries twice.
+            ToolTipService.SetToolTip(grid, "Open this conversation");
+        }
 
         return grid;
     }
@@ -151,6 +186,8 @@ public sealed partial class PillWindow
             $"Resuming \"{info.Title}\" ({messages.Count} messages).",
             string.Empty, isAnnouncement: true);
 
+        string? lastAnswer = null;
+
         foreach (StoredMessage message in messages)
         {
             switch (message.Role)
@@ -164,6 +201,7 @@ public sealed partial class PillWindow
                     // rendering it as one of Shellvis' own remarks put it in italic -- the same
                     // wrong category that made live answers look unformatted.
                     AddRow(GlyphSpeaker, message.Content, string.Empty, isAnswer: true);
+                    lastAnswer = message.Content;
                     break;
 
                 case "tool":
@@ -181,6 +219,15 @@ public sealed partial class PillWindow
 
         ToggleHistory();
         StatusText.Text = ShellvisVoice.Standby;
+
+        // The document window gets the conversation too.
+        //
+        // Without this, opening a conversation from the history filled the console and left
+        // the answer window empty -- so "open this chat" and "where is the message console"
+        // were the same complaint arriving from two directions. What the user asked to see
+        // is the conversation, and the last answer is the part of it that is a document.
+        if (lastAnswer is { Length: > 0 })
+            ShowAnswer(Tidy(lastAnswer), streaming: false);
     }
 
     private async void OnDelete(SessionInfo info)

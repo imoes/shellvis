@@ -53,7 +53,16 @@ public sealed partial class AnswerWindow : Window
             presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
             presenter.IsResizable = true;
             presenter.IsMaximizable = false;
-            presenter.IsMinimizable = false;
+
+            // Minimisable, and this is a correction. It was off because the window has no
+            // title bar and therefore no system buttons -- but that reasoning confused "no
+            // button to press" with "should not be possible". A document window you cannot
+            // get out of the way, on a window that is always on top, is a document window
+            // that sits over your work until you close it and lose your place in it.
+            //
+            // Restoring is the taskbar button: unlike a sticky note this is NOT a tool
+            // window, so it has one.
+            presenter.IsMinimizable = true;
 
             // Above ordinary windows like the pill, and stepping aside for the same reasons:
             // ForegroundState is shared rather than reimplemented, so a full-screen window or
@@ -64,6 +73,12 @@ public sealed partial class AnswerWindow : Window
         _shaper.TrySoftenEdges();
 
         CloseButton.Click += (_, _) => Hide();
+
+        MinimiseButton.Click += (_, _) =>
+        {
+            if (AppWindow.Presenter is OverlappedPresenter minimisable)
+                minimisable.Minimize();
+        };
         MakeDraggable(Header);
         MakeDraggable(Surface);
 
@@ -85,6 +100,7 @@ public sealed partial class AnswerWindow : Window
     public void ShowAnswer(string markdown, string heading)
     {
         HeaderText.Text = heading;
+        HasAnswer = markdown.Trim().Length > 0;
 
         MarkdownRenderer.Render(
             Body,
@@ -128,11 +144,26 @@ public sealed partial class AnswerWindow : Window
     /// <summary>Hide without destroying, so the next answer reuses this window.</summary>
     public void Hide() => AppWindow.Hide();
 
+    /// <summary>
+    /// Put the window in front, whether it was hidden, minimised or merely behind.
+    ///
+    /// All three states have to be handled here, and only the first one used to be. A
+    /// minimised window answers Show() by staying minimised: it is already "shown", it is
+    /// just iconic. So restoring has to be asked for separately, or the answer button
+    /// appears to do nothing for the one state the user is most likely to be in.
+    /// </summary>
     public void Reveal()
     {
         AppWindow.Show();
+
+        if (AppWindow.Presenter is OverlappedPresenter presenter)
+            presenter.Restore();
+
         _shaper.BringToFront();
     }
+
+    /// <summary>Whether there is anything to come back to.</summary>
+    public bool HasAnswer { get; private set; }
 
     /// <summary>
     /// Drag by the surface, the same way the pill does.

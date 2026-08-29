@@ -28,6 +28,7 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
                     <TextBlock x:Name="HeaderText"
@@ -38,11 +39,19 @@
                                VerticalAlignment="Center"
                                Foreground="{ThemeResource ConsoleMutedBrush}" />
 
-                    <Button x:Name="CloseButton"
+                    <!-- Minimise before close, in the Windows order, and the destructive
+                         one furthest from where the pointer usually is. -->
+                    <Button x:Name="MinimiseButton"
                             Grid.Column="1"
                             Style="{StaticResource PillIconButtonSmallStyle}"
+                            Content="&#xE921;"
+                            ToolTipService.ToolTip="Minimise to the taskbar" />
+
+                    <Button x:Name="CloseButton"
+                            Grid.Column="2"
+                            Style="{StaticResource PillIconButtonSmallStyle}"
                             Content="&#xE711;"
-                            ToolTipService.ToolTip="Close (the answer stays in the console)" />
+                            ToolTipService.ToolTip="Close (the answer button on the pill brings it back)" />
                 </Grid>
 
                 <ScrollViewer x:Name="Scroller"

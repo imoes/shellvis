@@ -126,6 +126,7 @@ public sealed partial class PillWindow : Window
         };
 
         CloseButton.Click += (_, _) => Close();
+        AnswerButton.Click += (_, _) => OnShowAnswer();
         ExpandButton.Click += (_, _) => Undock();
 
         // The same three actions from the pill menu, which is reachable whether or not

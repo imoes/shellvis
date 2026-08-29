@@ -4,6 +4,53 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.4.0
+
+The release that turns Shellvis from something that operates a machine into something that
+keeps your desk.
+
+- **It asks instead of guessing.** When an answer is genuinely yours to give, Shellvis puts
+  two to four options in front of you, each with a line saying what it costs, and you can
+  always write something else. No answer is not a refusal: a dismissed question or a
+  scheduled run means "decide yourself and say what you assumed", so it carries on rather
+  than stopping.
+- **Answers have links and tables.** A mail Shellvis mentions is a link you can click, and it
+  opens that message in Outlook -- starting Outlook if it was not running. Tables render as
+  real tables rather than arriving as raw pipes.
+- **It reads mail in context.** The whole conversation a message belongs to, from your inbox
+  and your sent items both, and the recent correspondence with one person in either
+  direction. A suggested reply is written in the register you already use with them. It still
+  cannot send: replies are drafts, and there is no send function to waive.
+- **Your Outlook task list.** List what is open and what is overdue, add a task when a mail
+  leaves you owing something, mark one done. Your own list, in the application you already
+  look at, rather than a second one in here.
+- **It keeps notes about people and dates.** What someone prefers, what you promised, when it
+  falls due. They come back attached to the mail and calendar results that mention the
+  person, so they surface when they matter instead of being remembered. Kept in their own
+  database, never in the prompt.
+- **Reminders and a daily briefing.** Scheduled, read-only, and each thing said exactly once
+  before it happens -- a job every five minutes stays silent unless something is genuinely
+  new. Two jobs are written into `jobs.json` on first run, switched off, so they can be
+  turned on rather than typed out.
+- **Sticky notes on the desktop.** The Windows Vista behaviour: a frameless note per window,
+  five colours, dragged anywhere, resized from the edges, saved without asking, and back
+  where you left it after a restart. No taskbar button and no Alt-Tab entry. Shellvis can
+  write one for you.
+- **Teams.** Open a chat with the message already written but unsent, and join the meeting on
+  a calendar entry -- calendar lines now say `[Teams]` when there is one. Through the links
+  Teams registers with Windows, so it needs no sign-in and no app registration.
+- **Windows PowerShell 5.1 and background processes.** `powershell_run_winps` reaches the
+  older engine for modules that will not load under 7. `process` starts something and lets go
+  of it, so a build no longer blocks the conversation for four minutes.
+- **The console shows what came back.** A tool call is a card now: worked or did not, what
+  ran, what it was given, how long it took, and the full output one click away -- which was
+  previously not reachable anywhere in the interface. The status line says what is happening
+  ("Reading the mail...") rather than only that something is.
+- **An assistant persona, shipped as a skill.** Triage before speaking, three things rather
+  than thirty, look ahead rather than back, nothing dropped, write as they write, and say
+  where every claim came from. Loaded only when the role is wanted.
+- **An overview page.** <https://imoes.github.io/shellvis/>
+
 ## 0.2.8
 
 - **Hosted speech recognition as an option.** `voice.engine: azure` or `voice.engine: google`

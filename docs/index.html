@@ -1,0 +1,450 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shellvis — a native Windows AI agent</title>
+<meta name="description" content="A floating command bar with a console beneath it, wired to PowerShell, the desktop, Office, Outlook and a browser. Every command it runs is on screen while it runs it.">
+<style>
+  :root {
+    color-scheme: light dark;
+
+    --ink: #1b1b21;
+    --muted: #5d5d6b;
+    --faint: #8a8a99;
+    --paper: #fbfbfd;
+    --panel: #ffffff;
+    --line: #e3e3ec;
+    --accent: #6d4bd8;
+    --accent-soft: #f0ebfd;
+    --warn: #b4331f;
+    --mono: "Cascadia Mono", "SF Mono", ui-monospace, "Consolas", monospace;
+    --sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e9e9f2;
+      --muted: #a6a6b6;
+      --faint: #77778a;
+      --paper: #131318;
+      --panel: #1b1b22;
+      --line: #2c2c37;
+      --accent: #a48bf0;
+      --accent-soft: #241d3a;
+      --warn: #e8896f;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #e9e9f2;
+    --muted: #a6a6b6;
+    --faint: #77778a;
+    --paper: #131318;
+    --panel: #1b1b22;
+    --line: #2c2c37;
+    --accent: #a48bf0;
+    --accent-soft: #241d3a;
+    --warn: #e8896f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------------------------------------------------------------- header */
+
+  header {
+    padding: 88px 0 56px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .mark {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 26px;
+  }
+
+  .pill {
+    width: 46px; height: 22px;
+    border-radius: 11px;
+    background: linear-gradient(100deg, var(--accent), #d86ba8);
+    flex: none;
+  }
+
+  h1 {
+    font-size: clamp(2.4rem, 7vw, 3.4rem);
+    line-height: 1.06;
+    letter-spacing: -0.025em;
+    margin: 0 0 18px;
+    font-weight: 640;
+  }
+
+  .lede {
+    font-size: 1.22rem;
+    color: var(--muted);
+    margin: 0 0 8px;
+    max-width: 40em;
+  }
+
+  .voice {
+    font-style: italic;
+    color: var(--faint);
+    margin-top: 26px;
+  }
+
+  .badges { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 10px; }
+
+  .badge {
+    font-size: 0.8rem;
+    font-family: var(--mono);
+    padding: 5px 11px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    text-decoration: none;
+    background: var(--panel);
+  }
+
+  .badge:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* ------------------------------------------------------------- sections */
+
+  section { padding: 52px 0; border-bottom: 1px solid var(--line); }
+
+  h2 {
+    font-size: 1.55rem;
+    letter-spacing: -0.015em;
+    margin: 0 0 6px;
+    font-weight: 620;
+  }
+
+  h2 + .sub { color: var(--faint); margin: 0 0 28px; font-size: 0.98rem; }
+
+  h3 {
+    font-size: 1.03rem;
+    margin: 30px 0 6px;
+    font-weight: 620;
+  }
+
+  p { margin: 0 0 16px; }
+
+  a { color: var(--accent); }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.9em;
+    background: var(--accent-soft);
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+
+  /* ---------------------------------------------------------------- cards */
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 16px;
+    margin-top: 22px;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 20px;
+  }
+
+  .card h3 { margin: 0 0 6px; font-size: 0.98rem; }
+  .card p { margin: 0; font-size: 0.94rem; color: var(--muted); }
+
+  /* ------------------------------------------------------- console mockup */
+
+  .console {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 16px 18px;
+    font-family: var(--mono);
+    font-size: 0.83rem;
+    line-height: 1.85;
+    overflow-x: auto;
+    margin: 24px 0 10px;
+  }
+
+  .console .row { display: flex; gap: 10px; white-space: nowrap; }
+  .console .tick { color: var(--faint); width: 1em; flex: none; }
+  .console .tool { font-weight: 620; }
+  .console .arg { color: var(--muted); }
+  .console .ms { margin-left: auto; color: var(--faint); padding-left: 20px; }
+  .console .said { color: var(--ink); font-family: var(--sans); }
+  .console .bad { color: var(--warn); }
+
+  .caption { font-size: 0.86rem; color: var(--faint); margin: 0; }
+
+  /* ---------------------------------------------------------------- table */
+
+  .tools { width: 100%; border-collapse: collapse; margin-top: 22px; font-size: 0.9rem; }
+  .tools th { text-align: left; font-weight: 620; padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); }
+  .tools td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .tools td:first-child { white-space: nowrap; color: var(--muted); width: 1%; }
+  .tools code { background: none; padding: 0; color: var(--ink); }
+
+  .scroll { overflow-x: auto; }
+
+  /* ----------------------------------------------------------------- list */
+
+  ul.plain { margin: 16px 0; padding-left: 20px; }
+  ul.plain li { margin-bottom: 10px; }
+
+  .rule {
+    border-left: 3px solid var(--accent);
+    padding: 2px 0 2px 18px;
+    margin: 22px 0;
+    color: var(--muted);
+  }
+
+  .rule strong { color: var(--ink); }
+
+  footer {
+    padding: 44px 0 72px;
+    color: var(--faint);
+    font-size: 0.9rem;
+  }
+
+  footer a { color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="mark"><span class="pill"></span></div>
+
+    <h1>Shellvis</h1>
+
+    <p class="lede">
+      A native Windows AI agent: a floating command bar with a console beneath it, wired to
+      PowerShell, the desktop, Office, Outlook, Teams and a browser.
+    </p>
+
+    <p class="lede">
+      It does not wrap a terminal. It hosts PowerShell&nbsp;7 in&#8209;process, drives windows
+      through UI&nbsp;Automation, talks to Office over COM — and shows every command and tool
+      call while it makes them.
+    </p>
+
+    <p class="voice">Shellvis has entered the building.</p>
+
+    <div class="badges">
+      <a class="badge" href="https://github.com/imoes/shellvis">source</a>
+      <a class="badge" href="https://github.com/imoes/shellvis/releases/latest">installers</a>
+      <a class="badge" href="https://github.com/imoes/shellvis/blob/main/CHANGELOG.md">changelog</a>
+      <a class="badge" href="https://github.com/imoes/shellvis/blob/main/LICENSE">AGPL-3.0</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>You can watch it work</h2>
+    <p class="sub">The console is the product, not a debug view.</p>
+
+    <p>
+      Every tool call is a card: whether it worked, what ran, what it was given, how long it
+      took, and the full output one click away. The mark is a shape rather than a colour,
+      because colour here means one thing only — something went wrong.
+    </p>
+
+    <div class="console" aria-label="Example of the console output">
+      <div class="row"><span class="tick">✓</span><span class="tool">calendar_list</span><span class="arg">8 appointment(s) from 2026-08-24 to 2026-08-30</span><span class="ms">260ms</span></div>
+      <div class="row"><span class="tick">✓</span><span class="tool">mail_thread</span><span class="arg">3 message(s) in this conversation</span><span class="ms">184ms</span></div>
+      <div class="row"><span class="tick">✓</span><span class="tool">powershell_run</span><span class="arg">Drive TotalGB UsedGB FreeGB PctFree</span><span class="ms">860ms</span></div>
+      <div class="row"><span class="tick">✕</span><span class="tool bad">program_open</span><span class="arg bad">policy on this machine forbids opening programs</span><span class="ms">denied</span></div>
+      <div class="row"><span class="tick">🗣</span><span class="said">answered, 132 words</span><span class="ms">answer</span></div>
+    </div>
+
+    <p class="caption">The prose answer goes to a window of its own. Conversation and activity
+      run on different clocks, and mixing them makes a record that serves neither.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>It keeps your desk</h2>
+    <p class="sub">The part that makes it an assistant rather than a shell.</p>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Reads mail in context</h3>
+        <p>A whole conversation by its thread key, and the history with one person in both
+          directions — so a suggested reply is in the register you already use with them.</p>
+      </div>
+      <div class="card">
+        <h3>Never sends</h3>
+        <p>Replies and new messages are drafts. Not a rule that can be waived: the mail
+          interface has no send function at all.</p>
+      </div>
+      <div class="card">
+        <h3>Keeps notes about people</h3>
+        <p>What someone prefers, what you owe them, when it is due. They surface attached to
+          the mail and calendar results that mention them, rather than being remembered.</p>
+      </div>
+      <div class="card">
+        <h3>Reminds you before</h3>
+        <p>Once, ahead of the thing, on a schedule. What has already been said is absent from
+          the result, so a job every five minutes stays quiet.</p>
+      </div>
+      <div class="card">
+        <h3>Outlook tasks</h3>
+        <p>Your own list, in the application you already look at, syncing to your phone —
+          not a second list inside this one.</p>
+      </div>
+      <div class="card">
+        <h3>Sticky notes</h3>
+        <p>The Vista behaviour rebuilt: frameless, five colours, dragged anywhere, saved
+          without asking, back where you left them after a restart.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Ninety-two tools</h2>
+    <p class="sub">Eighty on a machine with no Home Assistant, no privileged service and no Thunderbird.</p>
+
+    <div class="scroll">
+      <table class="tools">
+        <tr><th>Area</th><th>What it reaches</th></tr>
+        <tr><td>Desktop</td><td>The UI&nbsp;Automation tree of any window, with a short reference for
+          every element. Clicks and typing address references, never coordinates.</td></tr>
+        <tr><td>Shell</td><td>PowerShell&nbsp;7 in one persistent runspace, Windows PowerShell&nbsp;5.1
+          out of process for the modules that need it, WSL, and background processes.</td></tr>
+        <tr><td>Gallery</td><td>Search, install and import a module, and use its cmdlets in the
+          next turn — without ten thousand cmdlet names in the prompt.</td></tr>
+        <tr><td>Office</td><td>Word, Excel and PowerPoint without Office installed, plus the
+          documents you have open right now, plus PDF export.</td></tr>
+        <tr><td>Outlook</td><td>Mail, threads, correspondence history, calendar, contacts and
+          tasks. Opening a message puts it in front of you.</td></tr>
+        <tr><td>Teams</td><td>Open a chat with the message written but unsent; join the meeting
+          on a calendar entry.</td></tr>
+        <tr><td>Browser</td><td>Its own persistent profile, driven over the DevTools protocol.
+          A click that would land on a cookie banner is refused, not faked.</td></tr>
+        <tr><td>Skills &amp; memory</td><td>What it has learned about this machine, disclosed in
+          three tiers so it costs a line and not a page.</td></tr>
+        <tr><td>Privileged</td><td>A separate service, six operations, every one of them asking
+          first — even the ones that only read.</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What it will not do quietly</h2>
+    <p class="sub">The rules that shape the whole thing.</p>
+
+    <div class="rule">
+      <strong>The burden of proof is on reading.</strong> A command runs without asking only
+      when it can be <em>proved</em> to read: the verb, the syntax tree and the command shape
+      all have to agree. Anything unproven asks. There is no "probably harmless".
+    </div>
+
+    <div class="rule">
+      <strong>Some things always ask.</strong> Installing a module from the gallery, any
+      privileged operation, running script in a signed-in browser page. No mode waives those,
+      and that is the whole difference between them and merely writing something.
+    </div>
+
+    <div class="rule">
+      <strong>Nobody is there at three in the morning.</strong> A scheduled run refuses every
+      approval rather than granting it, and its prompt says so — otherwise it burns rounds
+      retrying something that will never be allowed.
+    </div>
+
+    <div class="rule">
+      <strong>An empty result is an answer.</strong> "No appointments this week" is a fine
+      thing to say. Filling the gap with plausible-looking entries is the worst thing an
+      assistant can do, and it happened here once: six invented appointments, dated to a year
+      that had not happened, from a calendar query that legitimately found nothing.
+    </div>
+
+    <div class="rule">
+      <strong>Dictation stays on the machine.</strong> Whisper runs locally by default. Hosted
+      recognition exists as an option, is never reached automatically, and says so in the
+      console every single time it is used.
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">Two modes, and the difference is whether a privileged service exists.</p>
+
+    <h3>As a user</h3>
+    <p>No administrator rights. Installs under your own profile, starts with you, and can do
+      everything except the operations that genuinely need elevation.</p>
+
+    <h3>With the service</h3>
+    <p>Adds a separate LocalSystem process reached over a named pipe whose ACL grants exactly
+      two identities and explicitly denies the network. It accepts six named operations, not a
+      command channel, and refuses to touch its own service, the boot configuration, the
+      antivirus or the shadow copies.</p>
+
+    <p style="margin-top:26px">
+      <a href="https://github.com/imoes/shellvis/releases/latest">Download the installers</a> ·
+      <a href="https://github.com/imoes/shellvis#requirements">Requirements</a> ·
+      <a href="https://github.com/imoes/shellvis#configuration">Configuration</a>
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>How it is verified</h2>
+    <p class="sub">Twenty-one harnesses, seven hundred-odd checks, and the ones that are not run.</p>
+
+    <p>
+      Most of what could go wrong here is about what a real process, a real mailbox or a real
+      window actually does, so most of the checking is against those rather than against mocks.
+      Outlook is driven for real and the run asserts that no Outlook process is left behind.
+      A browser is launched for real, because everything interesting about browser automation
+      is what the browser really does.
+    </p>
+
+    <p>
+      What is <em>not</em> checked is written down as plainly as what is. The privileged
+      service has never run as a service, because the development machine grants no
+      administrator rights; the Thunderbird extension has never met Thunderbird. Those are in
+      the README under <a href="https://github.com/imoes/shellvis#known-limitations">known
+      limitations</a>, not discovered later.
+    </p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>
+      Shellvis is free software under the
+      <a href="https://github.com/imoes/shellvis/blob/main/LICENSE">GNU AGPL&nbsp;3.0</a>.
+      Built with Claude Code.
+    </p>
+    <p style="font-style:italic">Shellvis has left the building.</p>
+  </div>
+</footer>
+
+</body>
+</html>

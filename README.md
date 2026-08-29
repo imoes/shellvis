@@ -1,13 +1,16 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.3.1-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.4.1-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
 [![installers](https://img.shields.io/github/v/release/imoes/shellvis?label=installers&color=orange)](https://github.com/imoes/shellvis/releases/latest)
+[![site](https://img.shields.io/badge/overview-imoes.github.io%2Fshellvis-8957e5)](https://imoes.github.io/shellvis/)
 
 A native Windows AI agent: a floating command bar with a console beneath it, wired to
-PowerShell, the desktop, Office, Outlook, a browser and anything else on the machine.
+PowerShell, the desktop, Office, Outlook, Teams, a browser and anything else on the machine.
+
+**[What it is, on one page →](https://imoes.github.io/shellvis/)**
 
 Shellvis does not wrap a terminal. It hosts PowerShell 7 in-process, drives the desktop
 through UI Automation, talks to Office over COM, and shows every command and tool call it
@@ -88,26 +91,31 @@ dictation, and the sentence "recognition runs on this machine" is not printed. K
 the DPAPI secret store or in `AZURE_SPEECH_KEY` / `GOOGLE_SPEECH_KEY`, never in `config.yaml`.
 Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 
-### 76 tools
+### 92 tools
 
 | Area | Tools |
 |---|---|
 | Desktop | `window_list` `window_focus` `desktop_analyze` `ui_click` `ui_set_text` `ui_send_keys` `ui_read_text` `screen_capture` `program_open` |
-| Shell | `powershell_run` `powershell_modules_list` `powershell_module_import` `powershell_cmdlets_search` `powershell_cmdlet_help` |
+| Shell | `powershell_run` `powershell_run_winps` `process` `powershell_modules_list` `powershell_module_import` `powershell_cmdlets_search` `powershell_cmdlet_help` |
 | WSL | `wsl_distros` `wsl_run` `wsl_path` |
 | Remoting | `remote_connect` `remote_run` `remote_sessions` `remote_disconnect` `remote_copy` |
 | Gallery | `psgallery_search` `psgallery_info` `psgallery_install` `psgallery_installed` |
 | Office (headless) | `word_create` `sheet_create` `slides_create` and four readers |
 | Office (live) | `office_open_documents` `office_read_open` `office_export_pdf` |
-| Outlook | `mail_list` `mail_read` `mail_reply_draft` `mail_compose_draft` `calendar_list` `contacts_find` |
+| Outlook | `mail_list` `mail_read` `mail_open` `mail_thread` `mail_history` `mail_reply_draft` `mail_compose_draft` `calendar_list` `contacts_find` |
+| Tasks | `task_list` `task_create` `task_complete` |
+| Teams | `teams_chat_open` `teams_meeting_join` |
+| Assistant | `agenda_due` `agenda_today` `note_add` `note_search` `note_due` `note_close` `note_stick` `note_stickies` |
 | Thunderbird | five `mail_*` tools behind the same abstraction |
 | Browser | 15 `browser_*` tools |
 | Home Assistant | `ha_list_entities` `ha_get_state` `ha_list_services` `ha_call_service` |
 | Skills & memory | `skills_list` `skill_view` `skill_manage` `memory` |
+| Asking | `clarify` |
 | Privileged | six `broker_*` tools, only when the service is installed |
 
-Home Assistant appears only when a token is configured, and the broker tools only when the
-service is actually listening. A tool that is offered is a promise; one that fails on first
+Eighty of them on a machine with no Home Assistant, no privileged service and no
+Thunderbird. Home Assistant appears only when a token is configured, and the broker tools
+only when the service is actually listening. A tool that is offered is a promise; one that fails on first
 use costs a round and reads as a broken agent rather than as an unconfigured integration.
 
 ---
@@ -446,13 +454,18 @@ Stated rather than discovered later.
   not open. Shellvis brings its own persistent profile; sign in there once.
 - **Anthropic and Gemini go through their OpenAI-compatible endpoints**, not the native
   APIs. That costs prompt caching and thinking blocks.
-- **No file tools yet.** `read_file`, `patch`, `search_files`, `web_search` and the meta
-  tools are not built; files are reachable through PowerShell.
+- **No file tools yet.** `read_file`, `patch`, `search_files` and `web_search` are not
+  built; files are reachable through PowerShell. `clarify` is.
 - **The `smart` permission mode is not implemented.** It is absent rather than aliased onto
   another mode, because a mode that silently behaves like a different one is worse than a
   missing one.
 - **Markdown rendering covers a subset**: headings, lists, bold, italic, inline and fenced
-  code, strikethrough. Tables, images and links are not rendered, and the model is told so.
+  code, strikethrough, links and GitHub-style tables. Images and block quotes are not
+  rendered, and the model is told exactly which subset it has.
+- **Teams goes through deep links, not Microsoft Graph.** That covers opening a chat with
+  the message written but unsent, and joining the meeting on a calendar entry. Reading chats
+  and presence would need an app registration in your own tenant, which in most
+  organisations is a request rather than a setting.
 
 ---
 

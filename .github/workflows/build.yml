@@ -1,0 +1,58 @@
+# Compile and run the harnesses on every push. No packaging here.
+#
+# WHY THIS IS SEPARATE FROM release.yml. Packaging produces two 108 MB files, and doing that
+# on every commit spends storage and minutes on an output nobody asked for -- while what a
+# push actually needs is fast word on whether the thing still builds and still passes. So the
+# gate runs on every push and the packaging runs on a tag.
+#
+# WHICH HARNESSES. Only the ones that need neither a desktop, an installed Office, a model
+# endpoint nor a VPN. The rest are left out on purpose: a runner has no Outlook and no live
+# UI, and a suite that fails for want of its environment stops being read.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build Shellvis.slnx -c Release
+
+      - name: Verify
+        shell: pwsh
+        run: |
+          $probe = Get-ChildItem -Recurse -Filter Shellvis.DesktopProbe.exe |
+                   Where-Object FullName -like '*Release*' |
+                   Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $probe) { throw 'the harness binary was not produced by the build' }
+
+          $failed = @()
+
+          # 'launch' is deliberately absent. It starts real programs and needs a desktop, and
+          # it has already been observed to be flaky under automation in this project -- a gate
+          # that fails at random teaches people to ignore the gate.
+          foreach ($harness in 'classify','config','skills','sessions','compaction',
+                               'providers','endpoint','reflect','hooks','cron','thunderbird',
+                               'stream','mcp','hass','broker','topmost','speech','whisper') {
+            Write-Host "--- $harness"
+            & $probe $harness
+            if ($LASTEXITCODE -ne 0) { $failed += $harness }
+          }
+
+          if ($failed.Count -gt 0) { throw "harnesses failed: $($failed -join ', ')" }

@@ -1,0 +1,191 @@
+# Builds both installers and attaches them to a GitHub Release.
+#
+# WHY A WORKFLOW AND NOT A COMMITTED FILE. Each MSI is about 105 MB, almost all of it the
+# PowerShell SDK, and GitHub refuses any single file over 100 MB on push -- a hard limit,
+# not a warning. So the installers cannot live in the repository at all, and the place for
+# a build output is a release asset anyway: it is tied to a tag, it is downloadable without
+# a clone, and it does not sit in everyone's working copy for ever.
+#
+# The version comes out of Directory.Build.props rather than the tag, so the number in the
+# package, in the file name and in the application can never disagree. A tag that does not
+# match is a mistake worth failing on rather than papering over.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  # Also runnable by hand, so the packaging can be exercised without cutting a release.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  installers:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Read the version
+        id: version
+        shell: pwsh
+        run: |
+          $props = [xml](Get-Content Directory.Build.props)
+          $version = $props.Project.PropertyGroup.VersionPrefix.Trim()
+
+          if (-not $version) { throw 'no VersionPrefix in Directory.Build.props' }
+
+          # A tag that disagrees with the build is a mistake, not something to reconcile
+          # silently: whichever one is wrong, shipping a package labelled with the other
+          # makes the version useless for identifying a build.
+          if ($env:GITHUB_REF -like 'refs/tags/*') {
+            $tag = $env:GITHUB_REF -replace '^refs/tags/v?', ''
+            if ($tag -ne $version) {
+              throw "tag $tag does not match VersionPrefix $version"
+            }
+          }
+
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "building $version"
+
+      - name: Build and test
+        shell: pwsh
+        run: |
+          dotnet build Shellvis.slnx -c Release
+          dotnet build tools/Shellvis.DesktopProbe -c Release
+
+      # The harnesses that need neither a desktop, a model endpoint nor Office. The rest are
+      # deliberately left out: a runner has no Outlook, no live UI and no VPN, and a suite
+      # that fails for want of the environment teaches nobody anything.
+      #
+      # 'launch' is absent for a different reason: it starts real programs, and it has already
+      # been observed flaky under automation here. A release gate that fails at random is a
+      # gate people learn to re-run rather than read.
+      - name: Verify
+        shell: pwsh
+        run: |
+          $probe = Get-ChildItem -Recurse -Filter Shellvis.DesktopProbe.exe |
+                   Where-Object FullName -like '*Release*' |
+                   Select-Object -First 1 -ExpandProperty FullName
+
+          if (-not $probe) { throw 'the harness binary was not produced by the build' }
+
+          $failed = @()
+
+          foreach ($harness in 'classify','config','skills','sessions','compaction',
+                               'providers','endpoint','reflect','hooks','cron','thunderbird',
+                               'stream','mcp','hass','broker','topmost','speech','whisper') {
+            Write-Host "--- $harness"
+            & $probe $harness
+            if ($LASTEXITCODE -ne 0) { $failed += $harness }
+          }
+
+          if ($failed.Count -gt 0) { throw "harnesses failed: $($failed -join ', ')" }
+
+      - name: Stage
+        shell: pwsh
+        run: |
+          $stage = 'artifacts/stage'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+
+          # All four into ONE folder: that is the layout the application and the console
+          # installer both assume, and shared dependencies simply overwrite each other.
+          foreach ($project in 'src/Shellvis.Shell/Shellvis.Shell.csproj',
+                               'src/Shellvis.Broker/Shellvis.Broker.csproj',
+                               'src/Shellvis.Setup/Shellvis.Setup.csproj',
+                               'src/Shellvis.Thunderbird.Host/Shellvis.Thunderbird.Host.csproj') {
+            dotnet publish $project -c Release -r win-x64 --self-contained false -o $stage
+            if ($LASTEXITCODE -ne 0) { throw "publish failed: $project" }
+          }
+
+      - name: Package
+        shell: pwsh
+        run: |
+          dotnet tool install --global wix --version 5.*
+          wix extension add -g WixToolset.UI.wixext/5.0.2
+
+          $version = '${{ steps.version.outputs.version }}'
+          $stage = Join-Path $PWD 'artifacts/stage'
+          $bind = Join-Path $PWD 'install'
+
+          # Per user, no elevation, no service.
+          wix build install/Shellvis.wxs -arch x64 -d Version=$version -d Stage=$stage `
+              -bindpath $bind -ext WixToolset.UI.wixext -d PerUser=1 `
+              -o "artifacts/Shellvis-$version-user.msi"
+          if ($LASTEXITCODE -ne 0) { throw 'per-user package failed' }
+
+          # Machine-wide, with the broker service as a selectable feature.
+          wix build install/Shellvis.wxs -arch x64 -d Version=$version -d Stage=$stage `
+              -bindpath $bind -ext WixToolset.UI.wixext `
+              -o "artifacts/Shellvis-$version-machine.msi"
+          if ($LASTEXITCODE -ne 0) { throw 'machine-wide package failed' }
+
+          # A size floor, because wix succeeds on a package with nothing in it. If the staging
+          # step ever produced an empty folder the build would go green and ship a 200 KB
+          # installer that installs nothing -- the failure would surface at a user's machine
+          # rather than here. Both packages are around 108 MB, almost all of it the PowerShell
+          # SDK; fifty is far below that and far above an empty one.
+          foreach ($msi in Get-ChildItem artifacts/*.msi) {
+            $mb = [math]::Round($msi.Length / 1MB, 1)
+            Write-Host ('{0}  {1} MB' -f $msi.Name, $mb)
+
+            if ($mb -lt 50) { throw "$($msi.Name) is only $mb MB; the payload is missing" }
+          }
+
+          if ((Get-ChildItem artifacts/*.msi).Count -ne 2) { throw 'expected two packages' }
+
+      # Kept for a manual run too, where there is no release to attach them to. Short
+      # retention: on a tag the release assets are the permanent copy, and this one is only
+      # useful while somebody is looking at the run that produced it.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installers
+          path: artifacts/*.msi
+          if-no-files-found: error
+          retention-days: 14
+
+      # The notes live in a YAML block and reach gh through a file.
+      #
+      # NOT a PowerShell here-string, which is what this was and why the whole workflow was
+      # unparseable: a here-string has to be closed by "@ in COLUMN ZERO, and column zero is
+      # exactly where a YAML block scalar ends. The notes therefore fell out of the run: block
+      # and into the top level of the document. GitHub's answer to an unparseable workflow is
+      # to not run it, with the reason visible only in the Actions tab -- so this was caught by
+      # parsing the file locally rather than by pushing it and waiting.
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          NOTES: |
+            Two installers, from the same source:
+
+            - `Shellvis-${{ steps.version.outputs.version }}-user.msi` installs into
+              `%LOCALAPPDATA%\Programs\Shellvis` for the current user. No administrator
+              rights, no service; the tools that need elevation report as unavailable.
+            - `Shellvis-${{ steps.version.outputs.version }}-machine.msi` installs into
+              `%ProgramFiles%\Shellvis` for everyone and offers the privileged broker
+              service as a selectable feature. Needs an elevated install.
+
+            Windows Installer fixes the scope when the package is *built*, which is why this
+            is two files rather than one with a switch.
+
+            Dictation downloads its speech model on first use; the installer asks which one.
+            Requires the Windows App Runtime 2.4.0, and Office for the Office and Outlook
+            tools. See the README for what is verified and what is not.
+        run: |
+          $env:NOTES | Set-Content release-notes.md -Encoding utf8
+
+          # gh ships on the runner, so this needs no action and no extra token.
+          gh release create $env:GITHUB_REF_NAME (Get-Item artifacts/*.msi).FullName `
+             --title "Shellvis $env:VERSION" `
+             --notes-file release-notes.md
+
+          if ($LASTEXITCODE -ne 0) { throw 'the release could not be created' }

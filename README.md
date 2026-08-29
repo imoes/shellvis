@@ -1,8 +1,10 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.2.9-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.2.10-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
+[![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
+[![installers](https://img.shields.io/github/v/release/imoes/shellvis?label=installers&color=orange)](https://github.com/imoes/shellvis/releases/latest)
 
 A native Windows AI agent: a floating command bar with a console beneath it, wired to
 PowerShell, the desktop, Office, Outlook, a browser and anything else on the machine.
@@ -187,9 +189,13 @@ layout problem.
 
 ## Install
 
-Download an installer from [Releases](https://github.com/imoes/shellvis/releases). There
-are two, and which one you want depends on whether the privileged broker should run on the
-machine.
+**➜ [Download the installers](https://github.com/imoes/shellvis/releases/latest)** — both
+packages are attached to every release, built on the tag by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) rather than uploaded by
+hand, so what you download is what the tag contains.
+
+There are two, and which one you want depends on whether the privileged broker should run
+on the machine.
 
 | | `-user.msi` | `-machine.msi` |
 |---|---|---|
@@ -211,13 +217,13 @@ feature tree, or from the command line:
 
 ```powershell
 # Everything, including the service. From an elevated prompt.
-msiexec /i Shellvis-0.2.9-machine.msi ADDLOCAL=Application,BrokerService
+msiexec /i Shellvis-0.2.10-machine.msi ADDLOCAL=Application,BrokerService
 
 # Application only, service left out.
-msiexec /i Shellvis-0.2.9-machine.msi ADDLOCAL=Application
+msiexec /i Shellvis-0.2.10-machine.msi ADDLOCAL=Application
 
 # Silent, with a log worth reading if it goes wrong.
-msiexec /i Shellvis-0.2.9-user.msi /qn /l*v install.log
+msiexec /i Shellvis-0.2.10-user.msi /qn /l*v install.log
 ```
 
 The packages contain no custom actions. The one thing that would have needed native code is
@@ -237,22 +243,40 @@ foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','
     dotnet publish $p -c Release -r win-x64 --self-contained false -o artifacts/stage
 }
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.9 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.10 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext -d PerUser=1 `
-    -o artifacts/Shellvis-0.2.9-user.msi
+    -o artifacts/Shellvis-0.2.10-user.msi
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.2.9 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.2.10 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
-    -o artifacts/Shellvis-0.2.9-machine.msi
+    -o artifacts/Shellvis-0.2.10-machine.msi
 ```
 
 **WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee
 EULA before the toolset will build anything. WiX 5 produces the same packages under the
 MS-RL and needs no such acceptance, so that is what the workflow pins.
 
-Each package is about 105 MB, nearly all of it the PowerShell SDK. That is over GitHub's
-100 MB per-file limit, so the installers are never committed — `.github/workflows/release.yml`
-builds them on a `v*` tag and attaches them to the release.
+Each package is about 108 MB, nearly all of it the PowerShell SDK. That is over GitHub's
+100 MB per-file limit, so the installers are never committed. They are built instead:
+
+| Workflow | Runs on | Produces |
+|---|---|---|
+| [`build.yml`](.github/workflows/build.yml) | every push and pull request to `main` | nothing — it compiles and runs the harnesses, as a gate |
+| [`release.yml`](.github/workflows/release.yml) | a `v*` tag, or by hand | both `.msi` files, attached to the release and kept as a run artefact for 14 days |
+
+**Why packaging only happens on a tag.** Two 108 MB files per commit is storage and minutes
+spent on an output nobody asked for, while what a push needs is a fast answer about whether
+the thing still builds. `workflow_dispatch` covers the case where you want the packages
+without cutting a release.
+
+**Why the version comes from `Directory.Build.props` and not the tag.** So the number in the
+package, in the file name and in the application cannot disagree. A tag that does not match
+fails the build rather than being reconciled silently — whichever of the two is wrong,
+shipping a package labelled with the other makes the version useless.
+
+The runner has no Office, no VPN and no live desktop, so the harnesses that need those are
+deliberately not part of the gate. What runs there is listed in the workflow; the full
+twenty-two are a local `probe` sweep.
 
 ### Without an installer
 

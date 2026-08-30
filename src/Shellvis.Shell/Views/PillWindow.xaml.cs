@@ -581,6 +581,11 @@ public sealed partial class PillWindow : Window
         // constructor's first pass may have assumed 96 DPI.
         PositionAtBottomCentre();
         ApplyRegion(ConsoleHost.Height);
+
+        // Before the prompt box takes focus, because priming the alert window activates it
+        // once and the focus has to end up here, not there.
+        PrepareToast();
+
         PromptBox.Focus(FocusState.Programmatic);
         RegisterHotkey();
         RegisterHoldToTalk();

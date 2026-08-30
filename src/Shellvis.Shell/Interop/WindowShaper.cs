@@ -3,6 +3,7 @@ using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Dwm;
 using Windows.Win32.Graphics.Gdi;
 using Windows.Win32.UI.Controls;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Shellvis.Shell.Interop;
 
@@ -142,6 +143,72 @@ internal sealed class WindowShaper : IDisposable
         _current = combined;
     }
 
+    /// <summary>
+    /// Clip a window to its own client area, rounded.
+    ///
+    /// <b>What this is for, and what the fault looked like.</b> A borderless WinUI window is
+    /// not actually frameless: on this machine a 700x525 answer window has a 682x507 client
+    /// area starting nine pixels in, and that nine-pixel frame is painted. Sampling the
+    /// pixels along the top edge showed a solid band of <c>#F9F1ED</c> nine rows deep, then
+    /// the surface -- a rectangular border tracing a window whose content is rounded, which
+    /// is exactly the report this exists to answer.
+    ///
+    /// <b>A region does not remove that band</b>, and finding that out cost four attempts,
+    /// each of which looked plausible: DWM paints the frame outside the region logic, so it
+    /// survives the clip, survives DWM's own rounding, and survives having the glass extended
+    /// over it -- the band merely changed colour, from Mica pink to glass white. What removes
+    /// it is <see cref="TrimFrame"/>, because a frame that does not exist cannot be painted.
+    ///
+    /// What this call is for is the shape that remains: once the client area IS the window,
+    /// clipping it to a rounded rectangle is what gives the window a silhouette matching the
+    /// surface drawn inside it.
+    ///
+    /// Unlike <see cref="Apply"/> this measures the window rather than the layout, because
+    /// there is nothing to measure: the shape wanted is "all of it", and asking XAML for the
+    /// size of something that fills the window is a second calculation that can disagree.
+    /// </summary>
+    public void ClipWindowRounded(double radiusDips)
+    {
+        if (!PInvoke.GetClientRect(_hwnd, out RECT client))
+            return;
+
+        WindowFrame frame = Frame();
+
+        int width = client.right;
+        int height = client.bottom;
+
+        if (width <= 0 || height <= 0)
+            return;
+
+        // Same +1 and the same doubling as Build, for the same two reasons: a rounded
+        // region comes out a pixel short of the exclusive edge, and GDI wants the ellipse
+        // size rather than the radius.
+        int ellipse = (int)Math.Round(radiusDips * 2 * Scale);
+        ellipse = Math.Clamp(ellipse, 0, Math.Min(width, height));
+
+        HRGN region = PInvoke.CreateRoundRectRgn(
+            frame.OffsetX,
+            frame.OffsetY,
+            frame.OffsetX + width + 1,
+            frame.OffsetY + height + 1,
+            ellipse,
+            ellipse);
+
+        if (region.IsNull)
+            return;
+
+        if (PInvoke.SetWindowRgn(_hwnd, region, bRedraw: true) == 0)
+        {
+            PInvoke.DeleteObject((HGDIOBJ)region);
+            return;
+        }
+
+        if (!_current.IsNull)
+            PInvoke.DeleteObject((HGDIOBJ)_current);
+
+        _current = region;
+    }
+
     private static HRGN Build(RoundedRect r, double scale, WindowFrame frame)
     {
         // The shape arrives in client DIPs; the region has to be in physical window
@@ -183,6 +250,65 @@ internal sealed class WindowShaper : IDisposable
     /// Ask DWM for rounded corners and an extended frame. Best-effort: both are
     /// cosmetic refinements on top of the region clip, so failures are ignored.
     /// </summary>
+    /// <summary>
+    /// The same as <see cref="TrySoftenEdges"/>, but with DWM rounding the frame.
+    ///
+    /// <b>For windows that keep a frame.</b> The pill's silhouette is cut by a region and it
+    /// must say DONOTROUND, because DWM would draw a second outline around the full rectangle
+    /// that the region cannot reach. The answer window and the alert are different: they are
+    /// resizable or borderless-but-framed, and Windows paints their nine-pixel frame itself,
+    /// outside the region logic. Sampling the pixels proved it -- a region set to exactly the
+    /// client rectangle left rows 0 to 8 painted, first in Mica pink, then in glass white
+    /// once the frame was extended.
+    ///
+    /// So the frame is not fought, it is rounded. That makes the window's own silhouette
+    /// match the surface drawn inside it, which is what the report was actually about.
+    /// </summary>
+    /// <summary>
+    /// Take the caption frame off a borderless window, so its client area IS its window.
+    ///
+    /// <b>The measurement that made this necessary.</b> A WinUI window with
+    /// <c>SetBorderAndTitleBar(false, false)</c> is not frameless: it keeps
+    /// <c>WS_DLGFRAME</c>, and on this machine that reserved nine pixels on every side of the
+    /// answer window. Something paints them -- Mica pink at first, glass white once the frame
+    /// was extended -- and a rounded surface drawn in the client area therefore sat inside a
+    /// square painted band. That band is what "a rectangular border on a window with rounded
+    /// corners" was.
+    ///
+    /// It cannot be clipped away: a window region does not reach it, which four separate
+    /// attempts established the slow way, each confirmed by sampling the pixels rather than
+    /// by looking. Removing the style is what removes the band, because then there is no
+    /// frame for anything to paint in.
+    ///
+    /// <c>WS_THICKFRAME</c> is deliberately kept: it is what lets the edges be dragged, and it
+    /// reserves no visible frame of its own.
+    /// </summary>
+    /// <param name="keepResizeBorder">
+    /// Whether to leave <c>WS_THICKFRAME</c> in place. Keeping it preserves edge-dragging and
+    /// costs an eight-pixel frame that the band comes back in; dropping it makes the window
+    /// truly frameless and no longer resizable by its edges. There is no third answer: the
+    /// frame IS the resize handle.
+    /// </param>
+    public void TrimFrame(bool keepResizeBorder = true)
+    {
+        nint style = PInvoke.GetWindowLongPtr(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE);
+
+        style &= ~(nint)WINDOW_STYLE.WS_DLGFRAME;
+        style &= ~(nint)WINDOW_STYLE.WS_BORDER;
+
+        if (!keepResizeBorder)
+            style &= ~(nint)WINDOW_STYLE.WS_THICKFRAME;
+
+        PInvoke.SetWindowLongPtr(_hwnd, WINDOW_LONG_PTR_INDEX.GWL_STYLE, style);
+
+        // Without SWP_FRAMECHANGED the non-client area is not recalculated and the window
+        // keeps the frame it no longer has a style for.
+        PInvoke.SetWindowPos(
+            _hwnd, HWND.Null, 0, 0, 0, 0,
+            SET_WINDOW_POS_FLAGS.SWP_NOMOVE | SET_WINDOW_POS_FLAGS.SWP_NOSIZE
+                | SET_WINDOW_POS_FLAGS.SWP_NOZORDER | SET_WINDOW_POS_FLAGS.SWP_NOACTIVATE
+                | SET_WINDOW_POS_FLAGS.SWP_FRAMECHANGED);
+    }
     public unsafe void TrySoftenEdges()
     {
         // DONOTROUND, not ROUND. Asking DWM to round the corners makes it draw its own
@@ -217,6 +343,7 @@ internal sealed class WindowShaper : IDisposable
         };
         PInvoke.DwmExtendFrameIntoClientArea(_hwnd, &margins);
     }
+
 
     public void BringToFront() => PInvoke.SetForegroundWindow(_hwnd);
 

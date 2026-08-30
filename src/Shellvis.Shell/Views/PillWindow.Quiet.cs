@@ -155,10 +155,25 @@ public sealed partial class PillWindow
 
         _announcements.Clear();
 
-        _toast ??= new ToastWindow
+        _toast?.Show(headline, source);
+    }
+
+    /// <summary>
+    /// Build the alert window before there is anything to say in it.
+    ///
+    /// <b>Eagerly, unlike the answer window, and for a reason that is not taste.</b> A WinUI
+    /// window has to be activated once before it can ever be shown quietly, and activating
+    /// takes the foreground. Doing that at the moment news arrives would take the keystroke
+    /// out of whatever the user was typing -- the exact interruption the whole design exists
+    /// to avoid. Done here, during the pill's own first activation, the foreground is already
+    /// moving and nothing is lost. <see cref="ToastWindow.Prime"/> carries the detail.
+    /// </summary>
+    private void PrepareToast()
+    {
+        _toast = new ToastWindow
         {
-            // Clicking opens the conversation, which is where the report itself was written
-            // -- and marks everything read, because the user has now been shown it. Outlook's
+            // Clicking opens the conversation, which is where the report itself was written,
+            // and marks everything read, because the user has now been shown it. Outlook's
             // alert works the same way: the click is the reading.
             OnOpen = () =>
             {
@@ -167,7 +182,7 @@ public sealed partial class PillWindow
             },
         };
 
-        _toast.Show(headline, source);
+        _toast.Prime();
     }
 
     private void StartQuietTimer()

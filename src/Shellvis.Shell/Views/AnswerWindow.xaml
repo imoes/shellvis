@@ -11,7 +11,7 @@
          They were one list until now, and mixing them served neither. -->
     <Grid x:Name="RootHost" Background="Transparent">
         <Border x:Name="Surface"
-                CornerRadius="12"
+                CornerRadius="8"
                 BorderThickness="1"
                 Background="{ThemeResource ConsoleTintBrush}"
                 BorderBrush="{ThemeResource SeparatorBrush}">

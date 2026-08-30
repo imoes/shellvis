@@ -83,9 +83,12 @@ public sealed partial class ToastWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
 
+        // The frame goes first, and it is not cosmetic housekeeping: the frame is what painted
+        // a rectangular band around the rounded panel. It can be dropped outright here because
+        // this window is not resizable -- see WindowShaper.TrimFrame. Then glass, and no DWM
+        // rounding: the silhouette comes from the region cut in Place().
+        _shaper.TrimFrame(keepResizeBorder: false);
         _shaper.TrySoftenEdges();
-
-        MakeUnfocusable();
 
         CloseButton.Click += (_, _) => Dismiss();
 
@@ -97,6 +100,36 @@ public sealed partial class ToastWindow : Window
 
     /// <summary>What to do when the notice is clicked. Set by the pill.</summary>
     public Action? OnOpen { get; set; }
+
+    /// <summary>
+    /// Bring the window into existence properly, off screen, before it is ever needed.
+    ///
+    /// <b>Why a window has to be shown once before it can be shown quietly.</b> A WinUI
+    /// window's XAML island is not composed until the framework has shown it, and until then
+    /// neither <c>ShowWindow(SW_SHOWNOACTIVATE)</c> nor <c>AppWindow.Show(false)</c> puts
+    /// anything on screen: the HWND exists, carries the right title and size, and is
+    /// invisible. Both were tried against a live scheduled job before this was understood,
+    /// and from outside the symptom is indistinguishable from "the notification never fired".
+    ///
+    /// Only <c>Activate</c> composes it, and <c>Activate</c> takes the foreground. So it is
+    /// done exactly once, here, at a moment when the foreground is already being taken --
+    /// the pill's own first activation -- and off screen, so nothing flashes. Afterwards the
+    /// window carries <c>WS_EX_NOACTIVATE</c> and every real show is quiet.
+    ///
+    /// The DPI is the second reason this is not deferred: <c>GetDpiForWindow</c> reports 96
+    /// for a window that has never been mapped to a monitor, and the first placement computed
+    /// from that came out at two thirds size in the middle of the screen.
+    /// </summary>
+    public void Prime()
+    {
+        // Off screen, and far enough that no monitor arrangement contains it.
+        AppWindow.MoveAndResize(new RectInt32(-32000, -32000, Width, Height));
+
+        Activate();
+        AppWindow.Hide();
+
+        MakeUnfocusable();
+    }
 
     /// <summary>Whether the alert is currently on screen.</summary>
     public bool IsShowing { get; private set; }
@@ -161,7 +194,14 @@ public sealed partial class ToastWindow : Window
             work.Y + work.Height - height - inset,
             width,
             height));
+
+        // Cut to the rounded panel, frame and all. DWM's rounding leaves the window's own
+        // edge square around it, which shows as a rectangular border tracing rounded content.
+        _shaper.ClipWindowRounded(SurfaceRadius);
     }
+
+    /// <summary>The radius the panel is painted with, so the clip and the paint agree.</summary>
+    private const double SurfaceRadius = 8;
 
     /// <summary>
     /// <c>WS_EX_NOACTIVATE</c>, plus out of the taskbar and out of Alt-Tab.
@@ -192,14 +232,20 @@ public sealed partial class ToastWindow : Window
         }
     }
 
-    private unsafe void ShowWithoutStealingFocus()
-    {
-        var hwnd = new HWND((void*)_handle);
-
-        // SW_SHOWNOACTIVATE rather than AppWindow.Show(): the AppWindow call activates, and
-        // there is no overload that does not.
-        PInvoke.ShowWindow(hwnd, SHOW_WINDOW_CMD.SW_SHOWNOACTIVATE);
-    }
+    /// <summary>
+    /// Put it on screen without taking the foreground.
+    ///
+    /// <b>Why not <c>ShowWindow(SW_SHOWNOACTIVATE)</c>, which is the obvious answer.</b> It
+    /// was the first answer, and the window came up hidden: a WinUI window's XAML island is
+    /// not composed until the window has been shown through the framework, so a raw Win32
+    /// show on a window that has never been activated sets a flag and paints nothing. The
+    /// symptom is exact and worth writing down, because from outside it looks like nothing
+    /// happened at all -- the HWND exists, carries the right title, and is invisible.
+    ///
+    /// <c>AppWindow.Show(false)</c> is the documented way to ask for both at once, and it
+    /// works only once the island exists. <see cref="Prime"/> is what makes sure it does.
+    /// </summary>
+    private void ShowWithoutStealingFocus() => AppWindow.Show(activateWindow: false);
 
     private void RestartDwell()
     {

@@ -44,14 +44,19 @@ public sealed partial class AnswerWindow : Window
         _shaper = new WindowShaper(Win32Interop.GetWindowFromWindowId(AppWindow.Id));
 
         // No caption, no border: the surface inside draws its own rounded panel, exactly as
-        // the pill does. Resizable, unlike the pill -- an answer can be any length, and a
-        // document the reader cannot make taller is a document they will copy out instead.
+        // the pill does.
         ExtendsContentIntoTitleBar = true;
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
             presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
-            presenter.IsResizable = true;
+            // Not resizable, and this is a trade made deliberately. The resize border IS the
+            // frame, and the frame is what painted a rectangular band around the rounded
+            // surface -- measured, not guessed: a 700x525 window had a 684x509 client area,
+            // and the eight-pixel difference was painted. Dropping the border is the only
+            // thing that removes it. The document is still movable, minimisable and
+            // closable; what it loses is edge-dragging.
+            presenter.IsResizable = false;
             presenter.IsMaximizable = false;
 
             // Minimisable, and this is a correction. It was off because the window has no
@@ -80,7 +85,18 @@ public sealed partial class AnswerWindow : Window
             presenter.IsAlwaysOnTop = false;
         }
 
+        // Glass across the client area, and no DWM rounding: the silhouette comes from the
+        // region cut in ClipWindowRounded, and DWM rounding on top of a clip draws its own
+        // outline around the full rectangle. The pill learned that first.
         _shaper.TrySoftenEdges();
+
+        // And clipped, because DWM's rounding alone leaves the frame square around the
+        // rounded surface. Recut on every layout pass: this window is resizable, so unlike
+        // the pill's there is no fixed shape to cut once. Measured from the surface rather
+        // than computed, for the reason the pill learned the hard way -- a second calculation
+        // of the same layout disagrees with the first eventually.
+        RootHost.SizeChanged += (_, _) => ClipToSurface();
+        Surface.SizeChanged += (_, _) => ClipToSurface();
 
         CloseButton.Click += (_, _) => Hide();
 
@@ -96,6 +112,18 @@ public sealed partial class AnswerWindow : Window
         // tearing one down per turn would flicker, lose the reader's scroll position, and
         // put a window-creation cost in front of every reply.
         Closed += (_, args) => { };
+    }
+
+    /// <summary>The radius the surface is painted with, so the clip and the paint agree.</summary>
+    private const double SurfaceRadius = 8;
+
+    /// <summary>Cut the window to the rounded surface it paints.</summary>
+    private void ClipToSurface()
+    {
+        if (Surface.ActualWidth < 1 || Surface.ActualHeight < 1)
+            return;
+
+        _shaper.ClipWindowRounded(SurfaceRadius);
     }
 
     /// <summary>
@@ -151,6 +179,9 @@ public sealed partial class AnswerWindow : Window
 
     private bool _placed;
 
+    /// <summary>Whether the caption frame has been taken off yet. See Reveal.</summary>
+    private bool _trimmed;
+
     /// <summary>Hide without destroying, so the next answer reuses this window.</summary>
     public void Hide() => AppWindow.Hide();
 
@@ -168,6 +199,21 @@ public sealed partial class AnswerWindow : Window
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
             presenter.Restore();
+
+        // The frame comes off on the first reveal rather than in the constructor: changing the
+        // style of a window that has never been shown left AppWindow.Show doing nothing at
+        // all, which looked exactly like the click on the alert having been ignored.
+        if (!_trimmed)
+        {
+            _trimmed = true;
+            _shaper.TrimFrame(keepResizeBorder: false);
+        }
+
+        // Cut here as well as on resize. The window settles into its size once and then keeps
+        // it, so a clip driven only by SizeChanged runs when the surface is still zero-sized
+        // and never again -- which left the square frame visible around the rounded panel for
+        // the whole life of the window.
+        ClipToSurface();
 
         _shaper.BringToFront();
     }

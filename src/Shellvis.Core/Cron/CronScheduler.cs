@@ -4,7 +4,23 @@ using Shellvis.Core.Tools;
 namespace Shellvis.Core.Cron;
 
 /// <summary>What happened on one scheduled run.</summary>
-public sealed record CronRunResult(string Job, bool Succeeded, string Summary, TimeSpan Duration);
+/// <param name="Headline">
+/// One sentence, when the run found something the user should be told about now -- and null
+/// when it did not.
+///
+/// <b>Why the model decides this and not a rule here.</b> "Is this news" is a judgement about
+/// content: three routine mails are not, one from the person whose deadline is tomorrow is.
+/// No condition available at this layer can tell those apart, and the alternatives are both
+/// wrong -- announcing every run trains the user to ignore the announcement, announcing none
+/// makes a scheduled assistant pointless. So the run is asked to say, in a form that is
+/// absent by default: no line, no notice.
+/// </param>
+public sealed record CronRunResult(
+    string Job,
+    bool Succeeded,
+    string Summary,
+    TimeSpan Duration,
+    string? Headline = null);
 
 /// <summary>
 /// An approval gate that refuses everything.
@@ -98,7 +114,12 @@ public sealed class CronScheduler(
             }
             catch (Exception ex)
             {
-                result = new CronRunResult(job.Name, false, $"failed: {ex.Message}", clock.Elapsed);
+                // A job that threw is news whatever it was for. The model never got to
+                // judge, so the judgement is made here, and only here: this is the one case
+                // where a headline is not the run's own opinion.
+                result = new CronRunResult(
+                    job.Name, false, $"failed: {ex.Message}", clock.Elapsed,
+                    Headline: $"The scheduled job '{job.Name}' failed.");
             }
 
             // Recorded even on failure. An interval counts from the last ATTEMPT, not

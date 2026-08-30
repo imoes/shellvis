@@ -42,13 +42,25 @@ public sealed partial class PillWindow
 
     private readonly List<string> _unread = [];
 
+    /// <summary>
+    /// Headlines waiting to be shown as a desktop alert.
+    ///
+    /// Separate from <see cref="_unread"/> on purpose, and the distinction is the feature:
+    /// everything quiet raises the dot, only what a run called out raises an alert. Merging
+    /// them would make every scheduled run pop up a panel, which is the behaviour that makes
+    /// people turn notifications off.
+    /// </summary>
+    private readonly List<string> _announcements = [];
+
+    private ToastWindow? _toast;
+
     private DispatcherQueueTimer? _quietTimer;
 
     /// <summary>Why the mark is currently being withheld, so it is said once and not repeatedly.</summary>
     private BusyBecause _heldReason = BusyBecause.NotBusy;
 
     /// <summary>Whether something is waiting that the user has not seen.</summary>
-    private bool HasUnread => _unread.Count > 0;
+    private bool HasUnread => _unread.Count > 0 || _announcements.Count > 0;
 
     /// <summary>
     /// Say something without interrupting.
@@ -57,13 +69,21 @@ public sealed partial class PillWindow
     /// that touched the machine invisibly is what this whole console exists to prevent. What
     /// is gated is only the MARK, which is the part the user notices.
     /// </summary>
-    private void NoteQuietly(string text, string trailing, bool isProblem)
+    private void NoteQuietly(string text, string trailing, bool isProblem, string? headline = null)
     {
         AddRow(isProblem ? GlyphWarning : GlyphTool, text, trailing, isWarning: isProblem);
 
+        // A called-out item is queued before the console check below. Someone with the
+        // console open is looking at the log, not necessarily at the line that just arrived
+        // at the bottom of it, and "you are due in ten minutes" is not a thing to leave to
+        // whether they happened to be scrolled down.
+        if (headline is { Length: > 0 })
+            _announcements.Add(headline);
+
         // Seen already: the console is open in front of them, so a dot saying "there is
-        // something in the console" would be pointing at what they are reading.
-        if (_consoleOpen && !_docked)
+        // something in the console" would be pointing at what they are reading. An
+        // announcement still goes up -- see above.
+        if (_consoleOpen && !_docked && headline is null)
         {
             ScrollToEnd();
             return;
@@ -107,6 +127,47 @@ public sealed partial class PillWindow
         // this size is four pixels of glyph nobody can read, and the tooltip is where a
         // Windows tray icon has always said this sort of thing.
         _tray?.UpdateTooltip(TrayText());
+
+        Announce();
+    }
+
+    /// <summary>
+    /// Raise the desktop alert, if anything asked for one.
+    ///
+    /// Called from <see cref="Offer"/> and nowhere else, so an alert passes through exactly
+    /// the same gate as the dot: while Windows says this is not a moment, it waits with
+    /// everything else. That is not a detail -- an alert appearing during a presentation is
+    /// the failure this whole mechanism was built to avoid, and it would be seen by the
+    /// wrong people and missed by the right one.
+    /// </summary>
+    private void Announce()
+    {
+        if (_announcements.Count == 0)
+            return;
+
+        // The newest, because it is the one that just happened. The others are still in the
+        // console and still counted in the source line.
+        string headline = _announcements[^1];
+
+        string source = _announcements.Count == 1
+            ? "Shellvis"
+            : $"Shellvis - {_announcements.Count} new";
+
+        _announcements.Clear();
+
+        _toast ??= new ToastWindow
+        {
+            // Clicking opens the conversation, which is where the report itself was written
+            // -- and marks everything read, because the user has now been shown it. Outlook's
+            // alert works the same way: the click is the reading.
+            OnOpen = () =>
+            {
+                MarkRead();
+                OnShowAnswer();
+            },
+        };
+
+        _toast.Show(headline, source);
     }
 
     private void StartQuietTimer()
@@ -138,7 +199,16 @@ public sealed partial class PillWindow
             return;
 
         _unread.Clear();
+
+        // Anything still queued for an alert is dropped rather than shown later: the user is
+        // reading the thing it would have pointed at. An alert about what is already open is
+        // the definition of noise.
+        _announcements.Clear();
+
         StopQuietTimer();
+
+        if (_toast?.IsShowing == true)
+            _toast.Dismiss();
 
         UnreadDot.Visibility = Visibility.Collapsed;
         _tray?.UpdateTooltip(TrayText());

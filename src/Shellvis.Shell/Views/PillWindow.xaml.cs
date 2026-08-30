@@ -709,6 +709,11 @@ public sealed partial class PillWindow : Window
         // Left open, it keeps the process alive with no way left to reach it.
         CloseAnswerWindow();
 
+        // And the alert, for the same reason. It is a tool window with no taskbar button, so
+        // one left behind would hold the process open with nothing on screen to close it.
+        _toast?.Close();
+        _toast = null;
+
         // Same for the notes, and the distinction matters here: closing them is not
         // throwing them away, so what is stored is left exactly as it is.
         CloseStickies();
@@ -794,8 +799,17 @@ public sealed partial class PillWindow : Window
             // writes its line and raises a dot, and the user reads it when they look. The
             // plan for this feature originally had a reminder OPEN the console by itself,
             // which is exactly the window-in-your-face this must not be.
-            session.StartCron((message, isProblem) =>
-                NoteQuietly(message, "cron", isProblem));
+            session.StartCron((message, isProblem, result) =>
+            {
+                // The report goes into the conversation, not just into the log, and that is
+                // what makes the alert clickable: a notice has to open something, and the
+                // something is the message window. Written WITHOUT revealing it -- the
+                // window arrives only when the user asks for it, which is the click.
+                if (result?.Headline is { Length: > 0 })
+                    RecordScheduledReport(result.Job, result.Summary, result.Headline);
+
+                NoteQuietly(message, "cron", isProblem, result?.Headline);
+            });
         }
         catch (Exception ex)
         {

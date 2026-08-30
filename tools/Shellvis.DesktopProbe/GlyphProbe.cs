@@ -82,6 +82,8 @@ internal static class GlyphProbe
 
         Check("the glyph constants were found at all", found > 0, $"{found} found");
 
+        XamlComments(root, Check);
+
         Console.WriteLine(failures == 0
             ? $"\nVERIFIED: all {found} icon glyphs carry a character, written as an escape so\n"
                 + "they survive a file rewrite. An invisible button is a working button nobody\n"
@@ -89,6 +91,57 @@ internal static class GlyphProbe
             : $"\n{failures} check(s) failed.");
 
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// No XAML comment contains a double dash.
+    ///
+    /// <b>Why a machine checks this.</b> It is not a style rule, it is XML: <c>--</c> may not
+    /// appear inside a comment, so the XAML compiler refuses the file. That would be fine if
+    /// it refused it legibly, but it reports <c>WMC9999 Xaml Internal Error</c> against a
+    /// targets file in the SDK, names a line number in a file it does not name, and does not
+    /// use the word "error" in the way a search for failures expects. This project has lost a
+    /// build to it nine times, and twice more looking for it in the wrong file.
+    ///
+    /// The comments here are prose, and prose written in this house style uses dashes. So the
+    /// rule is checked in a second rather than remembered.
+    /// </summary>
+    private static void XamlComments(string root, Action<string, bool, string> check)
+    {
+        var comment = new Regex(@"<!--(?<body>.*?)-->", RegexOptions.Compiled | RegexOptions.Singleline);
+        int files = 0;
+
+        foreach (string file in Directory.EnumerateFiles(
+            Path.Combine(root, "src"), "*.xaml", SearchOption.AllDirectories))
+        {
+            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            files++;
+            string text = File.ReadAllText(file);
+
+            foreach (Match match in comment.Matches(text))
+            {
+                string body = match.Groups["body"].Value;
+
+                if (!body.Contains("--", StringComparison.Ordinal) && !body.EndsWith('-'))
+                    continue;
+
+                // The line number, because the compiler's own message points at a file in the
+                // SDK and this is the whole reason the check exists.
+                int line = text[..match.Index].Count(c => c == '\n') + 1;
+
+                check(
+                    $"{Path.GetFileName(file)} line {line}: a comment contains '--'",
+                    false,
+                    "XML forbids it; the XAML compiler answers with WMC9999 against an SDK targets file");
+            }
+        }
+
+        check($"{files} XAML file(s) have comments XML accepts", true, string.Empty);
     }
 
     /// <summary>The repository root, found by the solution rather than by a fixed depth.</summary>

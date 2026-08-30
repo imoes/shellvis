@@ -29,13 +29,13 @@ internal sealed partial class AgentSession
     /// touching the machine invisibly, which is the opposite of what this project is
     /// for.
     /// </summary>
-    public void StartCron(Action<string, bool> report)
+    public void StartCron(Action<string, bool, CronRunResult?> report)
     {
         var store = new CronStore();
         IReadOnlyList<CronJob> jobs = store.Load();
 
         foreach (string warning in store.Warnings)
-            report($"cron: {warning}", false);
+            report($"cron: {warning}", false, null);
 
         CronJobCount = jobs.Count;
 
@@ -47,9 +47,10 @@ internal sealed partial class AgentSession
         scheduler.Ran += result => Post(() => report(
             $"cron '{result.Job}' {(result.Succeeded ? "ran" : "failed")} in "
                 + $"{result.Duration.TotalSeconds:F1}s: {result.Summary}",
-            !result.Succeeded));
+            !result.Succeeded,
+            result));
 
-        scheduler.Problem += problem => Post(() => report($"cron: {problem}", true));
+        scheduler.Problem += problem => Post(() => report($"cron: {problem}", true, null));
 
         _cronStop = new CancellationTokenSource();
 
@@ -60,7 +61,8 @@ internal sealed partial class AgentSession
         report(
             $"{jobs.Count} scheduled job(s) armed. Approvals are denied in scheduled "
             + "runs, so only read-only actions happen unattended.",
-            false);
+            false,
+            null);
     }
 
     private void Post(Action action) => _dispatcher.TryEnqueue(() => action());
@@ -122,12 +124,27 @@ internal sealed partial class AgentSession
 
             clock.Stop();
 
-            string summary = answer.ToString().ReplaceLineEndings(" ").Trim();
+            string report = answer.ToString().Trim();
+
+            // Split before flattening: the headline is a line, and ReplaceLineEndings would
+            // dissolve the very boundary that identifies it.
+            string? headline = CronReport.TakeHeadline(ref report);
+
+            string summary = report.ReplaceLineEndings(" ").Trim();
 
             if (summary.Length == 0)
                 summary = "the run produced no answer";
 
-            return new CronRunResult(job.Name, !failed, summary, clock.Elapsed);
+            // A run that did not finish is news whatever it was about, and the model never
+            // got to say so: it is the failure that stopped it. The same judgement the
+            // scheduler makes for a job that threw, made here for one that gave up.
+            //
+            // A scheduled task quietly ceasing to work is the worst outcome this feature
+            // has, because it looks exactly like a machine on which nothing is happening.
+            if (failed && headline is null)
+                headline = $"The scheduled job '{job.Name}' could not finish.";
+
+            return new CronRunResult(job.Name, !failed, summary, clock.Elapsed, headline);
         }
         finally
         {
@@ -179,6 +196,17 @@ internal sealed partial class AgentSession
         - If a task genuinely needs a change, say so and stop rather than retrying.
         - Be brief. This report is read later, out of context.
         - Reply in the language the task was written in.
+
+        If -- and only if -- you found something the user should be told about NOW, end your
+        report with one final line:
+
+            {CronReport.Marker} <one sentence, the thing itself, not that you looked>
+
+        This raises a notification on their screen. Leave the line out entirely for a routine
+        run, and that is most runs: nothing found, nothing changed, nothing due, or news that
+        can wait until they next look. Deadlines today, a failure, something addressed to
+        them that will not keep -- those are worth it. A notification for a routine result
+        teaches them to ignore the next one, and then the one that mattered is lost too.
         """;
 
     /// <summary>

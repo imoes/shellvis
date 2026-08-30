@@ -4,6 +4,20 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.7.0
+
+- **A desktop alert when something is worth knowing.** Bottom right, above the tray, the way
+  Outlook's has worked for twenty years: it never takes the focus, so the keystroke you were
+  typing still lands where you meant it; it leaves on its own after seven seconds, so
+  ignoring it costs nothing; and clicking it opens the message window with the full report.
+  It waits, along with everything else, while Windows says you are presenting, in a call or
+  away — the console says which of those it is.
+- **A scheduled run decides whether it is worth interrupting you for.** Most runs say
+  nothing at all and only leave their line in the console: a routine result that raises an
+  alert teaches you to ignore the next one, and then the one that mattered is lost with it.
+  A run that did not finish always says so, because a scheduled task that quietly stops
+  working looks exactly like a machine on which nothing is happening.
+
 ## 0.6.0
 
 - **Shellvis learns an API from a YAML file.** A connector is one directory holding a

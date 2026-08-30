@@ -56,6 +56,34 @@ public sealed partial class PillWindow
         Redraw(streaming: false, reveal: true);
     }
 
+    /// <summary>
+    /// Put a scheduled run's report into the conversation.
+    ///
+    /// <b>Why it belongs here and not only in the log.</b> A desktop alert has to open
+    /// something, and what it opens is the message window -- so the report has to BE in the
+    /// message window. The console keeps its one-line record of the run either way; the two
+    /// are not duplicates, they are the log entry and the document.
+    ///
+    /// <b>Marked as scheduled, not passed off as an answer.</b> A report nobody asked for,
+    /// rendered identically to a reply to a question, would make the conversation read as
+    /// though the user had asked something they did not. The heading says where it came
+    /// from and when.
+    ///
+    /// This does not reach the model. The conversation shown here and the history the agent
+    /// loop reasons over are separate on purpose -- a scheduled run must never become part of
+    /// the context of the next thing the user asks, which is the rule
+    /// <see cref="Agent.AgentSession"/> keeps by giving cron a loop of its own.
+    /// </summary>
+    private void RecordScheduledReport(string job, string report, string headline)
+    {
+        _conversation.Add(
+            Said.Assistant,
+            $"**{Conversation.Escape(headline)}**\n\n{report}\n\n*Scheduled job "
+                + $"'{Conversation.Escape(job)}', {DateTime.Now:HH:mm}*");
+
+        Redraw(streaming: false, reveal: false);
+    }
+
     /// <summary>Replace the whole conversation, for a resumed or a new session.</summary>
     private void ShowConversation(IEnumerable<Turn> turns, bool reveal)
     {

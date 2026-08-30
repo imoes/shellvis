@@ -54,6 +54,15 @@
               red mark on a bar reads as an error and gets treated as one.
             -->
             <SolidColorBrush x:Key="PillAccentBrush" Color="#FF7C6BF5" />
+
+            <!--
+              The desktop alert. Nearly opaque, unlike the pill: this one appears over
+              whatever the user is working on, and a translucent panel with someone's code
+              showing through it is a panel that has to be read twice.
+            -->
+            <SolidColorBrush x:Key="ToastTintBrush" Color="#FCFBFBFE" />
+            <SolidColorBrush x:Key="ToastTextBrush" Color="#FF1B1B1F" />
+            <SolidColorBrush x:Key="ToastBorderBrush" Color="#26000000" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Dark">
@@ -90,6 +99,10 @@
             </LinearGradientBrush>
             <!-- Lighter, to hold its own against a dark bar. -->
             <SolidColorBrush x:Key="PillAccentBrush" Color="#FF9A8BFF" />
+
+            <SolidColorBrush x:Key="ToastTintBrush" Color="#FC232329" />
+            <SolidColorBrush x:Key="ToastTextBrush" Color="#FFF2F2F7" />
+            <SolidColorBrush x:Key="ToastBorderBrush" Color="#33FFFFFF" />
         </ResourceDictionary>
 
     </ResourceDictionary.ThemeDictionaries>

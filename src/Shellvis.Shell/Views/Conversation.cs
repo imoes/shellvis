@@ -122,13 +122,13 @@ public sealed class Conversation
     }
 
     /// <summary>
-    /// Keep a prompt from being read as markup.
+    /// Keep text from being read as markup.
     ///
     /// A question can legitimately contain asterisks, backticks and brackets: "what does
     /// `Get-Process **` do" is a reasonable thing to type. Wrapped in bold and handed to the
     /// renderer unescaped, it would close the bold early and swallow the rest of the line.
     /// </summary>
-    private static string Escape(string text)
+    internal static string Escape(string text)
     {
         var sb = new StringBuilder(text.Length);
 

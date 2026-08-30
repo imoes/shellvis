@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.6.0-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.7.0-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -54,6 +54,14 @@ after a hit test, so a button behind a cookie banner is refused rather than clic
 registry as the built-in ones and the agent loop cannot tell them apart. Skills are
 progressive-disclosure instruction files. Hooks intercept tool calls. Cron runs unattended
 jobs.
+
+**Tells you, without interrupting you.** A scheduled run that finds something worth knowing
+raises a desktop alert like Outlook's: bottom right, no focus taken, gone in seven seconds,
+and a click opens the message window with the report. Most runs raise nothing — a run has to
+say for itself that something matters, and the default is silence, because an alert for a
+routine result teaches you to dismiss the next one unread. Everything waits while Windows
+says you are presenting, in a full-screen call or away; `SHQueryUserNotificationState` is the
+documented way to ask that, and the console says which of them it was.
 
 **Remembers.** Skills for procedures, a bounded memory store for facts, both written by the
 agent itself: after a turn that used tools, one extra tool-less model call asks whether

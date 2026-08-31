@@ -55,6 +55,31 @@ registry as the built-in ones and the agent loop cannot tell them apart. Skills 
 progressive-disclosure instruction files. Hooks intercept tool calls. Cron runs unattended
 jobs.
 
+**Schedules itself, through Windows.** *"Every morning at eight, the day's appointments and
+anything falling due"* is the whole setup — there is no dialog. Shellvis writes the job and
+registers a real task under `\Shellvis` in Task Scheduler that calls itself with
+`--job <name>`, so it fires whether or not Shellvis is open and is visible and editable in a
+tool you already have. Ask *"which jobs are set up"* to see them with their prompts, their
+next run and which scheduler owns the timing. Schedules Windows cannot express exactly — a
+step in the minutes, a list of hours, a day of the month — are refused rather than
+approximated and stay on the loop inside Shellvis, which says so when it happens. Every write
+asks first in every permission mode, and a scheduled run cannot create jobs at all: a timer
+that can add timers grows while nobody is looking.
+
+**Sticky notes, by asking.** *"Stick a note on the desktop: call Weber back, 0151…"* or *"a
+green note with the shopping list"*. Frameless, five colours, dragged anywhere, saved without
+asking, and back where you left them after a restart. A line or two — longer text is refused
+and goes into the notes database instead, because a sticky note is a reminder and not a
+document. *"What is on the desktop"* lists what is already up. There is no button for them,
+which is a real gap in discoverability rather than a design decision.
+
+**Anything can ask it a question.** `Shellvis.Shell.exe --prompt "what is due today"` lands in
+the conversation you already have open, without raising a window over what you are doing; a
+Windows task uses `--job <name>` the same way. If an instance is already running the parameter
+goes to *that* one rather than starting a second — otherwise the answer appears in a window
+nobody is looking at, and a job run headless cannot raise its alert at all. The channel is a
+named pipe whose ACL grants exactly the account that created it.
+
 **Tells you, without interrupting you.** A scheduled run that finds something worth knowing
 raises a desktop alert like Outlook's: bottom right, no focus taken, gone in seven seconds,
 and a click opens the message window with the report. Most runs raise nothing — a run has to
@@ -408,7 +433,7 @@ connectors/            declarative API packages, read in place beside the execut
 skills/                the skills that ship with the product, likewise
 ext/thunderbird-bridge/        the MailExtension
 tools/
-  Shellvis.DesktopProbe/       38 verification harnesses
+  Shellvis.DesktopProbe/       41 verification harnesses
   Shellvis.TestMcpServer/      a deliberately hostile MCP server
 ```
 

@@ -315,6 +315,32 @@
         <h3>Sticky notes</h3>
         <p>The Vista behaviour rebuilt: frameless, five colours, dragged anywhere, saved
           without asking, back where you left them after a restart.</p>
+        <p>There is no button for them, and no menu. You ask:
+          <em>&ldquo;stick a note on the desktop: call Weber back, 0151&hellip;&rdquo;</em> or
+          <em>&ldquo;a green note with the shopping list&rdquo;</em>. A line or two &mdash; longer
+          text is refused and goes to the notes database instead, because a sticky note is a
+          reminder and not a document. Ask <em>&ldquo;what is on the desktop&rdquo;</em> to see
+          what is already up.</p>
+      </div>
+      <div class="card">
+        <h3>Tells you, without taking the screen</h3>
+        <p>A run that finds something worth knowing raises a desktop alert like Outlook's:
+          bottom right, no focus taken, gone in seven seconds, and a click opens the message
+          window with the report.</p>
+        <p>Most runs raise nothing. A run has to say for itself that something matters, and
+          the default is silence &mdash; an alert for a routine result teaches you to dismiss
+          the next one unread, and then the one that mattered is lost with it. Everything
+          waits while Windows says you are presenting, in a full-screen call or away.</p>
+      </div>
+      <div class="card">
+        <h3>Schedules itself, through Windows</h3>
+        <p><em>&ldquo;every morning at eight, the day's appointments and anything falling
+          due&rdquo;</em> is the whole setup. Shellvis writes the job and registers a real task
+          under <code>\Shellvis</code> in Task Scheduler that calls itself with
+          <code>--job</code>.</p>
+        <p>So it fires whether or not Shellvis is open, and it is visible and editable in a
+          tool you already have. Every change asks first, in every permission mode: a
+          scheduled job is the one thing here that acts unattended, on a timer, indefinitely.</p>
       </div>
     </div>
   </div>
@@ -322,8 +348,8 @@
 
 <section>
   <div class="wrap">
-    <h2>Ninety-four tools, and room for more</h2>
-    <p class="sub">Eighty-two on a machine with no Home Assistant, no privileged service and no Thunderbird.</p>
+    <h2>Ninety-nine tools, and room for more</h2>
+    <p class="sub">Eighty-seven on a machine with no Home Assistant, no privileged service and no Thunderbird.</p>
 
     <div class="scroll">
       <table class="tools">
@@ -344,6 +370,8 @@
           A click that would land on a cookie banner is refused, not faked.</td></tr>
         <tr><td>Skills &amp; memory</td><td>What it has learned about this machine, disclosed in
           three tiers so it costs a line and not a page.</td></tr>
+        <tr><td>Scheduler</td><td>List, add, change, remove and disable scheduled jobs by
+          saying so. Each one becomes a Windows task, so it fires with Shellvis closed.</td></tr>
         <tr><td>Connectors</td><td>A directory with one YAML file in it teaches Shellvis a REST
           API it has never seen. Drop it in and its tools are there on the next start.</td></tr>
         <tr><td>Privileged</td><td>A separate service, six operations, every one of them asking
@@ -399,6 +427,37 @@
 
 <section>
   <div class="wrap">
+    <h2>Anything can ask it a question</h2>
+    <p class="sub">One parameter, and it lands in the conversation you already have open.</p>
+
+    <p>
+      A script, a task, a shortcut &mdash; anything that can start a program can put a question
+      to Shellvis:
+    </p>
+
+    <div class="console">
+      <div class="row"><span class="arg">Shellvis.Shell.exe --prompt "what is due today"</span></div>
+      <div class="row"><span class="arg">Shellvis.Shell.exe --job morning-briefing</span></div>
+    </div>
+
+    <p>
+      If a Shellvis is already running, the parameter is handed to <em>that</em> instance rather
+      than starting a second one. That is not an optimisation: a second copy would mean a
+      second PowerShell runspace and a second COM apartment, and the answer would appear in a
+      window you are not looking at. A prompt arrives as an ordinary turn and does
+      <strong>not</strong> raise the window over what you are doing.
+    </p>
+
+    <p>
+      The channel is a named pipe whose ACL grants exactly one account &mdash; the one that
+      created it. What travels through it is a prompt for an agent that can drive the desktop
+      and read mail, so another signed-in user must not be able to write to it.
+    </p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
     <h2>Install</h2>
     <p class="sub">Two modes, and the difference is whether a privileged service exists.</p>
 
@@ -423,7 +482,7 @@
 <section>
   <div class="wrap">
     <h2>How it is verified</h2>
-    <p class="sub">Twenty-one harnesses, seven hundred-odd checks, and the ones that are not run.</p>
+    <p class="sub">Forty-one harnesses, seven hundred-odd checks, and the ones that are not run.</p>
 
     <p>
       Most of what could go wrong here is about what a real process, a real mailbox or a real

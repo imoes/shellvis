@@ -1,0 +1,60 @@
+# Publish the overview page whenever it changes on main.
+#
+# WHY THIS EXISTS. The page lives at docs/index.html on main and is SERVED from the gh-pages
+# branch, and copying it across was a manual step. A manual step in a two-branch arrangement
+# is a step that gets skipped, and the failure is silent: the page stays up, looks maintained,
+# and slowly stops being true. It had drifted to claiming twenty-one verification harnesses
+# when there were forty-one, and two feature sections behind the README.
+#
+# Only the page. Nothing here builds, tests or releases anything.
+
+name: pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/index.html'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# The token needs to write a branch, and nothing else.
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Both branches are needed: the source of the page and its destination.
+          fetch-depth: 0
+
+      - name: Copy the page onto gh-pages
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # A worktree rather than a checkout, so the file being copied stays readable while
+          # the other branch is checked out beside it.
+          git worktree add ../pages gh-pages
+          cp docs/index.html ../pages/index.html
+
+          cd ../pages
+
+          # .nojekyll stops GitHub Pages running the page through Jekyll, which would
+          # otherwise mangle anything that looks like a Liquid tag.
+          touch .nojekyll
+
+          if git diff --quiet; then
+            echo "the published page is already current"
+            exit 0
+          fi
+
+          git add -A
+          git commit -m "The overview page, from ${GITHUB_SHA::7}."
+          git push origin gh-pages

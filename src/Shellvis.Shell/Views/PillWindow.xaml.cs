@@ -132,6 +132,7 @@ public sealed partial class PillWindow : Window
         // The same three actions from the pill menu, which is reachable whether or not
         // the console is open.
         SparkleButton.Click += (_, _) => ToggleDock();
+        SettingsButton.Click += (_, _) => ShowSettingsMenu();
         HistoryButton.Click += (_, _) => ToggleHistory();
         NewSessionButton.Click += (_, _) => OnNewSession();
         HistorySearch.TextChanged += (_, _) => RefreshSessionList();

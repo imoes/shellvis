@@ -272,7 +272,17 @@ public sealed class HttpConnector : IDisposable
                 return text;
         }
 
-        return parameter.Default;
+        // Expanded, so a default can refer to the configured account.
+        //
+        // This is what makes "my open tickets" mean the person at the keyboard: the JQL
+        // default is `assignee = "${JIRA_USER}"`, and without expansion it went to Jira as
+        // the literal text ${JIRA_USER} -- which is not an error, it is a filter that matches
+        // a user of that name, so the answer comes back empty or, worse, wrong. Only baseUrl
+        // and headers were expanded before, which is exactly the sort of gap that shows up as
+        // "it lists everybody's tickets".
+        return Expand(parameter.Default ?? string.Empty) is { Length: > 0 } expanded
+            ? expanded
+            : null;
     }
 
     /// <summary>Put a value into the body, honouring a dotted target such as fields.summary.</summary>

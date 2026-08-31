@@ -71,6 +71,12 @@ public sealed partial class PillWindow
         AttachButton.Visibility = Visibility.Collapsed;
         ModeButton.Visibility = Visibility.Collapsed;
         SparkleButton.Visibility = Visibility.Collapsed;
+
+        // Settings goes too, and this one is a judgement rather than an arithmetic result:
+        // configuring a connector opens a form 520 DIP wide, and that is not something anybody
+        // starts from a strip on the taskbar. The arrow beside it brings the pill back, and the
+        // gear is one press further from there.
+        SettingsButton.Visibility = Visibility.Collapsed;
         HistoryButton.Visibility = Visibility.Visible;
         ConsoleToggleButton.Visibility = Visibility.Visible;
         ExpandButton.Visibility = Visibility.Visible;
@@ -199,6 +205,7 @@ public sealed partial class PillWindow
 
         AttachButton.Visibility = Visibility.Visible;
         HistoryButton.Visibility = Visibility.Visible;
+        SettingsButton.Visibility = Visibility.Visible;
         ConsoleToggleButton.Visibility = Visibility.Visible;
         ModeButton.Visibility = Visibility.Visible;
         SparkleButton.Visibility = Visibility.Visible;

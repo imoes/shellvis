@@ -71,6 +71,13 @@ internal static class MarkdownRenderer
 
         var palette = new Palette(prose, mono, foreground, muted, size, onLink);
 
+        // How wide the flow actually is, so wide content can be capped to it rather than
+        // clipped by it. ActualWidth is zero before the first layout pass -- a streamed answer
+        // renders repeatedly, so the second pass has it -- and the fallback is deliberately
+        // narrow: a table that scrolls when it did not need to is a smaller fault than one
+        // whose right-hand columns are missing.
+        double available = target.ActualWidth > 40 ? target.ActualWidth - 8 : 480;
+
         MarkdownDocument document = MarkdownParser.Parse(markdown);
 
         foreach (MarkdownBlock block in document.Blocks)
@@ -86,11 +93,11 @@ internal static class MarkdownRenderer
                     break;
 
                 case MarkdownBlock.Code code:
-                    target.Blocks.Add(RenderCode(code, palette));
+                    target.Blocks.Add(RenderCode(code, palette, available));
                     break;
 
                 case MarkdownBlock.Table table:
-                    target.Blocks.Add(RenderTable(table, palette));
+                    target.Blocks.Add(RenderTable(table, palette, available));
                     break;
 
                 case MarkdownBlock.Rule:
@@ -154,21 +161,45 @@ internal static class MarkdownRenderer
         return block;
     }
 
-    private static Paragraph RenderCode(MarkdownBlock.Code code, Palette palette)
+    /// <summary>
+    /// A fenced block, scrolling sideways rather than wrapping or being cut.
+    ///
+    /// <b>Why not simply let it wrap.</b> A wrapped command line is a command line that cannot
+    /// be read back: the break lands wherever the width happens to fall, and a path or a
+    /// pipeline reads as two broken ones. The old code put the text straight into the flow,
+    /// which wraps -- and a table beside it was clipped outright. Both are the same mistake in
+    /// different clothes: wide content has to be given somewhere to go.
+    /// </summary>
+    private static Paragraph RenderCode(MarkdownBlock.Code code, Palette palette, double available)
     {
         var block = new Paragraph
         {
             Margin = new Thickness(8, 2, 0, 4),
         };
 
-        block.Inlines.Add(new Run
+        var text = new TextBlock
         {
-            // Line breaks intact and NOT wrapped: code that wraps is code that cannot be
-            // read back, and the console already scrolls.
             Text = code.Text,
             FontFamily = palette.Mono,
             FontSize = palette.Size - 1,
             Foreground = palette.Muted,
+
+            // No wrapping, so the lines are the lines the model wrote.
+            TextWrapping = TextWrapping.NoWrap,
+            IsTextSelectionEnabled = true,
+        };
+
+        block.Inlines.Add(new InlineUIContainer
+        {
+            Child = new ScrollViewer
+            {
+                Content = text,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollMode = ScrollMode.Enabled,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                VerticalScrollMode = ScrollMode.Disabled,
+                MaxWidth = available,
+            },
         });
 
         return block;
@@ -220,7 +251,7 @@ internal static class MarkdownRenderer
     /// table cannot be swept with the cursor along with the prose around it. Worth it, and
     /// the cell text can still be read.
     /// </summary>
-    private static Paragraph RenderTable(MarkdownBlock.Table table, Palette palette)
+    private static Paragraph RenderTable(MarkdownBlock.Table table, Palette palette, double available)
     {
         var grid = new Grid
         {
@@ -258,7 +289,30 @@ internal static class MarkdownRenderer
             AddRow(grid, table.Rows[r], table.Alignment, palette, line: r + 2, bold: false);
 
         var block = new Paragraph();
-        block.Inlines.Add(new InlineUIContainer { Child = grid });
+
+        // Wide content scrolls; it does not get cut off.
+        //
+        // An InlineUIContainer measures its child with unbounded width, so Auto columns grow
+        // to whatever the widest cell needs -- and then the RichTextBlock clips whatever
+        // exceeded its own width. Silently: no scrollbar, no ellipsis, just a table with its
+        // right-hand columns missing. A Jira listing is exactly the shape that triggers it
+        // (key, status, priority, summary, assignee), and it was reported as "the lines are
+        // cut off".
+        //
+        // MaxWidth is what makes the ScrollViewer useful. Without it the viewer is measured
+        // unbounded too, grows with the table, and clips at the same place -- a scroll viewer
+        // that is wider than its parent scrolls nothing.
+        var viewer = new ScrollViewer
+        {
+            Content = grid,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+            HorizontalScrollMode = ScrollMode.Enabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollMode = ScrollMode.Disabled,
+            MaxWidth = available,
+        };
+
+        block.Inlines.Add(new InlineUIContainer { Child = viewer });
 
         return block;
     }

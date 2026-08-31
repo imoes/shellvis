@@ -36,11 +36,14 @@ tools:
     effect: read
     preview: jql
     description: >
-      Search issues with JQL. Two rules that come from real failures on this kind of
-      installation: use "statusCategory != Done" rather than a status name, because the
-      status names are localised and change per workflow; and use "summary ~ text"
-      rather than "summary = text", because a colon in a subject makes an "=" comparison
-      a JQL syntax error. Example:
+      Search issues with JQL. For the user's OWN tickets use jira_my_open instead -- it is
+      already scoped to the configured account, and a hand-written assignee clause is how a
+      question about "my tickets" comes back listing everybody's.
+      Two rules that come from real failures on this kind of installation: use
+      "statusCategory != Done" rather than a status name, because the status names are
+      localised and change per workflow; and use "summary ~ text" rather than
+      "summary = text", because a colon in a subject makes an "=" comparison a JQL syntax
+      error. Example:
       project = IMIT AND statusCategory != Done ORDER BY priority DESC
     params:
       - name: jql
@@ -88,13 +91,25 @@ tools:
     path: /rest/api/2/search
     effect: read
     description: >
-      The issues assigned to the current user that are not done. The everyday question,
-      as one call rather than as a JQL the model has to get right.
+      MY open issues -- the ones assigned to the configured account. Use this, not
+      jira_search, whenever the question is about the user's own tickets ("what is still
+      open for me", "what am I working on"). It already filters by the account, so do not
+      add an assignee clause and do not pass a jql of your own.
     params:
       - name: jql
         in: query
-        default: "assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC"
-        description: Leave this alone unless a different filter is wanted.
+        # The configured account by NAME, not currentUser().
+        #
+        # currentUser() is the documented way and it is the wrong choice here: on a
+        # self-hosted Jira reached with HTTP Basic it resolves against whatever the server
+        # thinks the session is, and a proxy or a service account in front of it turns "my
+        # tickets" into somebody else's -- silently, because an empty or foreign list is a
+        # valid answer. ${JIRA_USER} is the account the user themselves configured, which is
+        # the only definition of "me" this application can be sure of.
+        default: 'assignee = "${JIRA_USER}" AND statusCategory != Done ORDER BY priority DESC, updated DESC'
+        description: >
+          Leave this alone. It is already scoped to the configured account; replacing it
+          removes that scope.
       - name: maxResults
         in: query
         default: "25"

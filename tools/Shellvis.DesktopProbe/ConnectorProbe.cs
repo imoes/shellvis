@@ -462,6 +462,21 @@ internal static class ConnectorProbe
                     && fields.GetProperty("project").GetProperty("key").GetString() == "IMIT");
             }
 
+            // "My open tickets" has to mean the configured account, and the ONLY way to know
+            // it did is to read the query that left. A ${VAR} that was not expanded goes out
+            // as literal text, which Jira accepts as a filter matching nobody -- so the
+            // failure looks like "you have no open tickets", or on a shared instance like
+            // somebody else's list. Neither reads as a bug.
+            await Invoke(registry, "jira_my_open", new { });
+
+            failures += Check("my open tickets are scoped to the configured account",
+                server.LastQuery?.Contains("probe.user", StringComparison.Ordinal) == true,
+                server.LastQuery);
+
+            failures += Check("and the variable was expanded, not sent literally",
+                server.LastQuery?.Contains("JIRA_USER", StringComparison.Ordinal) == false,
+                server.LastQuery);
+
             // A missing required argument is refused before anything is sent.
             server.LastPath = null;
             string refused = await Invoke(registry, "jira_comment", new { key = "IMIT-1" });

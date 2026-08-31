@@ -22,8 +22,12 @@ internal static class PillMetrics
     /// 720 is arrived at rather than chosen: it is what makes the input field as wide as
     /// it WOULD have been at 460 with no buttons at all (430 DIP), with the buttons still
     /// there. 430 + 30 padding + 36 spacing + 223 buttons = 719.
+    ///
+    /// <b>+42 for the settings button</b>, which is 36 of button and 6 of the gap beside it.
+    /// Added to the bar rather than taken out of the field, which is the rule this file has
+    /// now been asked for three times: the field is why the bar exists.
     /// </summary>
-    public const double Width = 720;
+    public const double Width = 720 + 36 + RowSpacing;
 
     /// <summary>Collapsed height, and the basis for the corner radius.</summary>
     public const double PillHeight = 64;

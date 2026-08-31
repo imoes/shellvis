@@ -84,6 +84,10 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
+                    <!-- The settings button. A column of its own, and the bar was widened by
+                         exactly one button to pay for it: the input field does not give up
+                         pixels for a control. -->
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <Button x:Name="AttachButton"
@@ -156,8 +160,27 @@
                         Content="auto"
                         ToolTipService.ToolTip="How much Shellvis may do without asking" />
 
-                <Button x:Name="ConsoleToggleButton"
+                <!-- Settings, and the reason it exists is worth writing down.
+
+                     There are ninety-nine tools and were six buttons. Connectors, the
+                     scheduler and the sticky notes were reachable only by saying the right
+                     sentence, which meant they were reachable only by somebody who already
+                     knew they existed. The question arrived three times. "Where do I
+                     configure the connectors", "where is the scheduler", "where are the
+                     sticky notes". The honest answer each time was "you ask it", which
+                     is not an answer for a thing with a window.
+
+                     So: one gear, one menu, and the menu is a table of contents rather than
+                     a settings page. It makes nothing new possible; it makes what exists
+                     findable. -->
+                <Button x:Name="SettingsButton"
                         Grid.Column="4"
+                        Style="{StaticResource PillIconButtonStyle}"
+                        Content="&#xE713;"
+                        ToolTipService.ToolTip="Settings: connectors, model, scheduled jobs, notes" />
+
+                <Button x:Name="ConsoleToggleButton"
+                        Grid.Column="5"
                         Style="{StaticResource PillIconButtonStyle}"
                         Content="&#xE70D;"
                         ToolTipService.ToolTip="Show console" />
@@ -166,7 +189,7 @@
                      is dropped while docked: at 26px on a taskbar it reads as a stray
                      coloured blob rather than an accent. -->
                 <Border x:Name="MicBackdrop"
-                        Grid.Column="5"
+                        Grid.Column="6"
                         Width="38"
                         Height="38"
                         CornerRadius="19"
@@ -184,7 +207,7 @@
                      standard minimise chevron rather than the old star, because a star
                      that minimises is a worse button than an unlabelled one. -->
                 <Button x:Name="SparkleButton"
-                        Grid.Column="6"
+                        Grid.Column="7"
                         Style="{StaticResource PillIconButtonStyle}"
                         Content="&#xE921;"
                         ToolTipService.ToolTip="Minimise to the taskbar" />
@@ -193,7 +216,7 @@
                      full pill back. Shares the last column with the sparkle button,
                      which is hidden in that mode. -->
                 <Button x:Name="ExpandButton"
-                        Grid.Column="6"
+                        Grid.Column="7"
                         Visibility="Collapsed"
                         Style="{StaticResource PillIconButtonStyle}"
                         Content="&#xE70E;"

@@ -94,6 +94,70 @@ public sealed class ConnectorLoader(ToolRegistry registry)
     public IReadOnlyList<ConnectorStatus> Status => _status;
 
     /// <summary>
+    /// Every manifest that was read, valid or not, kept so it can be configured later.
+    ///
+    /// A connector that is present but unconfigured registers no tools -- deliberately -- and
+    /// that used to make it invisible: the only record was a sentence in the status list. But
+    /// the manifest is exactly what says WHICH variables it is waiting for, so throwing it
+    /// away left nothing able to ask the user for them. That is why configuring a connector
+    /// was impossible without editing the environment by hand.
+    /// </summary>
+    private readonly List<ConnectorManifest> _manifests = [];
+
+    /// <summary>What each connector still needs, for a dialog to ask about.</summary>
+    public IReadOnlyList<ConnectorNeeds> Needs()
+    {
+        var needs = new List<ConnectorNeeds>();
+
+        foreach (ConnectorManifest manifest in _manifests)
+        {
+            ConnectorStatus? status = _status.FirstOrDefault(
+                s => s.Name.Equals(manifest.Name, StringComparison.OrdinalIgnoreCase));
+
+            var variables = new List<ConnectorVariable>();
+
+            // The address first, because it is the one a person can actually answer without
+            // looking anything up.
+            foreach (string name in Referenced(manifest.BaseUrl))
+                variables.Add(Variable(name, "Address", secret: false));
+
+            if (manifest.Auth is { } auth)
+            {
+                if (auth.UserVar is { Length: > 0 } user)
+                    variables.Add(Variable(user, "Account", secret: false));
+
+                if (auth.Secret is { Length: > 0 } secret)
+                    variables.Add(Variable(secret, auth.Scheme == AuthScheme.Basic ? "Password" : "Token", secret: true));
+            }
+
+            needs.Add(new ConnectorNeeds(
+                manifest.Name,
+                manifest.Title,
+                status?.Ready ?? false,
+                status?.Detail ?? "not loaded",
+                variables));
+        }
+
+        return needs;
+    }
+
+    private static ConnectorVariable Variable(string name, string label, bool secret) =>
+        new(name,
+            label,
+            secret,
+            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(name)));
+
+    /// <summary>The <c>${VAR}</c> names a value refers to.</summary>
+    private static IEnumerable<string> Referenced(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            yield break;
+
+        foreach (Match match in Regex.Matches(value, @"\$\{([A-Za-z_][A-Za-z0-9_]*)\}"))
+            yield return match.Groups[1].Value;
+    }
+
+    /// <summary>
     /// The directories connectors are read from, user first.
     ///
     /// Same order and same reason as the skills: what ships is a default, and a package of
@@ -131,6 +195,41 @@ public sealed class ConnectorLoader(ToolRegistry registry)
         }
 
         return _status;
+    }
+
+    /// <summary>
+    /// Read one connector again, after its settings changed.
+    ///
+    /// <b>Why reloading rather than asking for a restart.</b> The tool registry is live, which
+    /// is what lets <c>connector_install</c> work in the middle of a conversation. Telling
+    /// somebody who has just typed a password to restart the application would be asking them
+    /// to do work the machine can do -- and it would leave them unsure whether the password
+    /// was even accepted until after the restart.
+    ///
+    /// The old tools are deregistered first. Without that the re-registration collides with
+    /// itself and reports every tool name as taken, which reads exactly like a failure.
+    /// </summary>
+    public ConnectorStatus Reload(string name)
+    {
+        ConnectorManifest? manifest = _manifests.FirstOrDefault(
+            m => m.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        if (manifest is null)
+            return new ConnectorStatus(name, false, 0, "there is no connector by that name.");
+
+        registry.DeregisterPrefixed(Prefix(manifest.Name) + "_");
+
+        string file = Path.Combine(manifest.Directory, "connector.yaml");
+
+        if (!File.Exists(file))
+            return new ConnectorStatus(name, false, 0, $"{file} is gone.");
+
+        ConnectorStatus status = Load(file);
+
+        _status.RemoveAll(s => s.Name.Equals(status.Name, StringComparison.OrdinalIgnoreCase));
+        _status.Add(status);
+
+        return status;
     }
 
     /// <summary>Read, check and register one manifest file.</summary>
@@ -176,6 +275,11 @@ public sealed class ConnectorLoader(ToolRegistry registry)
             manifest.Name = name;
 
         manifest.Directory = Path.GetDirectoryName(file) ?? string.Empty;
+
+        // Kept even when it is about to be reported as unusable: a manifest that names the
+        // variables it is waiting for is the only thing able to tell the user what to fill in.
+        _manifests.RemoveAll(m => m.Name.Equals(manifest.Name, StringComparison.OrdinalIgnoreCase));
+        _manifests.Add(manifest);
 
         if (manifest.Validate() is { } problem)
             return new ConnectorStatus(manifest.Name, false, 0, problem);

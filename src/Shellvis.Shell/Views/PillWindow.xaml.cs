@@ -799,7 +799,10 @@ public sealed partial class PillWindow : Window
 
         // Off the UI thread on purpose: this opens a PowerShell runspace and a UI
         // Automation connection, which together cost seconds.
-        _sessionTask = Task.Run(() => AgentSession.Create(DispatcherQueue, gate));
+        // This window is the connector configurator: a connector's password has to go from
+        // the keyboard into the encrypted store without passing through the model or the
+        // transcript, and a dialog is the only thing that can do that.
+        _sessionTask = Task.Run(() => AgentSession.Create(DispatcherQueue, gate, this));
 
         _ = AnnounceWhenReadyAsync();
     }

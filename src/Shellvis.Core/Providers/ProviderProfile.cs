@@ -104,7 +104,14 @@ public static class ProviderCatalog
         Transport: ChatTransport.OpenAiChatCompletions,
         BaseUrl: "http://localhost:8080/v1",
         ApiKeyEnvVar: null,
-        DefaultModel: "laguna",
+
+        // Empty, and that is the correct value rather than a missing one. A llama.cpp server
+        // serves whatever model it was started with and ignores the field entirely, so there
+        // is no name to put here. It used to say "laguna" -- the provider's own id, which
+        // reads as a model name and is not one. Harmless against llama.cpp, and not harmless
+        // in a dialog: it was shown to a user in a box labelled Model while a completely
+        // different GGUF was answering.
+        DefaultModel: "",
         Quirks: ProviderQuirks.Default with { DefaultMaxTokens = 4096 },
         RequiresKey: false);
 

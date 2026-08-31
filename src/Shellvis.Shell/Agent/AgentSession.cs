@@ -80,6 +80,25 @@ internal sealed partial class AgentSession : IDisposable
     public bool IsBusy => _current is not null;
 
     /// <summary>
+    /// The connector loader, kept so a connector can be configured and reloaded later.
+    ///
+    /// Held on the session rather than discarded after startup: a connector that is present
+    /// but unconfigured registers no tools, and the loader is the only thing that knows which
+    /// variables it is waiting for. Throwing it away was why configuring one from inside the
+    /// application was impossible.
+    /// </summary>
+    private ConnectorLoader? _connectors;
+
+    /// <summary>What each installed connector still needs.</summary>
+    public IReadOnlyList<ConnectorNeeds> ConnectorNeeds() =>
+        _connectors?.Needs() ?? [];
+
+    /// <summary>Read one connector again, after its settings changed.</summary>
+    public ConnectorStatus ReloadConnector(string name) =>
+        _connectors?.Reload(name)
+            ?? new ConnectorStatus(name, false, 0, "connectors are not loaded in this session.");
+
+    /// <summary>
     /// Build a session.
     ///
     /// The endpoint is resolved from the environment rather than hard-coded so the
@@ -87,7 +106,10 @@ internal sealed partial class AgentSession : IDisposable
     /// OpenRouter without a rebuild. Falling back to the internal host keeps the
     /// out-of-the-box experience working on this machine.
     /// </summary>
-    public static AgentSession Create(DispatcherQueue dispatcher, IApprovalGate approvals)
+    public static AgentSession Create(
+        DispatcherQueue dispatcher,
+        IApprovalGate approvals,
+        IConnectorConfigurator? configurator = null)
     {
         ConfigLoadResult configuration = ConfigStore.Load();
         ShellvisConfig settings = configuration.Config;
@@ -211,7 +233,10 @@ internal sealed partial class AgentSession : IDisposable
                 warnings.Add($"connector '{status.Name}' {status.Detail}");
         }
 
-        registry.RegisterFrom(new ConnectorTools(connectors));
+        // The configurator is the pill itself, and only when there is one: a scheduled run
+        // gets null, so connector_configure says there is nobody to type into a dialog rather
+        // than opening one on an empty desktop.
+        registry.RegisterFrom(new ConnectorTools(connectors, configurator));
 
         // Skills are discovered before the system prompt is built, because the prompt
         // carries their index -- names and one-line descriptions only.
@@ -300,6 +325,7 @@ internal sealed partial class AgentSession : IDisposable
             Hooks = hooks,
             _processes = processes,
             _unattended = unattended,
+            _connectors = connectors,
         };
 
         // Held separately from the loop so a scheduled run is not affected by an
@@ -636,8 +662,14 @@ internal sealed partial class AgentSession : IDisposable
 
         if (!await client.IsAvailableAsync(cancellationToken).ConfigureAwait(false))
         {
-            BrokerAvailability = "no privileged broker; elevated operations are unavailable "
-                + "(install with Shellvis.Setup.exe --mode service).";
+            // Names what actually ships. The earlier wording pointed at
+            // "Shellvis.Setup.exe --mode service", which is real but is not how anybody gets
+            // Shellvis: the releases carry an installer, and Shellvis.Setup.exe is a
+            // developer path. Advice that names a file the reader does not have is worse than
+            // no advice, because they go looking for it.
+            BrokerAvailability = "no privileged broker; elevated operations are unavailable. "
+                + "The service is chosen while installing -- run the installer again and pick "
+                + "the machine-wide option.";
 
             return;
         }

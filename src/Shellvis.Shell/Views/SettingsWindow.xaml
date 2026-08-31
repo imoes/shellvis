@@ -1,0 +1,64 @@
+﻿<Window
+    x:Class="Shellvis.Shell.Views.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Shellvis settings">
+
+    <!--
+        A form in a window of its own, rather than a dialog inside the pill.
+
+        The pill is 386 pixels wide with its console open, and its silhouette is cut by a
+        Win32 region to the shape it paints. A ContentDialog hosted there is clipped twice
+        over: by the region, and by a window far smaller than any form with six fields. That
+        was reported as "the window is incomplete and is not displayed properly", and it was
+        exactly right. The approval prompt survives it only because it is two lines and a
+        pair of buttons.
+    -->
+    <Grid x:Name="RootHost" Background="Transparent">
+        <Border x:Name="Surface"
+                CornerRadius="8"
+                BorderThickness="1"
+                Background="{ThemeResource ConsoleTintBrush}"
+                BorderBrush="{ThemeResource SeparatorBrush}">
+
+            <Grid Padding="20,16,20,16" RowSpacing="14">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <!-- The header doubles as the drag handle: there is no title bar. -->
+                <Grid x:Name="Header" Grid.Row="0" Background="Transparent">
+                    <TextBlock x:Name="TitleText"
+                               FontSize="16"
+                               FontWeight="SemiBold"
+                               Foreground="{ThemeResource ConsoleTextBrush}" />
+                </Grid>
+
+                <TextBlock x:Name="NoteText"
+                           Grid.Row="1"
+                           TextWrapping="Wrap"
+                           FontSize="12"
+                           Visibility="Collapsed"
+                           Foreground="{ThemeResource ConsoleMutedBrush}" />
+
+                <ScrollViewer Grid.Row="2"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel x:Name="Fields" Spacing="10" />
+                </ScrollViewer>
+
+                <StackPanel x:Name="Buttons"
+                            Grid.Row="3"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Spacing="8" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

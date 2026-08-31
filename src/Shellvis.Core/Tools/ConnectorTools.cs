@@ -15,7 +15,7 @@ namespace Shellvis.Core.Tools;
 /// about a source. Installing from a directory the user can open and read keeps the judgement
 /// with the person who can make it.
 /// </summary>
-public sealed class ConnectorTools(ConnectorLoader loader)
+public sealed class ConnectorTools(ConnectorLoader loader, IConnectorConfigurator? configurator = null)
 {
     [ShellvisTool(
         "connector_list",
@@ -43,6 +43,43 @@ public sealed class ConnectorTools(ConnectorLoader loader)
             sb.Append("  ").Append(one.Ready ? "ready  " : "off    ").Append(one.Name).Append(": ").AppendLine(one.Detail);
 
         return sb.ToString();
+    }
+
+    [ShellvisTool(
+        "connector_configure",
+        SideEffect.Mutating,
+        Description =
+            "Open the settings dialog for a connector so the user can fill in its address, "
+            + "account and password. Use this whenever a connector reports that it is not "
+            + "configured, or when the user asks to set one up. "
+            + "IMPORTANT: never ask the user for a password in the conversation and never "
+            + "pass one to a tool -- it would be written into the transcript. This dialog "
+            + "takes it from the keyboard straight into the encrypted store. The connector is "
+            + "reloaded afterwards, so its tools appear without a restart.",
+        PreviewParameter = "name",
+        Glyph = "plug")]
+    public async Task<string> Configure(string name, CancellationToken cancellationToken = default)
+    {
+        if (configurator is null)
+        {
+            // A scheduled run reaches this: there is no window to put a dialog in, and no
+            // person to type into it. Saying so is better than opening nothing.
+            return "a connector can only be configured with somebody at the machine; there is "
+                + "no window here. Ask again from an interactive session.";
+        }
+
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            IEnumerable<string> installed = loader.Status.Select(s => s.Name);
+            string list = string.Join(", ", installed);
+
+            return list.Length == 0
+                ? "no connectors are installed."
+                : $"which one? Installed: {list}.";
+        }
+
+        return await configurator.ConfigureAsync(name.Trim(), cancellationToken)
+            .ConfigureAwait(false);
     }
 
     [ShellvisTool(

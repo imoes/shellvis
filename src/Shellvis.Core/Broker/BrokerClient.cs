@@ -63,9 +63,9 @@ public sealed class BrokerClient
             catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
             {
                 return BrokerResponse.Failed(
-                    "no broker is listening. Privileged actions need Shellvis installed in "
-                    + "service mode (Shellvis.Setup.exe --mode service, which requires "
-                    + "administrator rights).");
+                    "no broker is listening. Privileged actions need the Shellvis service, "
+                    + "which is chosen while installing: run the installer again and pick the "
+                    + "machine-wide option, which needs administrator rights.");
             }
 
             using var writer = new StreamWriter(pipe, new UTF8Encoding(false), 64 * 1024, leaveOpen: true)

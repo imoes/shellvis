@@ -1,5 +1,4 @@
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
+using Shellvis.Core.Config;
 using Shellvis.Core.Providers;
 
 namespace Shellvis.Shell.Views;
@@ -33,86 +32,63 @@ public sealed partial class PillWindow
             : Agent.AgentSession.AvailableProviders()
                 .FirstOrDefault(p => p.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
 
-        var idBox = Field("Id", "work-gateway", existing?.Id ?? string.Empty, enabled: adding);
-        var nameBox = Field("Name", "shown in the picker", existing?.DisplayName ?? string.Empty);
-
-        // No "/v1" in the placeholder any more. It was there because the first request
-        // without it returns 404, which reads like an outage rather than like a text box
-        // filled in slightly wrong -- but the honest fix was to stop needing it, not to
-        // teach the user someone else's URL convention. EndpointUrl adds the scheme and the
-        // version segment.
-        var urlBox = Field("Endpoint", "host/path -- https and /v1 are added", existing?.BaseUrl ?? string.Empty);
-
-        var modelBox = Field("Model", "name to use", existing?.DefaultModel ?? string.Empty);
-        var envBox = Field("Key from variable", "optional, e.g. OPENAI_API_KEY", existing?.ApiKeyEnvVar ?? string.Empty);
+        // Pre-filled ONLY from what the config file actually holds, with the resolved value as
+        // the placeholder behind it.
+        //
+        // This was a real defect and it wrote nonsense into a user's config. Every box used to
+        // be pre-filled from the RESOLVED profile -- catalogue defaults included -- and saving
+        // writes whatever is in a box. So opening the dialog and pressing Save froze every
+        // inherited default into an explicit override. The catalogue's placeholder model for
+        // the private llama.cpp entry is the string "laguna", which is not a model name at
+        // all, and it ended up in config.yaml as `defaultModel: laguna` beside a `model.model`
+        // that named the real GGUF. The dialog then showed "laguna" in a box labelled Model,
+        // which is how it was noticed.
+        //
+        // A placeholder shows an inherited value without claiming it was set here, and the
+        // existing rule -- blank means "leave the built-in alone" -- starts working as
+        // written.
+        ProviderSection? saved = ConfigStore.Load().Config.Providers
+            .FirstOrDefault(p => p.Key.Equals(id, StringComparison.OrdinalIgnoreCase)).Value;
 
         bool stored = existing is not null && Agent.AgentSession.HasStoredKey(existing.Id);
 
-        var keyBox = new PasswordBox
-        {
-            Header = "API key",
-            PlaceholderText = stored ? "stored; blank keeps it" : "optional, encrypted for this account",
-        };
+        // No "/v1" in the endpoint placeholder. It was there because the first request without
+        // it returns 404, which reads like an outage rather than like a text box filled in
+        // slightly wrong -- but the honest fix was to stop needing it, not to teach the user
+        // someone else's URL convention. EndpointUrl adds the scheme and the version segment.
+        //
+        // "Default model", not "Model": it is the model used when none is picked. The one in
+        // use comes from the model picker and lives under model.model, and calling this box
+        // Model claimed it was showing that.
+        SettingsField[] fields =
+        [
+            new("id", "Id", "work-gateway", existing?.Id ?? string.Empty, Enabled: adding),
+            new("name", "Name", existing?.DisplayName ?? "shown in the picker", saved?.Name ?? string.Empty),
+            new("url", "Endpoint", existing?.BaseUrl ?? "host/path -- https and /v1 are added", saved?.BaseUrl ?? string.Empty),
+            new("model", "Default model",
+                existing?.DefaultModel is { Length: > 0 } inherited ? inherited : "used when none is picked",
+                saved?.DefaultModel ?? string.Empty),
+            new("env", "Key from variable", existing?.ApiKeyEnvVar ?? "optional, e.g. OPENAI_API_KEY", saved?.ApiKeyEnvVar ?? string.Empty),
+            new("key", "API key", stored ? "stored; blank keeps it" : "optional, encrypted for this account", Secret: true),
+        ];
 
-        // A grid rather than a StackPanel: paired fields sit side by side, which is what
-        // makes six of them fit without scrolling.
-        var grid = new Grid { ColumnSpacing = 10, RowSpacing = 8, Width = 460 };
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        SettingsResult answer = await SettingsWindow.ShowAsync(
+            WinRT.Interop.WindowNative.GetWindowHandle(this),
+            adding ? "Add a provider" : existing?.DisplayName ?? "Provider",
 
-        for (int i = 0; i < 5; i++)
-            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            // Said in the form rather than only in a comment: someone typing a key into a box
+            // is owed a straight answer about where it goes.
+            "The variable wins when set. A key typed here is encrypted to this Windows "
+                + "account and never written to config.yaml. A blank box keeps what is there.",
+            fields,
+            ["Use this", "List models", "Cancel"]);
 
-        Place(grid, idBox, row: 0, column: 0);
-        Place(grid, nameBox, row: 0, column: 1);
-        Place(grid, urlBox, row: 1, column: 0, span: 2);
-        Place(grid, modelBox, row: 2, column: 0);
-        Place(grid, envBox, row: 2, column: 1);
-        Place(grid, keyBox, row: 3, column: 0, span: 2);
-
-        var note = new TextBlock
-        {
-            // Said in the dialog rather than only in a comment: someone typing a key into a
-            // box is owed a straight answer about where it goes.
-            Text = "The variable wins when set. A key typed here is encrypted to this "
-                + "Windows account and never written to config.yaml.",
-            TextWrapping = TextWrapping.Wrap,
-            FontSize = 11,
-            Opacity = 0.7,
-        };
-
-        Place(grid, note, row: 4, column: 0, span: 2);
-
-        var dialog = new ContentDialog
-        {
-            XamlRoot = RootHost.XamlRoot,
-            Title = adding ? "Add a provider" : existing?.DisplayName ?? "Provider",
-            Content = grid,
-            PrimaryButtonText = "Use this",
-            SecondaryButtonText = "List models",
-            CloseButtonText = "Cancel",
-            DefaultButton = ContentDialogButton.Primary,
-        };
-
-        ContentDialogResult result;
-
-        try
-        {
-            result = await dialog.ShowAsync();
-        }
-        catch (Exception)
-        {
-            // WinUI allows exactly one ContentDialog at a time and an approval prompt may
-            // hold it. Reported, because a settings page that simply does not appear looks
-            // like a dead menu item.
-            AddRow(GlyphWarning, "another dialog is open; close it and try again.", "model");
-            return;
-        }
-
-        if (result == ContentDialogResult.None)
+        if (answer.Button is null or "Cancel")
             return;
 
-        string chosenId = adding ? idBox.Text.Trim() : existing!.Id;
+        string Value(string key) => answer.Values.TryGetValue(key, out string? v) ? v : string.Empty;
+
+        string chosenId = adding ? Value("id").Trim() : existing!.Id;
 
         if (chosenId.Length == 0)
         {
@@ -124,14 +100,14 @@ public sealed partial class PillWindow
             GlyphSpeaker,
             _session.ConfigureProvider(
                 chosenId,
-                nameBox.Text,
-                urlBox.Text,
-                modelBox.Text,
-                envBox.Text,
+                Value("name"),
+                Value("url"),
+                Value("model"),
+                Value("env"),
                 // Null, not empty: an empty box means "keep the stored key". Passing empty
                 // through would delete it, so editing an endpoint would silently drop the
                 // key that made it work.
-                keyBox.Password.Length > 0 ? keyBox.Password : null),
+                Value("key").Length > 0 ? Value("key") : null),
             "model",
             isAnnouncement: true);
 
@@ -139,29 +115,13 @@ public sealed partial class PillWindow
 
         // "List models" saves first and then asks the endpoint what it serves, because
         // asking is only possible once the endpoint and key are in place.
-        if (result == ContentDialogResult.Secondary
+        if (answer.Button == "List models"
             && Agent.AgentSession.AvailableProviders()
                 .FirstOrDefault(p => p.Id.Equals(chosenId, StringComparison.OrdinalIgnoreCase))
-                is { } saved)
+                is { } configured)
         {
-            await ShowModelsForAsync(saved).ConfigureAwait(true);
+            await ShowModelsForAsync(configured).ConfigureAwait(true);
         }
     }
 
-    private static TextBox Field(string header, string placeholder, string text, bool enabled = true) =>
-        new()
-        {
-            Header = header,
-            PlaceholderText = placeholder,
-            Text = text,
-            IsEnabled = enabled,
-        };
-
-    private static void Place(Grid grid, FrameworkElement element, int row, int column, int span = 1)
-    {
-        Grid.SetRow(element, row);
-        Grid.SetColumn(element, column);
-        Grid.SetColumnSpan(element, span);
-        grid.Children.Add(element);
-    }
 }

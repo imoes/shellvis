@@ -257,6 +257,14 @@ public sealed class HttpConnector : IDisposable
 
     private static string? Value(IReadOnlyDictionary<string, object?> arguments, ConnectorParameter parameter)
     {
+        // A fixed parameter ignores whatever was passed. Not "prefers the default" -- ignores:
+        // it is not in the schema, so anything arriving under its name came from a model
+        // guessing, and honouring that guess is how a scoped tool stops being scoped.
+        if (parameter.Fixed)
+            return Expand(parameter.Default ?? string.Empty) is { Length: > 0 } fixedValue
+                ? fixedValue
+                : null;
+
         if (arguments.TryGetValue(parameter.Name, out object? given) && given is not null)
         {
             string text = given switch

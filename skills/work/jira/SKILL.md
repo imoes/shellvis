@@ -1,12 +1,31 @@
 ---
 name: jira
 description: >-
-  Work a self-hosted Jira and IT service desk: search issues without tripping over
-  localised statuses, read what a ticket actually says, and never create a duplicate.
+  Work a self-hosted Jira and IT service desk. An open TASK is a ticket, so "my tickets"
+  means every open issue assigned to the user, of every type. Use jira_my_open for that,
+  never a hand-written assignee clause.
 requires_tools:
   - jira_search
   - jira_issue
 ---
+
+## "My tickets" means every open issue assigned to me
+
+Read this before answering any question about the user's own work.
+
+**An open task is a ticket.** So is a bug, a service request, a change, and anything else the
+workflow calls an issue. There is no type worth excluding, and filtering by type is how a
+list of "my tickets" quietly loses half of them. When the user asks what is open for them,
+they mean everything with their name on it that is not finished.
+
+**Use `jira_my_open`.** It is scoped to the configured account and the scope cannot be
+changed from a tool call — deliberately, because the earlier version let a JQL be passed in
+and the answer came back listing everybody's tickets. Do not use `jira_search` with an
+assignee clause of your own; do not pass a JQL to `jira_my_open`.
+
+**Both systems.** Jira and the service desk are separate products on separate hosts. "My
+tickets" spans both: call `jira_my_open` *and* `servicedesk_my_open`, and say which came from
+where. Answering from one of them is answering half the question.
 
 # Working Jira and the service desk
 
@@ -45,10 +64,10 @@ specific ticket. The search line is a summary; the issue is the substance.
 
 ## The service desk
 
-`jira_queues` names the queues and their ids; `jira_queue_issues` takes an id from that
+`servicedesk_queues` names the queues and their ids; `servicedesk_queue_issues` takes an id from that
 call. Do not guess an id.
 
-`jira_sla` is the one worth reaching for unprompted. It answers "what runs out today",
+`servicedesk_sla` is the one worth reaching for unprompted. It answers "what runs out today",
 which is the question behind most requests about the service desk even when nobody phrases
 it that way. `breached=true` on a running clock is worth saying first, before anything
 else about the ticket.

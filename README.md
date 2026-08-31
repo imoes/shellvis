@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.8.4-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.8.5-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -152,8 +152,8 @@ Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 holding a `connector.yaml` that declares a REST API — endpoints, arguments, and how an
 answer should read. Drop it in `%USERPROFILE%\.shellvis\connectors` and its tools are there
 on the next start. Credentials are named, never held; only a `GET` can run without asking;
-and no package can shadow a built-in tool. Two ship with Shellvis, for a self-hosted Jira
-and Confluence. **[How to build one →](docs/connectors.md)**
+and no package can shadow a built-in tool. Three ship with Shellvis: a self-hosted Jira,
+its service desk, and Confluence. **[How to build one →](docs/connectors.md)**
 
 Eighty-seven of them on a machine with no Home Assistant, no privileged service and no
 Thunderbird. Home Assistant appears only when a token is configured, and the broker tools

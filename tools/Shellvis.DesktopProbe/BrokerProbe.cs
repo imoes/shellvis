@@ -109,9 +109,23 @@ internal static class BrokerProbe
         // A ten-second stall for the ordinary case would look like a broken application.
         failures += Check("and it answers within a few seconds", clock.Elapsed.TotalSeconds < 6);
 
+        // The INTENT, not the wording.
+        //
+        // This used to assert the literal text "--mode service", and that pinned the one part
+        // of the sentence that turned out to be wrong: Shellvis.Setup.exe is a developer path,
+        // and nobody who installs from a release has that file. Telling them to run it sent
+        // them looking for something they do not have. Changing the message therefore broke a
+        // check that was, on its face, still describing what the message should do.
+        //
+        // So the check now asks the two things that actually matter and neither of which is a
+        // phrase: does it point at installing, and does it avoid naming the developer binary.
         failures += Check(
             "the message says how to get one",
-            response.Error?.Contains("--mode service") == true);
+            response.Error?.Contains("install", StringComparison.OrdinalIgnoreCase) == true);
+
+        failures += Check(
+            "and does not send the reader after a file they do not have",
+            response.Error?.Contains("Shellvis.Setup", StringComparison.OrdinalIgnoreCase) == false);
 
         failures += Check("IsAvailable reports false", !await client.IsAvailableAsync().ConfigureAwait(false));
 

@@ -455,7 +455,26 @@ internal static class ConnectorProbe
 
             // The queue API is behind an opt-in header. Without it the server answers 404,
             // which reads as "no such project" rather than "you forgot a header".
-            await Invoke(registry, "jira_queues", new { projectKey = "IMIT" });
+            // The service desk is its own connector now, so its own loader and its own
+            // registry -- which is itself worth exercising: two manifests sharing one
+            // credential name is the arrangement that lets an installation where Jira and the
+            // service desk are the same server ask for the password once.
+            var jsm = new ToolRegistry();
+
+            string jsmManifest = Path.Combine(
+                Path.GetDirectoryName(Path.GetDirectoryName(manifest)!)!,
+                "atlassian-servicedesk",
+                "connector.yaml");
+
+            Environment.SetEnvironmentVariable("JIRA_SERVICEDESK_URL", server.BaseUrl);
+            Environment.SetEnvironmentVariable("JIRA_SERVICEDESK_USER", "probe.user");
+            Environment.SetEnvironmentVariable("JIRA_SERVICEDESK_PASSWORD", "probe-password");
+
+            ConnectorStatus jsmStatus = new ConnectorLoader(jsm).Load(jsmManifest);
+            failures += Check("the service desk connector loads", jsmStatus.Ready, jsmStatus.Detail);
+
+            if (jsmStatus.Ready)
+                await Invoke(jsm, "servicedesk_queues", new { projectKey = "IMIT" });
             failures += Check("the experimental header is present", server.LastExperimental == "true", server.LastExperimental);
 
             // The body has to be nested the way Jira expects. A flat {"summary": ...} is
@@ -488,13 +507,33 @@ internal static class ConnectorProbe
             // somebody else's list. Neither reads as a bug.
             await Invoke(registry, "jira_my_open", new { });
 
-            failures += Check("my open tickets are scoped to the configured account",
-                server.LastQuery?.Contains("probe.user", StringComparison.Ordinal) == true,
+            failures += Check("my open tickets ask the server who I am",
+                server.LastQuery?.Contains("currentUser", StringComparison.Ordinal) == true,
                 server.LastQuery);
 
-            failures += Check("and the variable was expanded, not sent literally",
-                server.LastQuery?.Contains("JIRA_USER", StringComparison.Ordinal) == false,
+            failures += Check("and nothing but done is excluded, so a task still counts",
+                server.LastQuery?.Contains("statusCategory", StringComparison.Ordinal) == true
+                && server.LastQuery?.Contains("issuetype", StringComparison.Ordinal) != true,
                 server.LastQuery);
+
+            // The scope cannot be widened, and this is the check that matters most.
+            //
+            // As an overridable default it WAS widened: asked for "my open tickets", the model
+            // called this tool and passed a JQL of its own, and the answer came back listing
+            // everybody's. So the hostile value below is deliberately NOT a sensible filter --
+            // it stands in for "whatever a model might invent" -- and what the check asserts
+            // is that none of it reaches the server.
+            await Invoke(registry, "jira_my_open", new { jql = "assignee = someone.else" });
+
+            failures += Check("a fixed filter ignores a jql passed anyway",
+                server.LastQuery?.Contains("currentUser", StringComparison.Ordinal) == true
+                && server.LastQuery?.Contains("someone.else", StringComparison.Ordinal) != true,
+                server.LastQuery);
+
+            failures += Check("and the fixed parameter is not offered to the model",
+                registry.Find("jira_my_open")?.Function.JsonSchema.ToString()
+                    .Contains("\"jql\"", StringComparison.Ordinal) == false,
+                registry.Find("jira_my_open")?.Function.JsonSchema.ToString());
 
             // A missing required argument is refused before anything is sent.
             server.LastPath = null;
@@ -527,6 +566,9 @@ internal static class ConnectorProbe
             Environment.SetEnvironmentVariable("JIRA_URL", null);
             Environment.SetEnvironmentVariable("JIRA_USER", null);
             Environment.SetEnvironmentVariable("JIRA_PASSWORD", null);
+            Environment.SetEnvironmentVariable("JIRA_SERVICEDESK_URL", null);
+            Environment.SetEnvironmentVariable("JIRA_SERVICEDESK_USER", null);
+            Environment.SetEnvironmentVariable("JIRA_SERVICEDESK_PASSWORD", null);
         }
 
         Console.WriteLine();

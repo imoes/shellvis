@@ -86,6 +86,14 @@ public sealed partial class PillWindow
             SessionList.Items.Add(BuildRow(row));
     }
 
+    /// <summary>
+    /// Room kept clear on the right for the scrollbar.
+    ///
+    /// Sixteen, not fourteen: WinUI's expanded vertical scrollbar is about fourteen DIP and a
+    /// control that merely stops touching it is still a control you have to aim past.
+    /// </summary>
+    private const double ScrollbarLane = 16;
+
     private FrameworkElement BuildRow(AgentSession.SessionRow row)
     {
         SessionInfo info = row.Info;
@@ -94,7 +102,14 @@ public sealed partial class PillWindow
         {
             // Indentation carries the compaction lineage. Without it a compacted
             // conversation reads as several unrelated near-duplicates.
-            Margin = new Thickness(row.Depth * 14, 2, 0, 2),
+            //
+            // The right margin is the scrollbar's lane, and it was zero. WinUI's scrollbar
+            // sits ON the content rather than beside it and widens from a hairline to about
+            // fourteen pixels when the pointer nears it -- so the delete button, flush against
+            // that edge, was covered at the exact moment somebody reached for it. Reported as
+            // "the scrollbar is in the way when I want to delete a session", which is what an
+            // overlay scrollbar over a control looks like from the outside.
+            Margin = new Thickness(row.Depth * 14, 2, ScrollbarLane, 2),
             ColumnSpacing = 4,
         };
 

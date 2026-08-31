@@ -82,6 +82,21 @@ public sealed class ConnectorParameter
     public string? Default { get; set; }
 
     /// <summary>
+    /// Whether the value is fixed: always sent, never asked for, and not overridable.
+    ///
+    /// <b>Why a declared default is not enough.</b> A default is a suggestion. The model sees
+    /// the parameter in the schema, and a description saying "leave this alone" is advice it
+    /// is free to ignore -- which it did: asked for "my open tickets", it called the scoped
+    /// tool and passed a JQL of its own, and the answer came back listing everybody's. The
+    /// report was "I get all tickets when I ask for mine", and the fault was not the filter
+    /// but that the filter could be replaced.
+    ///
+    /// A fixed parameter is absent from the schema the model is given, so there is nothing to
+    /// override. That is the difference between a scope and a hint.
+    /// </summary>
+    public bool Fixed { get; set; }
+
+    /// <summary>
     /// The name the server expects, when it differs from the one the model sees.
     /// Dotted for a body field: <c>fields.summary</c>.
     /// </summary>

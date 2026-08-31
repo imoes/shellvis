@@ -385,7 +385,7 @@
 
                     <TextBox x:Name="HistorySearch"
                              Grid.Row="0"
-                             Margin="0,0,6,6"
+                             Margin="0,0,16,6"
                              FontSize="12"
                              PlaceholderText="Search past conversations" />
 
@@ -397,7 +397,7 @@
 
                     <Button x:Name="NewSessionButton"
                             Grid.Row="2"
-                            Margin="0,8,6,0"
+                            Margin="0,8,16,0"
                             HorizontalAlignment="Stretch"
                             FontSize="12"
                             Content="Start a new conversation" />

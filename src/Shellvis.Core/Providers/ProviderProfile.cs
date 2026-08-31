@@ -105,13 +105,18 @@ public static class ProviderCatalog
         BaseUrl: "http://localhost:8080/v1",
         ApiKeyEnvVar: null,
 
-        // Empty, and that is the correct value rather than a missing one. A llama.cpp server
-        // serves whatever model it was started with and ignores the field entirely, so there
-        // is no name to put here. It used to say "laguna" -- the provider's own id, which
-        // reads as a model name and is not one. Harmless against llama.cpp, and not harmless
-        // in a dialog: it was shown to a user in a box labelled Model while a completely
-        // different GGUF was answering.
-        DefaultModel: "",
+        // "local-model", which is what the llamacpp and lmstudio entries beside it already
+        // use. A llama.cpp server serves whatever it was started with and ignores this field,
+        // so the value only has to be honest about being a placeholder.
+        //
+        // It used to say "laguna" -- the provider's own id, which reads as a model name and is
+        // not one. Harmless against llama.cpp, and not harmless in a dialog: it was shown to
+        // a user in a box labelled Model while a completely different GGUF was answering.
+        //
+        // The first correction made it empty, which was worse: the harness caught it
+        // immediately, because a client cannot be built without a model at all. An
+        // established convention in the same file beat both of my inventions.
+        DefaultModel: "local-model",
         Quirks: ProviderQuirks.Default with { DefaultMaxTokens = 4096 },
         RequiresKey: false);
 

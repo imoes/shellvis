@@ -462,6 +462,12 @@ internal sealed class ConnectorFunction(HttpConnector connector, ConnectorTool t
 
         foreach (ConnectorParameter parameter in tool.Params)
         {
+            // A fixed parameter is not offered. That absence IS the mechanism: a value the
+            // model cannot see is a value it cannot replace, which is what makes "my open
+            // tickets" a scope rather than a suggestion.
+            if (parameter.Fixed)
+                continue;
+
             properties[parameter.Name] = new Dictionary<string, object>(StringComparer.Ordinal)
             {
                 ["type"] = "string",

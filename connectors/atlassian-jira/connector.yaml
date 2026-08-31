@@ -1,4 +1,10 @@
-# Jira and the IT service desk, as tools.
+# Jira, as tools.
+#
+# Jira only. Jira Service Management -- the service desk -- is a separate product with a
+# separate licence and a separate REST namespace, and on a self-hosted estate not necessarily
+# even the same host. It lives in connectors/atlassian-servicedesk and shares these
+# credentials by name, so an installation where both are the same Jira needs the password
+# entered once.
 #
 # Written for a SELF-HOSTED Jira (Data Center or Server), not for *.atlassian.net:
 #   - the API is /rest/api/2, not v3
@@ -15,10 +21,10 @@
 
 name: atlassian-jira
 kind: http
-title: Jira & Service Desk
+title: Jira
 description: >
-  Read, search, comment on and create Jira issues, and see service desk queues and
-  SLA deadlines.
+  Read, search, comment on and create Jira issues. The service desk queues and SLAs are a
+  separate product and a separate connector: atlassian-servicedesk.
 
 baseUrl: ${JIRA_URL}
 
@@ -91,25 +97,34 @@ tools:
     path: /rest/api/2/search
     effect: read
     description: >
-      MY open issues -- the ones assigned to the configured account. Use this, not
-      jira_search, whenever the question is about the user's own tickets ("what is still
-      open for me", "what am I working on"). It already filters by the account, so do not
-      add an assignee clause and do not pass a jql of your own.
+      MY open issues: everything assigned to the configured account that is not done, of
+      every issue type -- tasks, bugs, service requests and the rest are all tickets and all
+      included. Use this, not jira_search, whenever the question is about the user's own
+      work ("which tickets are open for me", "what am I working on"). The account filter is
+      fixed and cannot be widened from here.
     params:
       - name: jql
         in: query
-        # The configured account by NAME, not currentUser().
+        # FIXED, not merely defaulted, and that distinction is the whole point.
         #
-        # currentUser() is the documented way and it is the wrong choice here: on a
-        # self-hosted Jira reached with HTTP Basic it resolves against whatever the server
-        # thinks the session is, and a proxy or a service account in front of it turns "my
-        # tickets" into somebody else's -- silently, because an empty or foreign list is a
-        # valid answer. ${JIRA_USER} is the account the user themselves configured, which is
-        # the only definition of "me" this application can be sure of.
-        default: 'assignee = "${JIRA_USER}" AND statusCategory != Done ORDER BY priority DESC, updated DESC'
-        description: >
-          Leave this alone. It is already scoped to the configured account; replacing it
-          removes that scope.
+        # As a default it was overridable: the model called this tool for "my open tickets"
+        # and passed a JQL of its own, and the answer listed everybody's. A parameter the
+        # model cannot see is a parameter it cannot replace.
+        #
+        # currentUser(), which is what the server itself resolves for the authenticated
+        # account. I had argued for the configured name instead, on the theory that a proxy
+        # could make currentUser() mean somebody else; that was speculation, and the person
+        # who runs this installation reported the opposite from experience. It also has a
+        # concrete advantage the other form does not: it needs nothing configured, so "my
+        # tickets" works the moment the connector has an address and a password.
+        #
+        # If it ever does resolve to the wrong account, the alternative is the configured
+        # name: assignee = "${JIRA_USER}".
+        #
+        # No issue-type clause on purpose: an open task is a ticket too, and filtering by type
+        # is how a list of "my tickets" quietly loses half of them.
+        fixed: true
+        default: 'assignee = currentUser() AND statusCategory != Done ORDER BY priority DESC, updated DESC'
       - name: maxResults
         in: query
         default: "25"
@@ -139,70 +154,6 @@ tools:
       line: "{id}  {name} -> {to.name}"
       empty: "this issue offers no transitions to your account."
 
-  # ------------------------------------------------------- service desk
-
-  - name: jira_queues
-    method: GET
-    path: /rest/servicedeskapi/queues/{projectKey}
-    effect: read
-    preview: projectKey
-    description: The service desk queues of a project, with how many issues each holds.
-    headers:
-      X-ExperimentalApi: "true"
-    params:
-      - name: projectKey
-        in: path
-        required: true
-        description: The project key, for example IMIT.
-    result:
-      items: values
-      total: size
-      line: "{id}  {name}  ({issueCount} issues)"
-      empty: >
-        this project has no service desk queues, or the account cannot see them. A
-        project without the service desk enabled answers this way.
-
-  - name: jira_queue_issues
-    method: GET
-    path: /rest/servicedeskapi/queues/{projectKey}/{queueId}/issue
-    effect: read
-    preview: queueId
-    description: The issues waiting in one queue. Get the queue id from jira_queues.
-    headers:
-      X-ExperimentalApi: "true"
-    params:
-      - name: projectKey
-        in: path
-        required: true
-      - name: queueId
-        in: path
-        required: true
-      - name: limit
-        in: query
-        default: "25"
-    result:
-      items: values
-      total: size
-      line: "{key}  [{fields.status.name}]  {fields.summary}"
-      empty: "this queue is empty."
-
-  - name: jira_sla
-    method: GET
-    path: /rest/servicedeskapi/request/{key}/sla
-    effect: read
-    preview: key
-    description: >
-      The SLA clocks on one service desk request: what is running, what has breached and
-      when the next deadline falls. This is the call that answers "what runs out today".
-    params:
-      - name: key
-        in: path
-        required: true
-        description: The request key, such as IMIT-1234.
-    result:
-      items: values
-      line: "{name}: {ongoingCycle.remainingTime.friendly} remaining, breached={ongoingCycle.breached}, due {ongoingCycle.breachTime.friendly}"
-      empty: "this request carries no SLA, or it is already closed."
 
   # ---------------------------------------------------------------- writing
   #

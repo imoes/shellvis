@@ -83,6 +83,7 @@ internal static class GlyphProbe
         Check("the glyph constants were found at all", found > 0, $"{found} found");
 
         XamlComments(root, Check);
+        Shutdown(root, Check);
 
         Console.WriteLine(failures == 0
             ? $"\nVERIFIED: all {found} icon glyphs carry a character, written as an escape so\n"
@@ -142,6 +143,74 @@ internal static class GlyphProbe
         }
 
         check($"{files} XAML file(s) have comments XML accepts", true, string.Empty);
+    }
+
+    /// <summary>
+    /// Every step of the pill's shutdown is isolated.
+    ///
+    /// <b>The fault this guards against.</b> Closing the alert window was the one step in
+    /// <c>OnClosed</c> that ran unguarded, and it sat in the middle of the sequence. Anything
+    /// it threw escaped the Closed handler and abandoned everything after it -- by which point
+    /// the tray icon and the pill window were already gone, so the surviving windows held the
+    /// process open with nothing left on screen able to reach it. What the user sees is an
+    /// application that cannot be quit, and there is nothing in a log to look at, because the
+    /// console it would have written to was being torn down.
+    ///
+    /// A shutdown path is the one place where a later step must not depend on an earlier one
+    /// succeeding, and that property is invisible in review: the code reads perfectly well
+    /// with one unguarded line in it. So it is checked instead.
+    /// </summary>
+    private static void Shutdown(string root, Action<string, bool, string> check)
+    {
+        string file = Path.Combine(root, "src", "Shellvis.Shell", "Views", "PillWindow.xaml.cs");
+
+        if (!File.Exists(file))
+        {
+            check("the pill's shutdown path was found", false, file);
+            return;
+        }
+
+        string text = File.ReadAllText(file);
+        int start = text.IndexOf("private void OnClosed(", StringComparison.Ordinal);
+
+        if (start < 0)
+        {
+            check("OnClosed was found", false, "the method has been renamed; this check needs updating");
+            return;
+        }
+
+        // To the end of the method: the next line that is a closing brace at method indent.
+        int end = text.IndexOf("\n    }", start, StringComparison.Ordinal);
+        string body = end > start ? text[start..end] : text[start..];
+
+        int unguarded = 0;
+
+        foreach (string line in body.ReplaceLineEndings("\n").Split('\n'))
+        {
+            string code = line.Trim();
+
+            // Comments and the guard helper's own body are not steps.
+            if (code.StartsWith("//", StringComparison.Ordinal) || code.Contains("step()", StringComparison.Ordinal))
+                continue;
+
+            bool isTeardown = code.Contains(".Dispose()", StringComparison.Ordinal)
+                || code.Contains("Close();", StringComparison.Ordinal)
+                || code.Contains("CloseAnswerWindow", StringComparison.Ordinal)
+                || code.Contains("CloseStickies", StringComparison.Ordinal)
+                || code.Contains("CloseToast", StringComparison.Ordinal);
+
+            if (!isTeardown)
+                continue;
+
+            if (!code.Contains("Safe(", StringComparison.Ordinal))
+            {
+                unguarded++;
+                check($"a teardown step runs unguarded: {code}", false,
+                    "one throw here abandons the rest and leaves a process nothing can quit");
+            }
+        }
+
+        check("every shutdown step is isolated", unguarded == 0, string.Empty);
     }
 
     /// <summary>The repository root, found by the solution rather than by a fixed depth.</summary>

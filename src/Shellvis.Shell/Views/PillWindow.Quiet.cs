@@ -159,6 +159,23 @@ public sealed partial class PillWindow
     }
 
     /// <summary>
+    /// Close the alert window on the way out.
+    ///
+    /// The dwell timer is stopped first. It fires <see cref="ToastWindow.Dismiss"/>, which
+    /// touches the window -- and a timer that survives its window is a callback into something
+    /// that is being torn down. Cheap to prevent, and the kind of thing that only shows up as
+    /// an application that will not quit.
+    /// </summary>
+    private void CloseToast()
+    {
+        ToastWindow? toast = _toast;
+        _toast = null;
+
+        toast?.Dismiss();
+        toast?.Close();
+    }
+
+    /// <summary>
     /// Build the alert window before there is anything to say in it.
     ///
     /// <b>Eagerly, unlike the answer window, and for a reason that is not taste.</b> A WinUI

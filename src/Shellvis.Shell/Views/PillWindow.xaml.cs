@@ -697,31 +697,57 @@ public sealed partial class PillWindow : Window
         // lifecycle boundary is observable.
         Debug.WriteLine(ShellvisVoice.Farewell);
 
+        // EVERY step guarded, and independently.
+        //
+        // This was a bug, and a nasty one: closing the alert window was the single step here
+        // that ran unguarded, and it sat in the middle. Anything it threw escaped the Closed
+        // handler and abandoned the rest of the teardown -- so the tray icon was already gone,
+        // the pill window was gone, and the remaining windows kept the process alive with
+        // nothing left on screen able to reach it. The report was "you cannot quit Shellvis",
+        // and that is exactly what it looks like from outside.
+        //
+        // The lesson is structural rather than local: a shutdown path is the one place where
+        // a later step must not depend on an earlier one succeeding. Adding a try around the
+        // one offending line would have fixed today's fault and left the shape that produced
+        // it, so each step is now isolated by construction.
+        static void Safe(Action step)
+        {
+            try
+            {
+                step();
+            }
+            catch (Exception ex)
+            {
+                // Nowhere to report it: the console is being torn down. The debug log is the
+                // only listener left, and losing one step is far better than losing the rest.
+                Debug.WriteLine($"shutdown step failed: {ex}");
+            }
+        }
+
         // The GDI region outlives the managed window unless it is released here.
-        _shaper.Dispose();
+        Safe(() => _shaper.Dispose());
 
         // A hotkey left registered stays claimed system-wide until the process dies,
         // and the window subclass would call into collected code.
         // The tray icon goes first: an icon whose owner window has already gone leaves a
         // ghost in the notification area until the user hovers over it.
-        _tray?.Dispose();
-        _dictation?.Dispose();
-        _hotkey?.Dispose();
-        _spaceHook?.Dispose();
-        _session?.Dispose();
+        Safe(() => _tray?.Dispose());
+        Safe(() => _dictation?.Dispose());
+        Safe(() => _hotkey?.Dispose());
+        Safe(() => _spaceHook?.Dispose());
+        Safe(() => _session?.Dispose());
 
         // The answer window is a second top-level window and does not close with this one.
         // Left open, it keeps the process alive with no way left to reach it.
-        CloseAnswerWindow();
+        Safe(CloseAnswerWindow);
 
         // And the alert, for the same reason. It is a tool window with no taskbar button, so
         // one left behind would hold the process open with nothing on screen to close it.
-        _toast?.Close();
-        _toast = null;
+        Safe(CloseToast);
 
         // Same for the notes, and the distinction matters here: closing them is not
         // throwing them away, so what is stored is left exactly as it is.
-        CloseStickies();
+        Safe(CloseStickies);
     }
 
     // ---------------------------------------------------------------- transcript

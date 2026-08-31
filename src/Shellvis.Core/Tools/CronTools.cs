@@ -169,6 +169,100 @@ public sealed class CronTools(CronStore store, string executable)
     }
 
     [ShellvisTool(
+        "cron_edit",
+        SideEffect.AlwaysAsk,
+        Description =
+            "Change a scheduled job: its prompt, its schedule, or the skills it applies. Pass "
+            + "only what should change; anything left out keeps its current value. Changing "
+            + "the schedule re-registers the Windows task, so the new time takes effect "
+            + "without a restart. The name cannot be changed -- it is how Windows addresses "
+            + "the job; remove it and add it again under the new name.",
+        PreviewParameter = "name",
+        Glyph = "clock")]
+    public string Edit(string name, string? prompt = null, string? schedule = null, string? skills = null)
+    {
+        List<CronJob> jobs = [.. store.Load()];
+        int at = jobs.FindIndex(j => j.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+
+        if (at < 0)
+        {
+            return $"no job named '{name}'. Present: "
+                + (jobs.Count == 0 ? "none" : string.Join(", ", jobs.Select(j => j.Name)));
+        }
+
+        CronJob job = jobs[at];
+
+        if (prompt is null && schedule is null && skills is null)
+        {
+            // Refused rather than treated as a no-op. This tool asks the user for permission
+            // every time; spending that on a call that changes nothing teaches them to
+            // approve without reading, which is the cost that matters.
+            return $"nothing to change. '{job.Name}' currently runs "
+                + $"{job.Parsed?.Describe() ?? job.Schedule}: {Oneline(job.Prompt)}";
+        }
+
+        var changes = new List<string>();
+
+        if (prompt is { Length: > 0 })
+        {
+            job = job with { Prompt = prompt.Trim() };
+            changes.Add("prompt");
+        }
+
+        if (skills is not null)
+        {
+            job = job with { Skills = Split(skills) };
+            changes.Add(skills.Trim().Length == 0 ? "skills cleared" : "skills");
+        }
+
+        string taskNote = string.Empty;
+
+        if (schedule is { Length: > 0 })
+        {
+            if (!CronSchedule.TryParse(schedule, out CronSchedule? parsed, out string? problem))
+                return $"error: {problem} Nothing was changed.";
+
+            job = job with { Schedule = schedule.Trim() };
+            changes.Add($"schedule to {parsed!.Describe()}");
+
+            // The task has to follow the job, and BOTH outcomes have to be recorded on the
+            // job itself. A schedule Windows cannot express any more must take the task away
+            // and hand the timing back to the in-process loop -- otherwise the old task keeps
+            // firing on the old schedule while the job claims the new one, and the two
+            // disagree forever with nothing on screen saying so.
+            string message = "this build could not work out its own path";
+
+            if (!string.IsNullOrWhiteSpace(executable)
+                && WindowsTasks.TryCreate(job.Name, job.Schedule, executable, out message))
+            {
+                job = job with { WindowsTask = true };
+                taskNote = " Its Windows task was updated.";
+            }
+            else
+            {
+                if (job.WindowsTask)
+                {
+                    WindowsTasks.TryDelete(job.Name, out _);
+                    taskNote = $" Its Windows task was REMOVED ({message}); the new schedule "
+                        + "runs on the scheduler inside Shellvis, so only while Shellvis is open.";
+                }
+                else
+                {
+                    taskNote = $" No Windows task ({message}); it runs on the scheduler inside "
+                        + "Shellvis.";
+                }
+
+                job = job with { WindowsTask = false };
+            }
+        }
+
+        jobs[at] = job;
+        store.Save(jobs);
+
+        return $"changed {string.Join(", ", changes)} on '{job.Name}'.{taskNote}";
+    }
+
+    [ShellvisTool(
         "cron_remove",
         SideEffect.AlwaysAsk,
         Description =

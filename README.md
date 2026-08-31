@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.8.0-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.8.1-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -99,7 +99,7 @@ dictation, and the sentence "recognition runs on this machine" is not printed. K
 the DPAPI secret store or in `AZURE_SPEECH_KEY` / `GOOGLE_SPEECH_KEY`, never in `config.yaml`.
 Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 
-### 94 tools
+### 99 tools
 
 | Area | Tools |
 |---|---|
@@ -117,6 +117,7 @@ Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 | Thunderbird | five `mail_*` tools behind the same abstraction |
 | Browser | 15 `browser_*` tools |
 | Home Assistant | `ha_list_entities` `ha_get_state` `ha_list_services` `ha_call_service` |
+| Scheduler | `cron_list` `cron_add` `cron_edit` `cron_remove` `cron_enable` — each write registers or updates a real Windows task |
 | Connectors | `connector_list` `connector_install`, plus whatever the installed packages add |
 | Skills & memory | `skills_list` `skill_view` `skill_manage` `memory` |
 | Asking | `clarify` |
@@ -129,7 +130,7 @@ on the next start. Credentials are named, never held; only a `GET` can run witho
 and no package can shadow a built-in tool. Two ship with Shellvis, for a self-hosted Jira
 and Confluence. **[How to build one →](docs/connectors.md)**
 
-Eighty-two of them on a machine with no Home Assistant, no privileged service and no
+Eighty-seven of them on a machine with no Home Assistant, no privileged service and no
 Thunderbird. Home Assistant appears only when a token is configured, and the broker tools
 only when the service is actually listening. A tool that is offered is a promise; one that fails on first
 use costs a round and reads as a broken agent rather than as an unconfigured integration.

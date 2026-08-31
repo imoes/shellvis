@@ -6,6 +6,7 @@ using Shellvis.Core.Broker;
 using Shellvis.Core.Browser;
 using Shellvis.Core.Config;
 using Shellvis.Core.Connectors;
+using Shellvis.Core.Cron;
 using Shellvis.Core.HomeAssistant;
 using Shellvis.Core.Hooks;
 using Shellvis.Core.Mail;
@@ -223,6 +224,14 @@ internal sealed partial class AgentSession : IDisposable
         registry.RegisterFrom(new MemoryTools(memory));
 
         registry.RegisterFrom(new NoteTools(notes));
+
+        // Configuring the scheduler in words, because the alternative was hand-editing
+        // jobs.json in the right snake_case shape and restarting -- which is not a feature
+        // anybody has. Every write asks, and no mode waives that: a scheduled job is the one
+        // thing here that acts unattended, on a timer, indefinitely.
+        registry.RegisterFrom(new CronTools(
+            new CronStore(),
+            Environment.ProcessPath ?? string.Empty));
 
         IReadOnlyList<HookDefinition> hookDefinitions = HookLoader.Load(settings.Hooks, warnings);
 

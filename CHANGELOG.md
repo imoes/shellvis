@@ -4,6 +4,26 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.8.0
+
+- **Set up a schedule by saying so.** `cron_list`, `cron_add`, `cron_remove` and
+  `cron_enable` replace hand-editing a JSON file and restarting. Every write asks first, in
+  every permission mode, because a scheduled job is the one thing here that acts unattended,
+  on a timer, indefinitely — and a scheduled run cannot create jobs at all.
+- **A schedule is a real Windows task.** Shellvis registers it under `\Shellvis` in Task
+  Scheduler, calling itself with `--job <name>`. It therefore fires whether or not Shellvis
+  is open, it is visible and editable in a tool you already have, and a briefing due at
+  eight still happens if the machine was restarted at seven. Schedules Windows cannot
+  express exactly — a step, a list of hours, a day of the month — are refused rather than
+  approximated: those stay on the scheduler inside Shellvis, and it says so when it happens.
+- **Anything can ask Shellvis a question.** `Shellvis.Shell.exe --prompt "what is due today"`
+  lands in the running conversation, without raising a window over what you are doing. If a
+  Shellvis is already open the parameter is handed to *that* instance rather than starting a
+  second one — otherwise the answer would appear in a window you are not looking at. The
+  channel is a named pipe restricted to your own account.
+- **The docked bar has the history button.** It was missing, which meant undocking, finding
+  the conversation, and docking again. The bar grew by one button; the input field did not.
+
 ## 0.7.0
 
 - **A desktop alert when something is worth knowing.** Bottom right, above the tray, the way

@@ -1,6 +1,7 @@
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Shellvis.Core.Desktop;
 using Windows.Graphics;
@@ -54,15 +55,23 @@ public sealed partial class PillWindow
 
         _docked = true;
 
-        // The buttons that have no room in a 34px bar. The prompt box and the microphone
-        // stay, because dictating into a docked field is the main reason to have one -- and
-        // so does the console toggle: a docked bar is the state in which output is least
-        // visible, so being able to open the console from it matters more here than when the
-        // pill is floating with its full row of controls.
+        // What stays, and why each one earns its place on a 34px bar.
+        //
+        // The prompt box and the microphone: dictating into a docked field is the main reason
+        // to have one. The console toggle: docked is the state in which output is least
+        // visible, so reaching the log matters more here than when the pill floats with its
+        // full row. And the history, which was missing and was asked for -- a docked bar is
+        // also the state someone leaves Shellvis in for hours, which makes "what did I ask
+        // earlier" a question that arises HERE, and the alternative was to undock first, find
+        // the history, and dock again.
+        //
+        // What goes: attach, the mode pill and minimise. Attach and mode belong to composing
+        // a request at length, which is not what a taskbar field is for, and minimise is
+        // replaced by the expand arrow that undoes it.
         AttachButton.Visibility = Visibility.Collapsed;
-        HistoryButton.Visibility = Visibility.Collapsed;
         ModeButton.Visibility = Visibility.Collapsed;
         SparkleButton.Visibility = Visibility.Collapsed;
+        HistoryButton.Visibility = Visibility.Visible;
         ConsoleToggleButton.Visibility = Visibility.Visible;
         ExpandButton.Visibility = Visibility.Visible;
 
@@ -103,9 +112,14 @@ public sealed partial class PillWindow
             MicButton.Foreground = Brush("PillGlyphBrush");
             ExpandButton.Foreground = Brush("PillGlyphBrush");
 
-            ConsoleToggleButton.Width = 36;
-            ConsoleToggleButton.Height = 36;
-            ConsoleToggleButton.Foreground = Brush("PillGlyphBrush");
+            // Both back to the pill's size, and both of them: the history button is shrunk
+            // while docked too, so undocking has to undo the same thing twice.
+            foreach (Button button in new[] { ConsoleToggleButton, HistoryButton })
+            {
+                button.Width = 36;
+                button.Height = 36;
+                button.Foreground = Brush("PillGlyphBrush");
+            }
 
             return;
         }
@@ -140,11 +154,14 @@ public sealed partial class PillWindow
         MicButton.Foreground = Brush("DockedGlyph" + suffix);
         ExpandButton.Foreground = Brush("DockedGlyph" + suffix);
 
-        // Shrunk to fit the strip, like the microphone beside it. Left at 36 it would be
-        // taller than the 34px bar that contains it.
-        ConsoleToggleButton.Width = PillMetrics.DockedButton;
-        ConsoleToggleButton.Height = PillMetrics.DockedButton;
-        ConsoleToggleButton.Foreground = Brush("DockedGlyph" + suffix);
+        // Shrunk to fit the strip, like the microphone beside it. Left at 36 they would be
+        // taller than the 34px bar that contains them.
+        foreach (Button button in new[] { ConsoleToggleButton, HistoryButton })
+        {
+            button.Width = PillMetrics.DockedButton;
+            button.Height = PillMetrics.DockedButton;
+            button.Foreground = Brush("DockedGlyph" + suffix);
+        }
     }
 
     private static Brush Brush(string key) =>

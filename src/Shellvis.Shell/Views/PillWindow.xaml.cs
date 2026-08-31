@@ -361,7 +361,24 @@ public sealed partial class PillWindow : Window
         _clock.Stop();
 
         ConsoleHost.Height = _consoleTo;
+
+        // Once now, so the shape is never a frame stale, and once AFTER the layout pass.
+        //
+        // The second call is the one that matters, and its absence was a real defect. This
+        // method sets a height and asks for a region in the same breath, but ApplyRegion
+        // MEASURES the console rather than trusting the number -- deliberately, because a
+        // second calculation of the same layout eventually disagrees. At this instant the
+        // measurement still returns the previous frame's height, so the region was cut for a
+        // console two thirds open while the content was laid out for a fully open one. The
+        // panel grows upward, so what fell outside the region was its TOP: the history's
+        // search box and the first row of the list, reported as "the first line in the
+        // history is cut off".
+        //
+        // Nothing corrected it afterwards, because the SizeChanged handlers watch RootHost
+        // and PillHost, and neither of those changes size when the console opens.
         ApplyRegion(_consoleTo);
+        DispatcherQueue.TryEnqueue(() => ApplyRegion(ConsoleHost.Height));
+
         SpikeLog.Write($"settled at {_consoleTo:F0}");
     }
 
@@ -586,6 +603,11 @@ public sealed partial class PillWindow : Window
         // once and the focus has to end up here, not there.
         PrepareToast();
 
+        // And the channel a Windows task reaches this instance through. Started here rather
+        // than in the constructor so a task that fires during startup finds a window that is
+        // actually ready to show what it asked for.
+        StartErrandListener();
+
         PromptBox.Focus(FocusState.Programmatic);
         RegisterHotkey();
         RegisterHoldToTalk();
@@ -747,6 +769,7 @@ public sealed partial class PillWindow : Window
 
         // Same for the notes, and the distinction matters here: closing them is not
         // throwing them away, so what is stored is left exactly as it is.
+        Safe(StopErrandListener);
         Safe(CloseStickies);
     }
 

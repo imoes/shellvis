@@ -39,6 +39,7 @@ internal static class Program
                 "glyphs" => GlyphProbe.Run(),
                 "taskbar" => TaskbarProbe.Run(),
                 "notify" => NotifyProbe.Run(),
+                "schedule" => ScheduleProbe.Run(),
                 "connectors" => await ConnectorProbe.RunAsync().ConfigureAwait(false),
                 "jira" => await ConnectorProbe.RunAsync().ConfigureAwait(false),
                 "notes" => NoteProbe.Run(),
@@ -109,7 +110,7 @@ internal static class Program
     private static int Usage()
     {
         Console.WriteLine(
-            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | whisper [--fetch] | mic | topmost | connectors | taskbar | notify | speech | stream | officelive]");
+            "usage: probe [windows | tree [title] | drive | launch | reflect | remote | endpoint | audiobridge | tools | agent [baseUrl] [model] [task] | classify | office | outlook | mcp | config | skills | sessions | history | compaction | hass | browser [--headless] | providers | hooks | cron | broker | thunderbird | voice | whisper [--fetch] | mic | topmost | connectors | taskbar | notify | schedule | speech | stream | officelive]");
         return 2;
     }
 

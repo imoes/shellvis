@@ -68,6 +68,16 @@ internal sealed partial class AgentSession
     private void Post(Action action) => _dispatcher.TryEnqueue(() => action());
 
     /// <summary>
+    /// Run one job now, for a Windows task that asked for it by name.
+    ///
+    /// The same method the in-process scheduler uses, reached from outside. Sharing it is the
+    /// point: two paths that ran a job slightly differently would mean "it works when I run it
+    /// by hand" -- and the difference would be in the part nobody watches.
+    /// </summary>
+    internal Task<CronRunResult> RunScheduledJobAsync(CronJob job, CancellationToken cancellationToken) =>
+        RunJobAsync(job, cancellationToken);
+
+    /// <summary>
     /// Execute one job.
     ///
     /// Serialised against interactive turns through the same gate. Two loops sharing one

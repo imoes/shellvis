@@ -84,6 +84,7 @@ internal static class GlyphProbe
 
         XamlComments(root, Check);
         Shutdown(root, Check);
+        RowSpacing(root, Check);
 
         Console.WriteLine(failures == 0
             ? $"\nVERIFIED: all {found} icon glyphs carry a character, written as an escape so\n"
@@ -211,6 +212,51 @@ internal static class GlyphProbe
         }
 
         check("every shutdown step is isolated", unguarded == 0, string.Empty);
+    }
+
+    /// <summary>
+    /// The row spacing in C# still matches the one in the XAML.
+    ///
+    /// <b>Why a duplicated 6 is worth a check.</b> The docked bar's width is computed in
+    /// <c>PillMetrics</c> from the number of buttons on it, and each button costs its own
+    /// width plus one gap. The gap is declared in the XAML as <c>ColumnSpacing</c>, so the
+    /// arithmetic has to know that number -- and a constant that exists in two places drifts.
+    ///
+    /// What drift looks like here is worth stating, because it is not a crash: the docked
+    /// input field silently loses a few pixels every time a button is added to the bar. That
+    /// field is the reason the docked bar exists, and it has now been asked for twice.
+    /// </summary>
+    private static void RowSpacing(string root, Action<string, bool, string> check)
+    {
+        string cs = Path.Combine(root, "src", "Shellvis.Shell", "Views", "PillMetrics.cs");
+        string xaml = Path.Combine(root, "src", "Shellvis.Shell", "Views", "PillWindow.xaml");
+
+        if (!File.Exists(cs) || !File.Exists(xaml))
+        {
+            check("the pill's metrics and layout were found", false, string.Empty);
+            return;
+        }
+
+        Match declared = Regex.Match(
+            File.ReadAllText(cs), @"RowSpacing\s*=\s*(?<n>[0-9]+(\.[0-9]+)?)");
+
+        Match used = Regex.Match(
+            File.ReadAllText(xaml), @"ColumnSpacing\s*=\s*""(?<n>[0-9]+(\.[0-9]+)?)""");
+
+        if (!declared.Success || !used.Success)
+        {
+            check("row spacing is declared in both places", false,
+                $"C#: {declared.Success}, XAML: {used.Success}");
+
+            return;
+        }
+
+        string a = declared.Groups["n"].Value;
+        string b = used.Groups["n"].Value;
+
+        check($"PillMetrics.RowSpacing ({a}) matches the XAML ColumnSpacing ({b})",
+            a == b,
+            a == b ? string.Empty : "the docked field loses this difference for every button on the bar");
     }
 
     /// <summary>The repository root, found by the solution rather than by a fixed depth.</summary>

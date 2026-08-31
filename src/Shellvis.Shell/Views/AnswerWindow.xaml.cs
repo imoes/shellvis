@@ -151,10 +151,21 @@ public sealed partial class AnswerWindow : Window
             onLink: OnLink);
     }
 
-    /// <summary>Put the window beside the pill the first time, then leave it where it is.</summary>
+    /// <summary>
+    /// Put the window beside the pill the first time, then leave it where the user left it.
+    ///
+    /// <b>Except when the pill has moved to another monitor.</b> Placing once and never again
+    /// is right for a window the user drags around: re-centring it on every answer would undo
+    /// their arrangement. It is wrong across displays. On a two-monitor machine the pill can
+    /// be moved -- or docked -- to the other screen while this window stays on the one it was
+    /// born on, and then an answer is "revealed" somewhere the user is not looking. What that
+    /// looks like from the desk is an application that took the question and did nothing.
+    /// </summary>
     public void PlaceBeside(nint pillHandle)
     {
-        if (_placed)
+        _pillHandle = pillHandle;
+
+        if (_placed && SharesDisplayWithPill())
             return;
 
         _placed = true;
@@ -178,6 +189,36 @@ public sealed partial class AnswerWindow : Window
     }
 
     private bool _placed;
+
+    /// <summary>The pill, so a later reveal can check it is still on the same screen.</summary>
+    private nint _pillHandle;
+
+    /// <summary>Whether this window and the pill are on the same monitor.</summary>
+    private bool SharesDisplayWithPill()
+    {
+        if (_pillHandle == 0)
+            return true;
+
+        try
+        {
+            DisplayArea mine = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
+
+            DisplayArea theirs = DisplayArea.GetFromWindowId(
+                Win32Interop.GetWindowIdFromWindow(_pillHandle), DisplayAreaFallback.Nearest);
+
+            // Compared by work area rather than by identity: DisplayArea instances are not
+            // reference-equal between calls, and the rectangle is what actually matters here.
+            return mine.WorkArea.X == theirs.WorkArea.X
+                && mine.WorkArea.Y == theirs.WorkArea.Y;
+        }
+        catch (Exception)
+        {
+            // A handle that has gone, or a display that was just unplugged. Treating it as
+            // "same screen" keeps the window where the user put it, which is the safer of
+            // the two mistakes.
+            return true;
+        }
+    }
 
     /// <summary>Whether the caption frame has been taken off yet. See Reveal.</summary>
     private bool _trimmed;

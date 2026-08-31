@@ -29,7 +29,8 @@ public sealed record CronJob(
     string? Model = null,
     bool Enabled = true,
     DateTimeOffset? LastRun = null,
-    string? LastResult = null)
+    string? LastResult = null,
+    bool WindowsTask = false)
 {
     /// <summary>
     /// The parsed schedule, or null when it does not parse.

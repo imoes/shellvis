@@ -142,6 +142,16 @@ public sealed class CronScheduler(
         if (!job.Enabled)
             return false;
 
+        // Windows owns this one's timing. Running it here as well would run it twice on any
+        // machine where Shellvis happens to be open at the moment the task fires -- two
+        // briefings, two sets of notifications, and a user who cannot tell which is which.
+        //
+        // Checked from a flag on the job rather than by asking Task Scheduler: this runs on
+        // a timer, and launching a process per tick to ask a question whose answer changes
+        // only when someone edits a job is the wrong trade.
+        if (job.WindowsTask)
+            return false;
+
         CronSchedule? schedule = job.Parsed;
 
         if (schedule is null)

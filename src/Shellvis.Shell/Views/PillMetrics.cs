@@ -67,18 +67,31 @@ internal static class PillMetrics
     public const double DockedButton = 26;
 
     /// <summary>
+    /// Space between controls in the pill's row.
+    ///
+    /// Must match the <c>ColumnSpacing</c> on the grid in PillWindow.xaml. It is named here
+    /// because the docked width has to account for it: a button added to the row costs its
+    /// own width AND one more gap, and forgetting the gap is how the field loses six pixels
+    /// nobody can explain.
+    /// </summary>
+    public const double RowSpacing = 6;
+
+    /// <summary>
     /// Width of the docked bar.
     ///
-    /// Narrower than the pill, because the docked mode drops three of the six buttons and a
+    /// Narrower than the pill, because the docked mode drops several of the buttons and a
     /// pill-width bar next to the taskbar's own search field looks like a mistake.
     ///
-    /// The console toggle's footprint is ADDED rather than taken out of the field: the bar
-    /// grew by exactly one button when the console toggle was put back on it, so the input
-    /// field is the same size docked as it was before. Squeezing the field instead would
-    /// have been invisible in the code and obvious in use -- the field is the reason the
-    /// docked bar exists.
+    /// <b>Every button's footprint is ADDED here rather than taken out of the field.</b> The
+    /// bar grew by exactly one button when the console toggle was put on it, and by another
+    /// when the history button followed, so the input field is the same width through all of
+    /// it. Squeezing the field instead would be invisible in the code and obvious in use --
+    /// the field is the reason the docked bar exists, and it has been asked for twice.
     /// </summary>
-    public const double DockedWidth = 320 + DockedButton + 2;
+    public const double DockedWidth =
+        320                             // the field
+        + DockedButton + 2              // the console toggle
+        + DockedButton + RowSpacing;    // the history button
 
     /// <summary>Half of <see cref="DockedHeight"/>, so the docked bar is a stadium too.</summary>
     public const double DockedRadius = DockedHeight / 2;

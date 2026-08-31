@@ -84,10 +84,6 @@
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
-                    <!-- The settings button. A column of its own, and the bar was widened by
-                         exactly one button to pay for it: the input field does not give up
-                         pixels for a control. -->
-                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <Button x:Name="AttachButton"
@@ -160,27 +156,8 @@
                         Content="auto"
                         ToolTipService.ToolTip="How much Shellvis may do without asking" />
 
-                <!-- Settings, and the reason it exists is worth writing down.
-
-                     There are ninety-nine tools and were six buttons. Connectors, the
-                     scheduler and the sticky notes were reachable only by saying the right
-                     sentence, which meant they were reachable only by somebody who already
-                     knew they existed. The question arrived three times. "Where do I
-                     configure the connectors", "where is the scheduler", "where are the
-                     sticky notes". The honest answer each time was "you ask it", which
-                     is not an answer for a thing with a window.
-
-                     So: one gear, one menu, and the menu is a table of contents rather than
-                     a settings page. It makes nothing new possible; it makes what exists
-                     findable. -->
-                <Button x:Name="SettingsButton"
-                        Grid.Column="4"
-                        Style="{StaticResource PillIconButtonStyle}"
-                        Content="&#xE713;"
-                        ToolTipService.ToolTip="Settings: connectors, model, scheduled jobs, notes" />
-
                 <Button x:Name="ConsoleToggleButton"
-                        Grid.Column="5"
+                        Grid.Column="4"
                         Style="{StaticResource PillIconButtonStyle}"
                         Content="&#xE70D;"
                         ToolTipService.ToolTip="Show console" />
@@ -189,7 +166,7 @@
                      is dropped while docked: at 26px on a taskbar it reads as a stray
                      coloured blob rather than an accent. -->
                 <Border x:Name="MicBackdrop"
-                        Grid.Column="6"
+                        Grid.Column="5"
                         Width="38"
                         Height="38"
                         CornerRadius="19"
@@ -207,7 +184,7 @@
                      standard minimise chevron rather than the old star, because a star
                      that minimises is a worse button than an unlabelled one. -->
                 <Button x:Name="SparkleButton"
-                        Grid.Column="7"
+                        Grid.Column="6"
                         Style="{StaticResource PillIconButtonStyle}"
                         Content="&#xE921;"
                         ToolTipService.ToolTip="Minimise to the taskbar" />
@@ -216,7 +193,7 @@
                      full pill back. Shares the last column with the sparkle button,
                      which is hidden in that mode. -->
                 <Button x:Name="ExpandButton"
-                        Grid.Column="7"
+                        Grid.Column="6"
                         Visibility="Collapsed"
                         Style="{StaticResource PillIconButtonStyle}"
                         Content="&#xE70E;"
@@ -259,11 +236,43 @@
                 <Grid Grid.Row="0" Margin="0,0,0,6" ColumnSpacing="4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
+                        <!-- Settings, beside the model chip. -->
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+
+                    <!-- Settings, and the reason it exists is worth writing down.
+
+                         There are ninety-nine tools and six buttons. Connectors, the
+                         scheduler and the sticky notes were reachable only by saying the
+                         right sentence, which meant reachable only by somebody who already
+                         knew they existed. The question arrived three times: where do I
+                         configure the connectors, where is the scheduler, where are the
+                         sticky notes. The honest answer each time was "you ask it", which is
+                         not an answer for an application with a window.
+
+                         It sits in the console header rather than on the bar, which is where
+                         it started. Two reasons: the bar's width belongs to the input field,
+                         and settings is a rare act, unlike the permission mode that has to be
+                         legible at all times. It is beside the model chip because that chip
+                         is the one thing here already understood to be a configuration
+                         control. -->
+                    <Button x:Name="SettingsButton"
+                            Grid.Column="1"
+                            Width="26"
+                            Height="22"
+                            Padding="0"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="12"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            VerticalAlignment="Center"
+                            Foreground="{ThemeResource ConsoleMutedBrush}"
+                            Content="&#xE713;"
+                            ToolTipService.ToolTip="Connectors, scheduled jobs, notes and where things live" />
 
                     <!-- The model, in the slot the word "Console" used to occupy.
                          A panel labelled with what it obviously is tells the reader
@@ -294,7 +303,7 @@
                             ToolTipService.ToolTip="Choose and configure the model" />
 
                     <TextBlock x:Name="StatusText"
-                               Grid.Column="1"
+                               Grid.Column="2"
                                HorizontalAlignment="Right"
                                Margin="0,0,6,0"
                                FontSize="11"
@@ -320,7 +329,7 @@
                          is 720 wide and every button on it comes out of the input field.
                          Disabled until there is an answer to come back to. -->
                     <Button x:Name="AnswerButton"
-                            Grid.Column="2"
+                            Grid.Column="3"
                             Width="26"
                             Height="22"
                             Padding="0"
@@ -333,7 +342,7 @@
                             ToolTipService.ToolTip="Show the answer" />
 
                     <Button x:Name="CollapseButton"
-                            Grid.Column="3"
+                            Grid.Column="4"
                             Width="26"
                             Height="22"
                             Padding="0"
@@ -345,7 +354,7 @@
                             ToolTipService.ToolTip="Hide the console" />
 
                     <Button x:Name="CloseButton"
-                            Grid.Column="4"
+                            Grid.Column="5"
                             Width="26"
                             Height="22"
                             Padding="0"

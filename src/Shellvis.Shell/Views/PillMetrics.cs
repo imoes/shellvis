@@ -23,11 +23,12 @@ internal static class PillMetrics
     /// it WOULD have been at 460 with no buttons at all (430 DIP), with the buttons still
     /// there. 430 + 30 padding + 36 spacing + 223 buttons = 719.
     ///
-    /// <b>+42 for the settings button</b>, which is 36 of button and 6 of the gap beside it.
-    /// Added to the bar rather than taken out of the field, which is the rule this file has
-    /// now been asked for three times: the field is why the bar exists.
+    /// It went up by one button when the settings gear was put on the bar, and back down when
+    /// the gear moved into the console header where it belongs. The rule survived both moves
+    /// and is the one this file exists to hold: a control is paid for by the bar, never by the
+    /// input field.
     /// </summary>
-    public const double Width = 720 + 36 + RowSpacing;
+    public const double Width = 720;
 
     /// <summary>Collapsed height, and the basis for the corner radius.</summary>
     public const double PillHeight = 64;

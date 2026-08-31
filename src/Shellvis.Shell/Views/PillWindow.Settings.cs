@@ -35,19 +35,21 @@ public sealed partial class PillWindow
         AddConnectorItems(menu);
 
         menu.Items.Add(new MenuFlyoutSeparator());
+        Header(menu, "The assistant");
 
-        Add(menu, "Model and endpoint...", () => _ = ConfigureProviderAsync(_session?.Provider.Id));
+        Add(menu, "   Model and endpoint...", () => _ = ConfigureProviderAsync(_session?.Provider.Id));
 
         AddScheduleItems(menu);
 
-        menu.Items.Add(new MenuFlyoutSeparator());
+        Add(menu, "   Sticky notes on the desktop", () => AskSelf("was klebt gerade auf dem Desktop?"));
 
-        Add(menu, "Sticky notes on the desktop", () => AskSelf("was klebt gerade auf dem Desktop?"));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Header(menu, "Where things live");
 
         // The two places, opened rather than described. A path in a sentence is something the
         // reader has to copy out; a menu item is something they can press.
-        Add(menu, "Open Task Scheduler", () => Open("taskschd.msc"));
-        Add(menu, "Open the Shellvis folder", () => Open(ShellvisPaths.Home));
+        Add(menu, "   Open Task Scheduler", () => Open("taskschd.msc"));
+        Add(menu, "   Open the Shellvis folder", () => Open(ShellvisPaths.Home));
 
         menu.ShowAt(SettingsButton);
     }
@@ -62,13 +64,27 @@ public sealed partial class PillWindow
     /// </summary>
     private void AddConnectorItems(MenuFlyout menu)
     {
+        // A heading, because the entries alone did not answer the question.
+        //
+        // The first version listed each connector under its own title -- "Jira & Service
+        // Desk", "Confluence" -- and the report was that the connectors were MISSING from the
+        // menu. They were not missing; nothing said what they were. Somebody looking for
+        // "connectors" reads two product names and moves on. A disabled first item costs one
+        // line and turns a list of things into a labelled group.
+        Header(menu, "Connectors");
+
         IReadOnlyList<ConnectorNeeds> connectors = _session?.ConnectorNeeds() ?? [];
 
         if (connectors.Count == 0)
         {
+            // The two cases are not the same and the menu must not conflate them: a session
+            // that is still warming up will have connectors in a moment, and an installation
+            // with none needs telling where they go.
             menu.Items.Add(new MenuFlyoutItem
             {
-                Text = "No connectors installed",
+                Text = _session is null
+                    ? "   still starting..."
+                    : "   none installed",
                 IsEnabled = false,
             });
 
@@ -80,10 +96,21 @@ public sealed partial class PillWindow
             string label = needs.Title is { Length: > 0 } title ? title : needs.Name;
 
             Add(menu,
-                needs.Ready ? $"{label} — configured" : $"{label} — not configured",
+                needs.Ready ? $"   {label} — configured" : $"   {label} — not configured...",
                 () => _ = ConfigureConnectorReportAsync(needs.Name));
         }
     }
+
+    /// <summary>
+    /// A group heading: a disabled item, which is what a MenuFlyout has instead of headers.
+    /// </summary>
+    private static void Header(MenuFlyout menu, string text) =>
+        menu.Items.Add(new MenuFlyoutItem
+        {
+            Text = text,
+            IsEnabled = false,
+            FontSize = 11,
+        });
 
     private async Task ConfigureConnectorReportAsync(string name)
     {
@@ -109,8 +136,8 @@ public sealed partial class PillWindow
 
         Add(menu,
             jobs.Count == 0
-                ? "Scheduled jobs — none yet"
-                : $"Scheduled jobs — {jobs.Count}",
+                ? "   Scheduled jobs — none yet"
+                : $"   Scheduled jobs — {jobs.Count}",
             () => AskSelf("welche Jobs sind eingerichtet?"));
     }
 

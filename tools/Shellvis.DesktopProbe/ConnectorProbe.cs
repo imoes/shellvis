@@ -363,13 +363,32 @@ internal static class ConnectorProbe
             failures += Check($"{name} carries no credential", ConnectorLoader.FindCredential(text) is null);
 
             var registry = new ToolRegistry();
-            ConnectorStatus status = new ConnectorLoader(registry).Load(file);
+            var loader = new ConnectorLoader(registry);
+            ConnectorStatus status = loader.Load(file);
 
             // Unconfigured is the expected answer on a build machine. What must not happen
             // is a refusal or a parse error, and those read differently.
             bool acceptable = status.Ready || status.Detail.Contains("not configured", StringComparison.Ordinal);
 
             failures += Check($"{name} is a valid manifest", acceptable, acceptable ? null : status.Detail);
+
+            // An UNCONFIGURED connector must still be listable, and this is the check that
+            // matters for the settings menu: a connector that registers no tools used to
+            // vanish entirely, which is precisely the state in which somebody needs to find
+            // it in order to configure it.
+            IReadOnlyList<ConnectorNeeds> needs = loader.Needs();
+
+            failures += Check($"{name} appears in Needs() even unconfigured",
+                needs.Any(n => n.Name.Equals(status.Name, StringComparison.OrdinalIgnoreCase)),
+                string.Join(", ", needs.Select(n => n.Name)));
+
+            if (needs.FirstOrDefault(n => n.Name.Equals(status.Name, StringComparison.OrdinalIgnoreCase))
+                is { } one)
+            {
+                failures += Check($"{name} says which variables it wants",
+                    one.Variables.Count > 0,
+                    $"{one.Variables.Count} variables");
+            }
         }
 
         Console.WriteLine();

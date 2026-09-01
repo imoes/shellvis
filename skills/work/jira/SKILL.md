@@ -27,6 +27,47 @@ assignee clause of your own; do not pass a JQL to `jira_my_open`.
 tickets" spans both: call `jira_my_open` *and* `servicedesk_my_open`, and say which came from
 where. Answering from one of them is answering half the question.
 
+### How to present a list of tickets
+
+Always a table, always these columns, always in this order:
+
+| Ticket | Status | Titel | Zusammenfassung |
+|---|---|---|---|
+| [JCUE-5915](https://example/browse/JCUE-5915) | In Arbeit | Massive CUE-Performanceprobleme | Seit dem Update auf 3.4 braucht der Seitenaufbau über 20 s; betrifft die ganze Redaktion, Workaround ist der alte Client. |
+
+Not a bullet list. A list of sixteen tickets with the status and priority folded into
+parentheses is unreadable and cannot be scanned down one column, which is the entire reason
+to show a list at all. The shape above is what the reader asked for; do not improvise
+another.
+
+**Titel and Zusammenfassung are two different fields, and this is the mistake to avoid.**
+Jira's `summary` is the *title* — one line, usually typed in a hurry by whoever raised the
+ticket. Repeating it under the heading "Zusammenfassung" tells the reader nothing they could
+not read one column to the left. The summary is written from the **description**, which the
+tools now return as `about:` on each line:
+
+- **Titel** is the `title:` part, verbatim.
+- **Zusammenfassung** is *your* one or two sentences from the `about:` part: what is actually
+  wrong or wanted, and for whom. Condense it — do not paste the wiki markup back out, and do
+  not simply cut the description off mid-word.
+- If a ticket has no description at all, the Zusammenfassung is a dash. Say nothing rather
+  than inventing a plausible sentence; a made-up summary of somebody's ticket is worse than
+  an empty cell.
+
+Everything else about the shape:
+
+- **The key is a link, and the tools already made it one.** They return
+  `[JCUE-5915](https://…/browse/JCUE-5915)`; put that in the Ticket column exactly as it came.
+  Never retype a key as plain text, never drop the brackets, and never invent a URL for one
+  the tools did not give you. A ticket number that cannot be opened makes the reader search
+  for it by hand, which is most of the work the list was supposed to save.
+- **A missing value is a dash**, not an empty cell and not the word "null".
+- **Escape any `|` inside a cell as `\|`**, or the row breaks into the wrong columns.
+- Priority and due date are worth a sentence under the table when they matter — overdue and
+  `Kritisch` first — rather than two more columns that squeeze the summary to nothing.
+- Group by status with a heading and a count above each table when there are more than about
+  ten, and say the total first.
+
 # Working Jira and the service desk
 
 These rules are not style. Each one is here because the obvious approach fails against a

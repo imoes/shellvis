@@ -76,7 +76,7 @@ tools:
     result:
       items: values
       total: size
-      line: "{key}  [{fields.status.name}]  {fields.summary}"
+      line: "[{key}](${JIRA_SERVICEDESK_URL}/browse/{key})  [{fields.status.name}]  {fields.summary}"
       empty: "this queue is empty."
 
   - name: servicedesk_sla
@@ -126,11 +126,11 @@ tools:
         default: "25"
       - name: fields
         in: query
-        default: "summary,status,priority,assignee,created,updated"
+        default: "summary,status,priority,assignee,created,updated,description"
     result:
       items: issues
       total: total
-      line: "{key}  [{fields.status.name}]  {fields.priority.name}  {fields.summary}  ({fields.assignee.displayName})"
+      line: "[{key}](${JIRA_SERVICEDESK_URL}/browse/{key})  [{fields.status.name}]  {fields.priority.name}  ({fields.assignee.displayName})  title: {fields.summary}  about: {fields.description|220}"
       empty: >
         no tickets match that JQL. That is the answer. If a match was expected, remember that
         status names are localised: use statusCategory != Done.
@@ -144,6 +144,14 @@ tools:
       done, of every type. An open task is a ticket too. Use this rather than
       servicedesk_search when the question is about the user's own work; the account filter is
       fixed and cannot be widened from here.
+      Present the result as a Markdown table with exactly these four columns:
+      Ticket | Status | Titel | Zusammenfassung -- the same shape as the Jira list, under its
+      own heading, because the two are separate products and mixing them into one table hides
+      which system a ticket is in.
+      Ticket is the [KEY](url) link exactly as returned. Titel is the "title:" part verbatim.
+      Zusammenfassung is YOUR OWN one-sentence summary of the "about:" part, and a dash when
+      there is no "about:" text; never repeat the title there. Escape any | inside a cell as
+      \|. No greeting, no invented names.
     params:
       - name: jql
         in: query
@@ -158,11 +166,11 @@ tools:
         default: "25"
       - name: fields
         in: query
-        default: "summary,status,priority,duedate,updated"
+        default: "summary,status,priority,duedate,updated,description"
     result:
       items: issues
       total: total
-      line: "{key}  [{fields.status.name}]  {fields.priority.name}  {fields.summary}"
+      line: "[{key}](${JIRA_SERVICEDESK_URL}/browse/{key})  [{fields.status.name}]  {fields.priority.name}  title: {fields.summary}  about: {fields.description|220}"
       empty: "nothing on the service desk is assigned to you and still open."
 
   - name: servicedesk_issue

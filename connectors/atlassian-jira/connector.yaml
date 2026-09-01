@@ -62,12 +62,14 @@ tools:
         description: How many issues to return. 25 by default.
       - name: fields
         in: query
-        default: "summary,status,priority,assignee,duedate,updated"
+        default: "summary,status,priority,assignee,duedate,updated,description"
         description: Which fields to fetch. Fewer fields, faster answer.
     result:
       items: issues
       total: total
-      line: "{key}  [{fields.status.name}]  {fields.priority.name}  {fields.summary}  ({fields.assignee.displayName})"
+      # The key is a link. ${JIRA_URL} is resolved from the configuration before the {…}
+      # placeholders are filled from the response, so the package never holds the address.
+      line: "[{key}](${JIRA_URL}/browse/{key})  [{fields.status.name}]  {fields.priority.name}  ({fields.assignee.displayName})  title: {fields.summary}  about: {fields.description|220}"
       empty: >
         no issues match that JQL. That is the answer. If it was expected to match, check
         the project key and remember that status names are localised -- use
@@ -96,12 +98,23 @@ tools:
     method: GET
     path: /rest/api/2/search
     effect: read
+    # The presentation rule is IN THE TOOL DESCRIPTION, not only in the skill, and that is
+    # deliberate. A skill reaches the prompt as a name and one line; its body arrives only
+    # when the model calls skill_view, and asked a plain question like "what is still open"
+    # a local model answers straight from the tool result without ever loading it. A tool
+    # description, by contrast, is in front of the model every time the tool is.
     description: >
       MY open issues: everything assigned to the configured account that is not done, of
       every issue type -- tasks, bugs, service requests and the rest are all tickets and all
       included. Use this, not jira_search, whenever the question is about the user's own
       work ("which tickets are open for me", "what am I working on"). The account filter is
       fixed and cannot be widened from here.
+      Present the result as a Markdown table with exactly these four columns:
+      Ticket | Status | Titel | Zusammenfassung.
+      Ticket is the [KEY](url) link exactly as returned. Titel is the "title:" part verbatim.
+      Zusammenfassung is YOUR OWN one-sentence summary of the "about:" part -- what is
+      actually wrong or wanted -- and a dash when there is no "about:" text; never repeat
+      the title there. Escape any | inside a cell as \|. No greeting, no invented names.
     params:
       - name: jql
         in: query
@@ -130,11 +143,20 @@ tools:
         default: "25"
       - name: fields
         in: query
-        default: "summary,status,priority,duedate,updated"
+        # description is fetched, and it costs something, so here is why.
+        #
+        # summary is the TITLE -- one line, often written by whoever raised the ticket in a
+        # hurry ("Drucker geht nicht"). Presented as a summary it tells the reader nothing
+        # they could not guess from the key. The description is the body, and one clipped
+        # sentence of it is the difference between a list of names and a list you can
+        # actually triage from.
+        default: "summary,status,priority,duedate,updated,description"
     result:
       items: issues
       total: total
-      line: "{key}  [{fields.status.name}]  {fields.priority.name}  due {fields.duedate}  {fields.summary}"
+      # title: and about: are labelled on purpose -- unlabelled, the model cannot tell which
+      # of two sentences is the headline and puts the wrong one in the wrong column.
+      line: "[{key}](${JIRA_URL}/browse/{key})  [{fields.status.name}]  {fields.priority.name}  due {fields.duedate}  title: {fields.summary}  about: {fields.description|220}"
       empty: "nothing is assigned to you that is still open."
 
   - name: jira_transitions

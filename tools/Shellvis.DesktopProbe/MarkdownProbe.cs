@@ -169,6 +169,15 @@ internal static class MarkdownProbe
         MarkdownDocument escaped = MarkdownParser.Parse("Ein literaler \\*Stern\\* bleibt stehen.");
         Check("a backslash escape yields the character",
             Plain(escaped).Contains("*Stern*", StringComparison.Ordinal), Plain(escaped));
+
+        // The pipe, which a model escapes because a table cell containing one would otherwise
+        // split the row. It reached a real answer as "FTP Server \| Update" -- the backslash
+        // visible on screen -- because the escape set had every special character except the
+        // one that tables are made of.
+        MarkdownDocument pipe = MarkdownParser.Parse(@"FTP Server \| Update");
+        Check("an escaped pipe loses its backslash",
+            Plain(pipe).Contains("FTP Server | Update", StringComparison.Ordinal)
+            && !Plain(pipe).Contains('\\'), Plain(pipe));
         Check("and does not open emphasis",
             Spans(escaped).All(s => !s.Has(SpanStyle.Emphasis)));
 

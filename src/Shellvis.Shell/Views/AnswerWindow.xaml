@@ -54,13 +54,25 @@
                             ToolTipService.ToolTip="Close (the answer button on the pill brings it back)" />
                 </Grid>
 
+                <!-- HorizontalScrollMode="Disabled" is the load-bearing attribute, and its
+                     absence was a real defect.
+
+                     HorizontalScrollBarVisibility only hides the BAR. With the scroll mode
+                     still enabled, a ScrollViewer measures its content with infinite width,
+                     so the RichTextBlock sized itself to its longest line instead of to the
+                     viewport: text wrapped at some width of its own choosing and the right
+                     third of the window stayed empty. Worse, the renderer asks the same
+                     control for ActualWidth to decide how wide a table may be, so the table
+                     was clamped to that wrong number too. -->
                 <ScrollViewer x:Name="Scroller"
                               Grid.Row="1"
                               Padding="14,0,14,14"
                               VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
+                              HorizontalScrollBarVisibility="Disabled"
+                              HorizontalScrollMode="Disabled">
 
                     <RichTextBlock x:Name="Body"
+                                   HorizontalAlignment="Stretch"
                                    IsTextSelectionEnabled="True"
                                    TextWrapping="Wrap" />
                 </ScrollViewer>

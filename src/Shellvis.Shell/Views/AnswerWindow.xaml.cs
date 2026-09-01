@@ -175,8 +175,13 @@ public sealed partial class AnswerWindow : Window
 
         DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
 
-        int width = (int)Math.Round(560 * scale);
-        int height = (int)Math.Round(420 * scale);
+        // 720, not 560. The window stopped being resizable when it gained a rounded
+        // silhouette, so its width is now the only width it will ever have -- and 560 is too
+        // narrow for what actually arrives in it. A Jira listing is five columns of key,
+        // status, priority, due date and a sentence; at 560 the sentence had nowhere to go.
+        // 720 matches the pill above it, which is also what makes the pair look deliberate.
+        int width = (int)Math.Round(720 * scale);
+        int height = (int)Math.Round(460 * scale);
 
         // Above the pill and its console, centred on the same monitor. Not overlapping it:
         // the log and the document are meant to be readable at the same time, which is the

@@ -394,7 +394,13 @@ public static class MarkdownParser
             char c = text[i];
 
             // A backslash escape, so a model that means a literal asterisk can say so.
-            if (c == '\\' && i + 1 < text.Length && "*_`~\\[]".Contains(text[i + 1]))
+            //
+            // The pipe is in the set because of tables: a cell containing one has to escape
+            // it or the row splits there, so "FTP Server \| Update" is correct Markdown and
+            // was reaching the screen with the backslash still in it. It is escaped even
+            // outside a table, because a model that has learned the habit does not drop it
+            // when the same sentence appears in a bullet.
+            if (c == '\\' && i + 1 < text.Length && "*_`~\\[]|".Contains(text[i + 1]))
             {
                 buffer.Append(text[i + 1]);
                 i++;

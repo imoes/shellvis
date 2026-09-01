@@ -331,6 +331,26 @@ internal static class ConnectorProbe
             "an unresolved placeholder does not survive into the answer",
             !missing.Contains("{fields", StringComparison.Ordinal));
 
+        // A list line that carries a description has to clip it hard, or twenty-five tickets
+        // are a page of context. The same field without a limit stays long, because fetching
+        // one issue is exactly when the whole text is wanted.
+        string prose = new('x', 400);
+
+        string clipped = ResultShaper.Shape(
+            "{\"key\":\"IMIT-9\",\"fields\":{\"description\":\"" + prose + "\"}}",
+            new ConnectorResult { Line = "{key} about: {fields.description|60}" },
+            "jira_my_open");
+
+        failures += Check("a placeholder limit clips", clipped.Length is > 60 and < 100);
+        failures += Check("and says that it did", clipped.EndsWith("...", StringComparison.Ordinal));
+
+        string unclipped = ResultShaper.Shape(
+            "{\"key\":\"IMIT-9\",\"fields\":{\"description\":\"" + prose + "\"}}",
+            new ConnectorResult { Line = "{key} {fields.description}" },
+            "jira_issue");
+
+        failures += Check("without one, the ordinary limit still applies", unclipped.Length > 300);
+
         Console.WriteLine();
         return failures;
     }
@@ -442,6 +462,17 @@ internal static class ConnectorProbe
 
             failures += Check("the count leads the answer", search.StartsWith("2 result(s):", StringComparison.Ordinal), search);
             failures += Check("the key leads the line", search.Contains("IMIT-1", StringComparison.Ordinal));
+
+            // The key is a link, and the address comes from the configuration rather than from
+            // the package. A ticket number that cannot be opened sends the reader off to search
+            // for it by hand, which is most of the work the list was meant to save.
+            failures += Check("the key is a link to the real installation",
+                search.Contains($"[IMIT-1]({server.BaseUrl}/browse/IMIT-1)", StringComparison.Ordinal),
+                search);
+
+            failures += Check("and the address was resolved, not left as a variable",
+                search.Contains("JIRA_URL", StringComparison.Ordinal) == false,
+                search);
 
             failures += Check("the basic header is built from the named variables",
                 server.LastAuthorization == "Basic " + Convert.ToBase64String(

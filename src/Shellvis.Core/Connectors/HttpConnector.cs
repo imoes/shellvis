@@ -227,7 +227,34 @@ public sealed class HttpConnector : IDisposable
         if (!response.IsSuccessStatusCode)
             return Failure(response, text);
 
-        return ResultShaper.Shape(text, tool.Result, tool.Name);
+        return ResultShaper.Shape(text, Resolve(tool.Result), tool.Name);
+    }
+
+    /// <summary>
+    /// Expand <c>${VAR}</c> in the line template, so a result can carry a real link.
+    ///
+    /// <b>Why the template needs the variables at all.</b> A ticket key is only useful if you
+    /// can open it, and the address of the installation is exactly the thing a manifest is
+    /// forbidden to contain. Expanding here lets a line be written as
+    /// <c>[{key}](${JIRA_URL}/browse/{key})</c>: the <c>${...}</c> half is resolved from the
+    /// configuration, the <c>{...}</c> half from the response, and neither the package nor
+    /// the model has to know the host.
+    ///
+    /// The two syntaxes cannot collide -- one requires the dollar -- which is why this can run
+    /// before the shaper without touching its placeholders.
+    /// </summary>
+    private static ConnectorResult? Resolve(ConnectorResult? result)
+    {
+        if (result?.Line is not { Length: > 0 } line || !line.Contains("${", StringComparison.Ordinal))
+            return result;
+
+        return new ConnectorResult
+        {
+            Items = result.Items,
+            Line = Expand(line),
+            Empty = result.Empty,
+            Total = result.Total,
+        };
     }
 
     private string Failure(HttpResponseMessage response, string body)

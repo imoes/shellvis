@@ -170,10 +170,26 @@ public static class ResultShaper
             }
 
             string path = template[(i + 1)..close];
+            int max = MaxValue;
+
+            // "{fields.description|160}" -- the same path, clipped harder.
+            //
+            // Needed the moment a list line carries prose. A description is the field that
+            // says what a ticket is ABOUT, as opposed to what it is called, so a list without
+            // it is a list of headlines; but twenty-five descriptions at the ordinary limit
+            // is a page of context spent on a single question. A per-placeholder limit lets
+            // one line be a sentence while the same field, fetched on its own, stays whole.
+            if (path.LastIndexOf('|') is > 0 and int bar
+                && int.TryParse(path[(bar + 1)..], CultureInfo.InvariantCulture, out int limit)
+                && limit > 0)
+            {
+                max = limit;
+                path = path[..bar];
+            }
 
             // Left empty rather than printed as {fields.status.name}: a placeholder that
             // survives into the answer teaches the model that the template is data.
-            sb.Append(Render(Dig(item, path)));
+            sb.Append(Render(Dig(item, path), max));
 
             i = close;
         }
@@ -206,16 +222,16 @@ public static class ResultShaper
     }
 
     /// <summary>One value as text, with arrays summarised rather than dumped.</summary>
-    private static string Render(JsonNode? node) => node switch
+    private static string Render(JsonNode? node, int max = MaxValue) => node switch
     {
         null => string.Empty,
-        JsonValue value => Clip(value.ToString(), MaxValue),
+        JsonValue value => Clip(value.ToString(), max),
         JsonArray array when array.Count == 0 => string.Empty,
 
         // A nested array is named and counted. Expanding it inline is how a single line
         // becomes a paragraph and a list becomes unreadable.
         JsonArray array => string.Create(CultureInfo.InvariantCulture, $"[{array.Count} items]"),
-        JsonObject obj => Clip(obj.ToJsonString(), MaxValue),
+        JsonObject obj => Clip(obj.ToJsonString(), max),
         _ => string.Empty,
     };
 

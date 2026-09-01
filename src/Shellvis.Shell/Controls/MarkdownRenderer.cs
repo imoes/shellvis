@@ -97,7 +97,7 @@ internal static class MarkdownRenderer
                     break;
 
                 case MarkdownBlock.Table table:
-                    target.Blocks.Add(RenderTable(table, palette, available));
+                    target.Blocks.Add(RenderTable(table, palette, target));
                     break;
 
                 case MarkdownBlock.Rule:
@@ -114,6 +114,56 @@ internal static class MarkdownRenderer
         // paragraph keeps the row's height while a streamed answer is still empty.
         if (target.Blocks.Count == 0)
             target.Blocks.Add(new Paragraph());
+
+        // Give the tables the width, now and again after every layout.
+        //
+        // Re-subscribed rather than subscribed once, because Render is called for every
+        // streamed delta and the handlers would otherwise stack up by the hundred.
+        target.SizeChanged -= OnSizeChanged;
+        target.SizeChanged += OnSizeChanged;
+
+        StretchTables(target);
+    }
+
+    /// <summary>Marks the grids that <see cref="StretchTables"/> owns.</summary>
+    private const string TableTag = "markdown-table";
+
+    private static void OnSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (sender is RichTextBlock block)
+            StretchTables(block);
+    }
+
+    /// <summary>
+    /// Make every table in <paramref name="target"/> exactly as wide as the flow.
+    ///
+    /// <b>Why a handler and not a binding.</b> A table needs a definite width: an
+    /// InlineUIContainer measures its child unbounded, and with no width of its own a table
+    /// comes out as wide as its cells happen to be -- which is how a list of tickets ended up
+    /// occupying two thirds of the window with the rest blank. Reading ActualWidth while
+    /// rendering gives a value one layout pass old, and binding to ActualWidth does not help
+    /// either: it is a dependency property that never raises a change, so the binding reads
+    /// once and then goes quiet. SizeChanged is the notification that actually exists.
+    /// </summary>
+    private static void StretchTables(RichTextBlock target)
+    {
+        if (target.ActualWidth <= 40)
+            return;
+
+        foreach (Block block in target.Blocks)
+        {
+            if (block is not Paragraph paragraph)
+                continue;
+
+            foreach (Inline inline in paragraph.Inlines)
+            {
+                if (inline is InlineUIContainer { Child: Grid grid }
+                    && grid.Tag as string == TableTag)
+                {
+                    grid.Width = target.ActualWidth;
+                }
+            }
+        }
     }
 
     /// <summary>Everything a block needs to draw itself, so it is passed once rather than six times.</summary>
@@ -251,19 +301,86 @@ internal static class MarkdownRenderer
     /// table cannot be swept with the cursor along with the prose around it. Worth it, and
     /// the cell text can still be read.
     /// </summary>
-    private static Paragraph RenderTable(MarkdownBlock.Table table, Palette palette, double available)
+    /// <summary>
+    /// How much of the width each column should get, from how much text it holds.
+    ///
+    /// <b>The square root, not the length itself.</b> A ticket table has a key of ten
+    /// characters beside a summary of a hundred and twenty; shared out in proportion, the
+    /// key gets 55 pixels and breaks in half while the summary takes three quarters of the
+    /// row and does not need it. Text that wraps does not need width in proportion to its
+    /// length -- it needs enough to make a readable paragraph -- so the curve is flattened.
+    /// On that same table the key ends up around 85 pixels and the summary around 300,
+    /// which is what a person would have chosen.
+    /// </summary>
+    private static double[] Weights(MarkdownBlock.Table table, int columns)
+    {
+        var longest = new int[columns];
+
+        Measure(table.Header);
+
+        foreach (MarkdownRow row in table.Rows)
+            Measure(row);
+
+        var weights = new double[columns];
+
+        for (int i = 0; i < columns; i++)
+            weights[i] = Math.Sqrt(Math.Clamp(longest[i], 3, 400));
+
+        return weights;
+
+        void Measure(MarkdownRow row)
+        {
+            for (int i = 0; i < columns && i < row.Cells.Count; i++)
+            {
+                int length = row.Cells[i].Inlines.Sum(span => span.Text.Length);
+
+                if (length > longest[i])
+                    longest[i] = length;
+            }
+        }
+    }
+
+    private static Paragraph RenderTable(MarkdownBlock.Table table, Palette palette, RichTextBlock target)
     {
         var grid = new Grid
         {
-            Margin = new Thickness(2, 4, 0, 6),
+            Margin = new Thickness(0, 4, 0, 6),
             ColumnSpacing = 14,
             RowSpacing = 2,
         };
 
+        // Tagged so the size-changed handler can find it again. The width itself is not set
+        // here: see StretchTables.
+        grid.Tag = TableTag;
+
         int columns = table.Header.Cells.Count;
+        double[] weights = Weights(table, columns);
 
         for (int i = 0; i < columns; i++)
-            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        {
+            // Every column is a SHARE of the width. None of them is auto, and that is the
+            // correction to the previous two attempts.
+            //
+            // First the grid went into a horizontal ScrollViewer, which did nothing: an
+            // InlineUIContainer measures its child unbounded, so the viewer sized itself to
+            // the table and clipped in the same place. Then the columns were auto with the
+            // last one star -- and with five columns that failed loudly: the four auto ones
+            // claimed the whole fixed width between them, the star column was left zero, and
+            // its dates wrapped to one character per line. Rows 264 pixels tall, three
+            // columns pushed off the right-hand edge.
+            //
+            // Shares cannot do that. They always sum to exactly the width available, so no
+            // column can starve another, and the long prose column simply wraps.
+            grid.ColumnDefinitions.Add(new ColumnDefinition
+            {
+                Width = new GridLength(weights[i], GridUnitType.Star),
+
+                // A floor, so a column of short values still shows its heading. Twelve
+                // columns would need 528 of the ~690 available, which still fits; beyond
+                // that the table is unreadable at this size whatever is done to it.
+                MinWidth = 44,
+            });
+        }
 
         for (int i = 0; i < table.Rows.Count + 2; i++)
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -289,30 +406,7 @@ internal static class MarkdownRenderer
             AddRow(grid, table.Rows[r], table.Alignment, palette, line: r + 2, bold: false);
 
         var block = new Paragraph();
-
-        // Wide content scrolls; it does not get cut off.
-        //
-        // An InlineUIContainer measures its child with unbounded width, so Auto columns grow
-        // to whatever the widest cell needs -- and then the RichTextBlock clips whatever
-        // exceeded its own width. Silently: no scrollbar, no ellipsis, just a table with its
-        // right-hand columns missing. A Jira listing is exactly the shape that triggers it
-        // (key, status, priority, summary, assignee), and it was reported as "the lines are
-        // cut off".
-        //
-        // MaxWidth is what makes the ScrollViewer useful. Without it the viewer is measured
-        // unbounded too, grows with the table, and clips at the same place -- a scroll viewer
-        // that is wider than its parent scrolls nothing.
-        var viewer = new ScrollViewer
-        {
-            Content = grid,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollMode = ScrollMode.Enabled,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalScrollMode = ScrollMode.Disabled,
-            MaxWidth = available,
-        };
-
-        block.Inlines.Add(new InlineUIContainer { Child = viewer });
+        block.Inlines.Add(new InlineUIContainer { Child = grid });
 
         return block;
     }

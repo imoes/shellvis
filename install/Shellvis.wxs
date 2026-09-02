@@ -1,52 +1,60 @@
 <?xml version="1.0" encoding="utf-8"?>
 
 <!--
-  Shellvis installer authoring, for both variants.
+  Shellvis installer authoring. ONE package, and the scope is chosen while it runs.
 
-  WHY TWO PACKAGES FROM ONE FILE. Windows Installer fixes the install scope at BUILD time:
-  a package is either per-user or per-machine, and nothing about it can be switched while it
-  runs. So "pick the variant you want" cannot be a checkbox inside one .msi. It is two
-  packages, built from this one source with the PerUser switch, so the two cannot drift:
+  WHAT THIS FILE USED TO SAY, AND WHY IT WAS WRONG. It said Windows Installer fixes the
+  install scope at BUILD time, so "pick the variant you want" could not be a checkbox
+  inside one .msi, and it therefore built two packages from one source. That is not true.
+  MSI 4.5 has Single Package Authoring: a package with ALLUSERS=2 and MSIINSTALLPERUSER
+  installs per-user or per-machine depending on what the session sets, and the install-scope
+  page of WixUI_Advanced sets it from what the user picked. Verified before this was
+  written: Scope="perUserOrMachine" through WiX 5.0.2 produces exactly those two
+  properties in the built package.
 
-    Shellvis-<version>-user.msi     %LOCALAPPDATA%\Programs\Shellvis, no elevation
-    Shellvis-<version>-machine.msi  %ProgramFiles%\Shellvis, elevation, service optional
+  So there is one download, and the choice is a page in the installer:
 
-  WHY THE SERVICE IS A FEATURE AND NOT A SECOND PACKAGE. Inside the machine variant the
-  broker genuinely is optional: the application works without it and reports elevated
-  operations as unavailable. That is a feature selection, which is what Windows Installer
-  features are for, and it means one package covers "machine-wide" and "machine-wide with
-  privileged operations" without a third build.
+    per user     %LOCALAPPDATA%\Programs\Shellvis, no elevation, no service
+    per machine  %ProgramFiles%\Shellvis, elevation, the broker service selectable
 
-  NO CUSTOM ACTIONS, anywhere. The one thing that would have needed native code is the
-  installing user's SID, which the broker's pipe ACL grants: Windows Installer exposes the
-  user's NAME as [LogonUser] and never their SID. The broker resolves the name itself, so
-  the package stays declarative, and a package with no custom actions cannot fail in a
-  way that leaves a half-installed machine behind.
+  WHY THE SERVICE IS A FEATURE AND NOT A SECOND PACKAGE. The broker genuinely is optional:
+  the application works without it and reports elevated operations as unavailable. That is a
+  feature selection, which is what Windows Installer features are for. It is also why the
+  scope choice and the service choice are two questions and not one; a service running as
+  LocalSystem cannot exist in a per-user installation at all, so that feature switches
+  itself off when the user picks per-user rather than offering something impossible.
+
+  NO CUSTOM ACTIONS OF OUR OWN, and the qualifier is new. Nothing here runs code: the one
+  thing that would have needed native code is the installing user's SID, which the broker's
+  pipe ACL grants, and Windows Installer exposes the user's NAME as [LogonUser] and never
+  their SID. The broker resolves the name itself.
+
+  What the file cannot claim any more is that the PACKAGE contains no custom actions at all.
+  The scope choice needs three, and every one of them is a type 51 SetProperty: it writes a
+  property and does nothing else. No code of ours runs during an installation, which is the
+  property that actually matters; a package that cannot leave a half-installed machine behind
+  is still the point, and setting a property cannot.
 -->
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
      xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
 
-  <?ifdef PerUser ?>
-    <?define ScopeName = "perUser" ?>
-    <?define PackageSuffix = " (this user)" ?>
-    <!--
-      A distinct UpgradeCode per variant, on purpose. Sharing one would make the two
-      packages upgrades OF EACH OTHER, so installing the machine variant would silently
-      uninstall a per-user copy that is running, and vice versa. They are different
-      products that happen to share a name.
-    -->
-    <?define UpgradeGuid = "7A5C1E64-6C1F-4A83-9E5B-1D4F8B2A0C11" ?>
-  <?else ?>
-    <?define ScopeName = "perMachine" ?>
-    <?define PackageSuffix = " (all users)" ?>
-    <?define UpgradeGuid = "2F91B0D7-45AE-4C36-8B0E-9C7A6E5D3F22" ?>
-  <?endif ?>
+  <!--
+    A NEW UpgradeCode, because the product this replaces was two products. The two old
+    packages had a code each, deliberately, so that installing one would not silently
+    uninstall the other. A single package inherits neither cleanly, and a cross-context major
+    upgrade (a per-user install removing a per-machine one, or the reverse) is exactly the
+    sort of half-completed thing this package avoids everywhere else. So both old codes are
+    detected below and the install stops with a sentence instead.
+  -->
+  <?define UpgradeGuid = "C4E7A2B9-3D18-4F5A-8E6C-0B9D71F4A238" ?>
+  <?define LegacyUserGuid = "7A5C1E64-6C1F-4A83-9E5B-1D4F8B2A0C11" ?>
+  <?define LegacyMachineGuid = "2F91B0D7-45AE-4C36-8B0E-9C7A6E5D3F22" ?>
 
-  <Package Name="Shellvis$(PackageSuffix)"
+  <Package Name="Shellvis"
            Manufacturer="imoes"
            Version="$(Version)"
            UpgradeCode="$(UpgradeGuid)"
-           Scope="$(ScopeName)"
+           Scope="perUserOrMachine"
            Compressed="yes">
 
     <!--
@@ -56,6 +64,24 @@
     -->
     <MajorUpgrade DowngradeErrorMessage="A newer version of Shellvis is already installed. Uninstall it first if you really want [ProductVersion]." />
 
+    <!--
+      The two packages this one replaces, detected rather than upgraded.
+      Removing them from here would mean a per-user session uninstalling a per-machine
+      product or the reverse, which Windows Installer does not do reliably across contexts.
+      A refusal with a sentence is worth more than an upgrade that works four times out of
+      five and leaves a service registered on the fifth.
+    -->
+    <Upgrade Id="$(LegacyUserGuid)">
+      <UpgradeVersion Property="LEGACYUSER" Minimum="0.0.0" IncludeMinimum="yes" OnlyDetect="yes" />
+    </Upgrade>
+
+    <Upgrade Id="$(LegacyMachineGuid)">
+      <UpgradeVersion Property="LEGACYMACHINE" Minimum="0.0.0" IncludeMinimum="yes" OnlyDetect="yes" />
+    </Upgrade>
+
+    <Launch Condition="NOT LEGACYUSER AND NOT LEGACYMACHINE"
+            Message="An older Shellvis is installed as a separate product (the -user or -machine package). Uninstall it from Apps &amp; features first, then run this installer; your settings under %USERPROFILE%\.shellvis are not touched by either step." />
+
     <MediaTemplate EmbedCab="yes" />
 
     <Icon Id="ShellvisIcon" SourceFile="$(Stage)\Shellvis.Shell.exe" />
@@ -64,7 +90,75 @@
 
     <!-- The licence has to be shown, not merely shipped: it is AGPL-3.0. -->
     <WixVariable Id="WixUILicenseRtf" Value="License.rtf" />
+
+    <!--
+      WixUI_FeatureTree, and the scope page is authored here rather than borrowed.
+
+      WixUI_Advanced was tried first, because it ships an install-scope page. It puts that page
+      behind an "Advanced" button, and the main "Install" button starts the installation
+      immediately: measured twice, pressing Install ran three dialogs (welcome, progress, exit)
+      and the choice never appeared, which is exactly the complaint that came back from the
+      person installing it.
+
+      Routing the button was tried and does not work. A NewDialog published at Ordering 0 for
+      both Install buttons does land in the package's ControlEvent table, and Windows Installer
+      still ran the built-in EndDialog at Ordering 2 instead: MSI treats an ordering of 0 as
+      unspecified, and there is no ordering below 1 to claim. Fighting a foreign dialog set for
+      the first click is not a thing to leave in a package.
+
+      So the choice is a page of our own, inserted where every user passes through it. This
+      file already authors a dialog for the speech model; a second one is the same idiom, and
+      the sequencing below is on the main path by construction rather than by override.
+    -->
     <ui:WixUI Id="WixUI_FeatureTree" />
+
+    <!--
+      The scope, as the user picked it. Secure="yes" so an unattended install can set it too:
+      msiexec /i Shellvis.msi SCOPE=machine
+
+      "user" is the default because it needs no elevation and touches nothing outside the
+      profile. Note that on a managed desktop it may also be the choice that does not RUN:
+      Defender's rule against low-prevalence executables blocks an unsigned binary under
+      %LOCALAPPDATA%, and %ProgramFiles% is outside what that rule looks at. Measured on the
+      machine this was built on, with a byte-identical binary allowed from one path and blocked
+      from the other, which is worth knowing when choosing.
+    -->
+    <Property Id="SCOPE" Value="user" Secure="yes" />
+
+    <!--
+      The whole mechanism of Single Package Authoring is one property, and WHEN it is set
+      matters as much as what it is set to.
+
+      ALLUSERS stays at 2, which is what Scope="perUserOrMachine" put there. MSIINSTALLPERUSER
+      is the switch: 1 means per-user, empty means per-machine. ALLUSERS must NOT be rewritten;
+      doing that is how a dual-purpose package ends up half in one context and half in the
+      other.
+
+      The switch is thrown by the SCOPE PAGE, not by a scheduled action, and that is the second
+      thing this got wrong. A SetProperty scheduled before LaunchConditions runs before any
+      dialog has appeared, so it can only ever see the default; the same goes for the install
+      folder, because CostFinalize in the UI sequence runs before the dialogs too. Both are
+      therefore published from the page's Next button, which is also how the toolset's own
+      scope dialog does it.
+
+      What remains here is the SILENT path, which has no dialogs at all. There the caller
+      supplies MSIINSTALLPERUSER on the command line and this maps it to the folder, in the
+      execute sequence where it is the only thing that runs. It agrees with the page rather
+      than fighting it: if the page chose per-machine the property is empty and this does
+      nothing.
+    -->
+    <SetProperty Id="INSTALLFOLDER" Value="[LocalAppDataFolder]Programs\Shellvis"
+                 Before="CostFinalize" Sequence="execute" Condition="MSIINSTALLPERUSER" />
+
+    <!--
+      WixUISupportPerUser and WixUISupportPerMachine are NOT set here, and neither is
+      WIXUI_INSTALLDIR. All three already exist inside WixUI_Advanced: the support flags as
+      virtual WixVariables defaulting to 1, which is what "offer both" means, and the install
+      directory as a property pointing at INSTALLFOLDER. Redeclaring them is a link
+      error, not a redundancy, so the absence is deliberate: both scopes are offered because
+      nothing switched one off.
+    -->
+
 
     <!--
       Which speech model dictation should use.
@@ -83,6 +177,50 @@
     <Property Id="WHISPERMODEL" Value="medium" Secure="yes" />
 
     <UI>
+      <!--
+        The choice, on the main path. Between the licence and the feature tree, because the
+        feature tree's contents DEPEND on it: the broker service exists in one scope and not
+        in the other, so asking about features first would offer something that then vanishes.
+      -->
+      <Dialog Id="ScopeDlg" Width="370" Height="270" Title="[ProductName] Setup">
+        <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
+                 TabSkip="no" Text="WixUI_Bmp_Banner" />
+        <Control Id="BannerLine" Type="Line" X="0" Y="44" Width="370" Height="0" />
+        <Control Id="BottomLine" Type="Line" X="0" Y="234" Width="370" Height="0" />
+
+        <Control Id="Title" Type="Text" X="15" Y="6" Width="220" Height="15" Transparent="yes"
+                 NoPrefix="yes" Text="{\WixUI_Font_Title}Who is this installation for?" />
+
+        <Control Id="Description" Type="Text" X="25" Y="23" Width="330" Height="15"
+                 Transparent="yes" NoPrefix="yes"
+                 Text="This decides where Shellvis goes and whether the broker can run." />
+
+        <Control Id="ScopeGroup" Type="RadioButtonGroup" X="20" Y="58" Width="330" Height="130"
+                 Property="SCOPE">
+          <RadioButtonGroup Property="SCOPE">
+            <RadioButton Value="user" X="0" Y="0" Width="325" Height="40"
+                         Text="Just for me. Installs into my profile, needs no administrator, and cannot register the broker service. On a managed machine, note that security policy may refuse to run programs from a profile folder." />
+
+            <RadioButton Value="machine" X="0" Y="48" Width="325" Height="40"
+                         Text="For everyone on this machine. Installs into Program Files, needs administrator rights once, and can register the broker service so the elevated tools work." />
+          </RadioButtonGroup>
+        </Control>
+
+        <Control Id="Note" Type="Text" X="20" Y="196" Width="330" Height="30"
+                 Text="Either way your settings, notes and sessions stay in %USERPROFILE%\.shellvis and are untouched by installing or uninstalling." />
+
+        <Control Id="Back" Type="PushButton" X="180" Y="243" Width="56" Height="17"
+                 Text="!(loc.WixUIBack)" />
+
+        <Control Id="Next" Type="PushButton" X="236" Y="243" Width="56" Height="17"
+                 Default="yes" Text="!(loc.WixUINext)" />
+
+        <Control Id="Cancel" Type="PushButton" X="304" Y="243" Width="56" Height="17"
+                 Cancel="yes" Text="!(loc.WixUICancel)">
+          <Publish Event="SpawnDialog" Value="CancelDlg" />
+        </Control>
+      </Dialog>
+
       <Dialog Id="WhisperDlg" Width="370" Height="270" Title="[ProductName] Setup">
         <Control Id="BannerBitmap" Type="Bitmap" X="0" Y="0" Width="370" Height="44"
                  TabSkip="no" Text="WixUI_Bmp_Banner" />
@@ -133,6 +271,54 @@
         the surrounding dialogs carry a higher Order than the ones WixUI_FeatureTree
         publishes, which is how a built-in dialog set is extended without forking it.
       -->
+      <!--
+        The two inserted pages, in the order a person meets them:
+
+          LicenseAgreementDlg -> ScopeDlg -> CustomizeDlg -> WhisperDlg -> VerifyReadyDlg
+
+        The overrides on the built-in dialogs carry a higher Order than the ones
+        WixUI_FeatureTree publishes, which is how a built-in dialog set is extended without
+        forking it. Order matters and 0 does not work: MSI treats an ordering of 0 as
+        unspecified, which is what defeated the earlier attempt to route WixUI_Advanced's
+        Install button.
+      -->
+      <Publish Dialog="LicenseAgreementDlg" Control="Next" Event="NewDialog" Value="ScopeDlg"
+               Condition="LicenseAccepted = &quot;1&quot;" Order="10" />
+
+      <Publish Dialog="ScopeDlg" Control="Back" Event="NewDialog" Value="LicenseAgreementDlg" />
+
+      <!--
+        Next does four things, in this order, and every one of them has to be here rather than
+        in a scheduled action: a dialog is the only place that runs after the user has chosen.
+
+        1 and 2 throw the per-user switch and pick the matching folder.
+        3 re-costs the directory. Without SetTargetPath the property changes and the directory
+          table does not, so the files go where the default said and only the registry entries
+          follow the choice.
+        4 moves on, last, because a NewDialog ends the dialog and anything after it is lost.
+      -->
+      <Publish Dialog="ScopeDlg" Control="Next" Property="MSIINSTALLPERUSER" Value="1"
+               Condition="SCOPE = &quot;user&quot;" Order="1" />
+
+      <Publish Dialog="ScopeDlg" Control="Next" Property="MSIINSTALLPERUSER" Value="{}"
+               Condition="SCOPE &lt;&gt; &quot;user&quot;" Order="1" />
+
+      <Publish Dialog="ScopeDlg" Control="Next" Property="INSTALLFOLDER"
+               Value="[LocalAppDataFolder]Programs\Shellvis"
+               Condition="SCOPE = &quot;user&quot;" Order="2" />
+
+      <Publish Dialog="ScopeDlg" Control="Next" Property="INSTALLFOLDER"
+               Value="[ProgramFiles64Folder]Shellvis"
+               Condition="SCOPE &lt;&gt; &quot;user&quot;" Order="2" />
+
+      <Publish Dialog="ScopeDlg" Control="Next" Event="SetTargetPath" Value="INSTALLFOLDER"
+               Order="3" />
+
+      <Publish Dialog="ScopeDlg" Control="Next" Event="NewDialog" Value="CustomizeDlg"
+               Order="4" />
+
+      <Publish Dialog="CustomizeDlg" Control="Back" Event="NewDialog" Value="ScopeDlg" Order="10" />
+
       <Publish Dialog="CustomizeDlg" Control="Next" Event="NewDialog" Value="WhisperDlg" Order="10" />
       <Publish Dialog="WhisperDlg" Control="Back" Event="NewDialog" Value="CustomizeDlg" />
       <Publish Dialog="WhisperDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
@@ -140,17 +326,16 @@
     </UI>
 
 
-    <?ifdef PerUser ?>
-      <StandardDirectory Id="LocalAppDataFolder">
-        <Directory Id="ProgramsFolder" Name="Programs">
-          <Directory Id="INSTALLFOLDER" Name="Shellvis" />
-        </Directory>
-      </StandardDirectory>
-    <?else ?>
-      <StandardDirectory Id="ProgramFiles64Folder">
-        <Directory Id="INSTALLFOLDER" Name="Shellvis" />
-      </StandardDirectory>
-    <?endif ?>
+    <!--
+      One directory id, resolved at RUN time rather than at build time.
+      WixUI_Advanced owns INSTALLFOLDER: its install-scope page sets ALLUSERS and then
+      points INSTALLFOLDER at WixPerUserFolder or WixPerMachineFolder accordingly. The
+      literal parent below is only the default before that page runs; it is not where a
+      per-user installation ends up.
+    -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Shellvis" />
+    </StandardDirectory>
 
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="ShortcutFolder" Name="Shellvis" />
@@ -174,15 +359,25 @@
       <ComponentGroupRef Id="SetupChoiceComponents" />
     </Feature>
 
-    <?ifndef PerUser ?>
-      <Feature Id="BrokerService"
-               Title="Privileged broker service"
-               Description="Registers the broker as a LocalSystem service, which is what makes elevated operations available. Leave this out and those tools report as unavailable."
-               Level="1000">
+    <Feature Id="BrokerService"
+             Title="Privileged broker service"
+             Description="Registers the broker as a LocalSystem service, which is what makes elevated operations available. Available only when installing for all users; leave it out and those tools report as unavailable."
+             Level="1000">
 
-        <ComponentGroupRef Id="BrokerComponents" />
-      </Feature>
-    <?endif ?>
+      <!--
+        Absent, not merely unselected, in a per-user installation.
+        A service running as LocalSystem is a machine-wide object: it cannot be created
+        without elevation and would not belong to the installing user if it could. Offering it
+        greyed out would be honest; offering it at all in a context where choosing it must
+        fail is not, so at level 0 it disappears from the feature tree entirely.
+
+        MSIINSTALLPERUSER is what the scope page sets, which is why this is a runtime
+        condition and not a build-time switch.
+      -->
+      <Level Value="0" Condition="MSIINSTALLPERUSER" />
+
+      <ComponentGroupRef Id="BrokerComponents" />
+    </Feature>
 
     <ComponentGroup Id="ShortcutComponents" Directory="ShortcutFolder">
       <Component Id="StartMenuShortcut" Guid="*">
@@ -238,7 +433,6 @@
       </Component>
     </ComponentGroup>
 
-    <?ifndef PerUser ?>
       <ComponentGroup Id="BrokerComponents" Directory="INSTALLFOLDER">
         <Component Id="BrokerServiceRegistration" Guid="*">
           <!--
@@ -279,7 +473,6 @@
                           Wait="yes" />
         </Component>
       </ComponentGroup>
-    <?endif ?>
 
   </Package>
 </Wix>

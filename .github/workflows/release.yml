@@ -127,23 +127,18 @@ jobs:
           $version = '${{ steps.version.outputs.version }}'
           $stage = Join-Path $PWD 'artifacts/stage'
           $bind = Join-Path $PWD 'install'
-
-          # Per user, no elevation, no service.
-          wix build install/Shellvis.wxs -arch x64 -d Version=$version -d Stage=$stage `
-              -bindpath $bind -ext WixToolset.UI.wixext -d PerUser=1 `
-              -o "artifacts/Shellvis-$version-user.msi"
-          if ($LASTEXITCODE -ne 0) { throw 'per-user package failed' }
-
-          # Machine-wide, with the broker service as a selectable feature.
+          # ONE package. It carries both scopes: Scope="perUserOrMachine" puts ALLUSERS=2 and
+          # MSIINSTALLPERUSER in it, and a page in the installer sets the switch. There is no
+          # -d PerUser switch any more, and no second build to drift from the first.
           wix build install/Shellvis.wxs -arch x64 -d Version=$version -d Stage=$stage `
               -bindpath $bind -ext WixToolset.UI.wixext `
-              -o "artifacts/Shellvis-$version-machine.msi"
-          if ($LASTEXITCODE -ne 0) { throw 'machine-wide package failed' }
+              -o "artifacts/Shellvis-$version.msi"
+          if ($LASTEXITCODE -ne 0) { throw 'package failed' }
 
           # A size floor, because wix succeeds on a package with nothing in it. If the staging
           # step ever produced an empty folder the build would go green and ship a 200 KB
-          # installer that installs nothing -- the failure would surface at a user's machine
-          # rather than here. Both packages are around 108 MB, almost all of it the PowerShell
+          # installer that installs nothing, and the failure would surface at a user's machine
+          # rather than here. The package is around 108 MB, almost all of it the PowerShell
           # SDK; fifty is far below that and far above an empty one.
           foreach ($msi in Get-ChildItem artifacts/*.msi) {
             $mb = [math]::Round($msi.Length / 1MB, 1)
@@ -152,6 +147,7 @@ jobs:
             if ($mb -lt 50) { throw "$($msi.Name) is only $mb MB; the payload is missing" }
           }
 
+          if ((Get-ChildItem artifacts/*.msi).Count -ne 1) { throw 'expected exactly one package' }
           if ((Get-ChildItem artifacts/*.msi).Count -ne 2) { throw 'expected two packages' }
 
       # Kept for a manual run too, where there is no release to attach them to. Short
@@ -179,17 +175,23 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
           NOTES: |
-            Two installers, from the same source:
+            One installer, and it asks who the installation is for:
 
-            - `Shellvis-${{ steps.version.outputs.version }}-user.msi` installs into
-              `%LOCALAPPDATA%\Programs\Shellvis` for the current user. No administrator
-              rights, no service; the tools that need elevation report as unavailable.
-            - `Shellvis-${{ steps.version.outputs.version }}-machine.msi` installs into
-              `%ProgramFiles%\Shellvis` for everyone and offers the privileged broker
-              service as a selectable feature. Needs an elevated install.
+            - **Just for me** installs into `%LOCALAPPDATA%\Programs\Shellvis`. No
+              administrator rights, no broker service; the tools that need elevation report
+              as unavailable.
+            - **For everyone on this machine** installs into `%ProgramFiles%\Shellvis` and
+              offers the privileged broker service as a selectable feature. Needs
+              administrator rights once.
 
-            Windows Installer fixes the scope when the package is *built*, which is why this
-            is two files rather than one with a switch.
+            **On a managed desktop, choose "for everyone"** even if you do not want the
+            service. Defender's rule against low-prevalence executables refuses an unsigned
+            binary under a user-writable path, and `%LOCALAPPDATA%` is one; `%ProgramFiles%`
+            is not. The binaries are not signed yet.
+
+            This used to be two packages, on the belief that Windows Installer fixes the
+            scope at build time. It does not: MSI 4.5 single package authoring covers both,
+            which is what this package now uses.
 
             Dictation downloads its speech model on first use; the installer asks which one.
             Requires the Windows App Runtime 2.4.0, and Office for the Office and Outlook

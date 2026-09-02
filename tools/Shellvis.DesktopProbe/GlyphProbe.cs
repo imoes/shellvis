@@ -103,7 +103,9 @@ internal static class GlyphProbe
     /// it refused it legibly, but it reports <c>WMC9999 Xaml Internal Error</c> against a
     /// targets file in the SDK, names a line number in a file it does not name, and does not
     /// use the word "error" in the way a search for failures expects. This project has lost a
-    /// build to it nine times, and twice more looking for it in the wrong file.
+    /// build to it nine times, twice more looking for it in the wrong file, and four times in
+    /// one sitting in the INSTALLER, which this check did not cover until then: wix reports it
+    /// legibly, but only after building a 107 MB package.
     ///
     /// The comments here are prose, and prose written in this house style uses dashes. So the
     /// rule is checked in a second rather than remembered.
@@ -113,8 +115,17 @@ internal static class GlyphProbe
         var comment = new Regex(@"<!--(?<body>.*?)-->", RegexOptions.Compiled | RegexOptions.Singleline);
         int files = 0;
 
-        foreach (string file in Directory.EnumerateFiles(
-            Path.Combine(root, "src"), "*.xaml", SearchOption.AllDirectories))
+        // The INSTALLER is scanned too, and it was added after the rule bit a fourth time in
+        // one sitting. Only XAML was covered, so the same mistake in Shellvis.wxs was caught
+        // by wix -- four times in a row, once per rebuild of a 107 MB package -- rather than
+        // in a second by the harness. XML is XML.
+        IEnumerable<string> Candidates() =>
+            Directory.EnumerateFiles(Path.Combine(root, "src"), "*.xaml", SearchOption.AllDirectories)
+                .Concat(Directory.Exists(Path.Combine(root, "install"))
+                    ? Directory.EnumerateFiles(Path.Combine(root, "install"), "*.wxs", SearchOption.AllDirectories)
+                    : []);
+
+        foreach (string file in Candidates())
         {
             if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                 || file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
@@ -139,11 +150,16 @@ internal static class GlyphProbe
                 check(
                     $"{Path.GetFileName(file)} line {line}: a comment contains '--'",
                     false,
-                    "XML forbids it; the XAML compiler answers with WMC9999 against an SDK targets file");
+
+                    // Named per file type, because the point of this check is a legible
+                    // message and pointing at the wrong compiler is how it stops being one.
+                    file.EndsWith(".wxs", StringComparison.OrdinalIgnoreCase)
+                        ? "XML forbids it; wix answers with WIX0104 after staging the whole payload"
+                        : "XML forbids it; the XAML compiler answers with WMC9999 against an SDK targets file");
             }
         }
 
-        check($"{files} XAML file(s) have comments XML accepts", true, string.Empty);
+        check($"{files} XAML and installer file(s) have comments XML accepts", true, string.Empty);
     }
 
     /// <summary>

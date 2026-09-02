@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.8.8-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.8.9-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -241,50 +241,73 @@ layout problem.
 
 ## Install
 
-**➜ [Download the installers](https://github.com/imoes/shellvis/releases/latest)** — both
-packages are attached to every release, built on the tag by
+**➜ [Download the installer](https://github.com/imoes/shellvis/releases/latest)** — one
+package, attached to every release and built on the tag by
 [`.github/workflows/release.yml`](.github/workflows/release.yml) rather than uploaded by
 hand, so what you download is what the tag contains.
 
-There are two, and which one you want depends on whether the privileged broker should run
-on the machine.
+**The choice is a page in the installer**, between the licence and the feature tree:
 
-| | `-user.msi` | `-machine.msi` |
+| | Just for me | For everyone on this machine |
 |---|---|---|
 | Installs into | `%LOCALAPPDATA%\Programs\Shellvis` | `%ProgramFiles%\Shellvis` |
-| Administrator rights | not needed | required |
-| Broker service | no | selectable feature |
+| Administrator rights | not needed | required once |
+| Broker service | not offered at all | selectable feature |
 | Elevated tools | report as unavailable | available when the feature is installed |
 | Start Menu entry, autostart | yes | yes |
 
-**Why two files rather than one with a switch.** Windows Installer fixes the install scope
-when the package is *built*: a package is either per-user or per-machine and nothing about
-it can be changed while it runs. So the choice cannot be a checkbox inside one `.msi`. Both
-are built from the same `install/Shellvis.wxs` with one preprocessor switch, so they cannot
-drift apart.
+Either way your settings, notes and sessions live in `%USERPROFILE%\.shellvis` and are
+untouched by installing or uninstalling.
 
-Inside the machine-wide package the broker genuinely *is* optional — the application works
-without it and says so — which is what a Windows Installer feature is for. Pick it in the
+**This used to be two downloads, and the reason given was wrong.** The README said Windows
+Installer fixes the install scope when the package is *built*, so the choice could not be a
+page inside one `.msi`. MSI 4.5 has *Single Package Authoring*: with `ALLUSERS=2` and
+`MSIINSTALLPERUSER` the same package installs either way, and the scope page sets it. The
+package is now built once with `Scope="perUserOrMachine"`, which puts exactly those two
+properties in it.
+
+**On a managed desktop, pick "for everyone".** Not for the service — because otherwise
+Shellvis may not start at all. Microsoft Defender's rule *"block executable files from
+running unless they meet a prevalence, age, or trusted list criterion"* refuses an unsigned
+binary under a user-writable path, and `%LOCALAPPDATA%` is one. Measured on a managed
+machine with a **byte-identical** executable: allowed from a fixed path, blocked from
+`%LOCALAPPDATA%\Programs\Shellvis`, for the user and for `SYSTEM` both, with Defender event
+1121 naming rule `01443614-CD74-433A-B99E-2ECDC07BFC25`. `%ProgramFiles%` is not
+user-writable and is outside what that rule looks at. Signing the binaries is the real
+answer and is not done yet.
+
+The broker genuinely is optional inside a machine-wide install — the application works
+without it and says so, which is what a Windows Installer feature is for. Pick it in the
 feature tree, or from the command line:
 
 ```powershell
-# Everything, including the service. From an elevated prompt.
-msiexec /i Shellvis-0.3.1-machine.msi ADDLOCAL=Application,BrokerService
+# Machine-wide with the service. From an elevated prompt: a silent install
+# cannot ask for elevation, so it has to start elevated.
+msiexec /i Shellvis-VERSION.msi ALLUSERS=1 MSIINSTALLPERUSER="" `
+    ADDLOCAL=Application,BrokerService
 
-# Application only, service left out.
-msiexec /i Shellvis-0.3.1-machine.msi ADDLOCAL=Application
+# Machine-wide, service left out.
+msiexec /i Shellvis-VERSION.msi ALLUSERS=1 MSIINSTALLPERUSER="" ADDLOCAL=Application
 
-# Silent, with a log worth reading if it goes wrong.
-msiexec /i Shellvis-0.3.1-user.msi /qn /l*v install.log
+# Just for me, silent, with a log worth reading if it goes wrong.
+msiexec /i Shellvis-VERSION.msi /qn /l*v install.log
+
+# The speech model, answered without the page appearing.
+msiexec /i Shellvis-VERSION.msi WHISPERMODEL=medium
 ```
 
-The packages contain no custom actions. The one thing that would have needed native code is
-the installing user's SID, which the broker's pipe ACL grants: Windows Installer exposes the
-user's *name* as `[LogonUser]` and never their SID, so the broker resolves the name itself.
-A package with no custom actions cannot fail in a way that leaves a half-installed machine
-behind.
+`MSIINSTALLPERUSER=""` is what a silent install needs and the page sets for you; passing
+`ALLUSERS=1` alone leaves the package in per-user mode, because that property stays at 2 by
+design and `MSIINSTALLPERUSER` is the switch.
 
-### Building the installers
+**No code of ours runs during an installation.** The three custom actions in the package are
+all `SetProperty`: they write a property and nothing else. The one thing that would have
+needed real code is the installing user's SID, which the broker's pipe ACL grants: Windows
+Installer exposes the user's *name* as `[LogonUser]` and never their SID, so the broker
+resolves the name itself. A package that only sets properties cannot fail in a way that
+leaves a half-installed machine behind.
+
+### Building the installer
 
 ```powershell
 dotnet tool install --global wix --version 5.*
@@ -295,21 +318,18 @@ foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','
     dotnet publish $p -c Release -r win-x64 --self-contained false -o artifacts/stage
 }
 
-wix build install/Shellvis.wxs -arch x64 -d Version=0.3.1 -d Stage="$PWD/artifacts/stage" `
-    -bindpath "$PWD/install" -ext WixToolset.UI.wixext -d PerUser=1 `
-    -o artifacts/Shellvis-0.3.1-user.msi
-
-wix build install/Shellvis.wxs -arch x64 -d Version=0.3.1 -d Stage="$PWD/artifacts/stage" `
+# One build. There is no scope switch any more: the package carries both.
+wix build install/Shellvis.wxs -arch x64 -d Version=0.8.9 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
-    -o artifacts/Shellvis-0.3.1-machine.msi
+    -o artifacts/Shellvis-0.8.9.msi
 ```
 
 **WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee
 EULA before the toolset will build anything. WiX 5 produces the same packages under the
 MS-RL and needs no such acceptance, so that is what the workflow pins.
 
-Each package is about 108 MB, nearly all of it the PowerShell SDK. That is over GitHub's
-100 MB per-file limit, so the installers are never committed. They are built instead:
+The package is about 108 MB, nearly all of it the PowerShell SDK. That is over GitHub's
+100 MB per-file limit, so the installer is never committed. It is built instead:
 
 | Workflow | Runs on | Produces |
 |---|---|---|

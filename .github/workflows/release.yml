@@ -118,6 +118,40 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "publish failed: $project" }
           }
 
+      # Signed BEFORE packaging, because the files inside the .msi are what Windows checks
+      # when they are launched. Signing only the package would leave every executable it
+      # installs unsigned, which is the state that gets them blocked.
+      #
+      # Nothing is configured in the public repository, and that is deliberate rather than an
+      # omission: the step reports the files as unsigned and the build goes on. -Require is
+      # passed only when a certificate actually is configured, so a pipeline that MEANS to
+      # sign fails loudly instead of shipping a package that only looks signed.
+      - name: Sign the binaries
+        shell: pwsh
+        env:
+          SHELLVIS_SIGN_THUMBPRINT: ${{ secrets.SIGN_THUMBPRINT }}
+          SHELLVIS_SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          SHELLVIS_SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          # A .pfx arrives as a secret, which cannot be a file. Written next to the runner's
+          # temp rather than into the staging folder, so it cannot end up inside the package.
+          if ($env:SHELLVIS_SIGN_PFX_BASE64) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SHELLVIS_SIGN_PFX_BASE64))
+            $env:SHELLVIS_SIGN_PFX = $pfx
+          }
+
+          $configured = [bool]$env:SHELLVIS_SIGN_THUMBPRINT -or [bool]$env:SHELLVIS_SIGN_PFX
+
+          ./install/Sign.ps1 -Require:$configured -Path @(
+            'artifacts/stage/Shellvis.Shell.exe'
+            'artifacts/stage/Shellvis.Broker.exe'
+            'artifacts/stage/Shellvis.Setup.exe'
+            'artifacts/stage/Shellvis.Thunderbird.Host.exe'
+          )
+
+          if ($LASTEXITCODE -ne 0) { throw 'signing the binaries failed' }
+
       - name: Package
         shell: pwsh
         run: |
@@ -148,6 +182,34 @@ jobs:
           }
 
           if ((Get-ChildItem artifacts/*.msi).Count -ne 1) { throw 'expected exactly one package' }
+
+      # And the package itself, after building it. Both are needed: the signature on the .msi
+      # is what a user sees in the UAC prompt and what SmartScreen weighs before they run it,
+      # and the signatures inside are what Windows checks every time the application starts.
+      - name: Sign the package
+        shell: pwsh
+        env:
+          SHELLVIS_SIGN_THUMBPRINT: ${{ secrets.SIGN_THUMBPRINT }}
+          SHELLVIS_SIGN_PFX_BASE64: ${{ secrets.SIGN_PFX_BASE64 }}
+          SHELLVIS_SIGN_PFX_PASSWORD: ${{ secrets.SIGN_PFX_PASSWORD }}
+        run: |
+          if ($env:SHELLVIS_SIGN_PFX_BASE64) {
+            $pfx = Join-Path $env:RUNNER_TEMP 'sign.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:SHELLVIS_SIGN_PFX_BASE64))
+            $env:SHELLVIS_SIGN_PFX = $pfx
+          }
+
+          $configured = [bool]$env:SHELLVIS_SIGN_THUMBPRINT -or [bool]$env:SHELLVIS_SIGN_PFX
+
+          ./install/Sign.ps1 -Require:$configured -Path 'artifacts/*.msi'
+          if ($LASTEXITCODE -ne 0) { throw 'signing the package failed' }
+
+          # Said out loud in the log either way, because "was this release signed" is a
+          # question somebody will ask about a build nobody can re-run.
+          foreach ($msi in Get-ChildItem artifacts/*.msi) {
+            $s = Get-AuthenticodeSignature $msi.FullName
+            Write-Host ('{0}: {1} {2}' -f $msi.Name, $s.Status, $s.SignerCertificate.Subject)
+          }
           if ((Get-ChildItem artifacts/*.msi).Count -ne 2) { throw 'expected two packages' }
 
       # Kept for a manual run too, where there is no release to attach them to. Short

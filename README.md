@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.8.9-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.9.0-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -273,8 +273,36 @@ binary under a user-writable path, and `%LOCALAPPDATA%` is one. Measured on a ma
 machine with a **byte-identical** executable: allowed from a fixed path, blocked from
 `%LOCALAPPDATA%\Programs\Shellvis`, for the user and for `SYSTEM` both, with Defender event
 1121 naming rule `01443614-CD74-433A-B99E-2ECDC07BFC25`. `%ProgramFiles%` is not
-user-writable and is outside what that rule looks at. Signing the binaries is the real
-answer and is not done yet.
+user-writable and is outside what that rule looks at.
+
+### Signing
+
+**The releases are not signed yet, and it is the release step that is waiting, not the
+build.** [`install/Sign.ps1`](install/Sign.ps1) signs the four executables and the package,
+timestamps them (RFC 3161, so a signature outlives the certificate), and the release
+workflow calls it twice: once before packaging, because the executables inside are what
+Windows checks when they start, and once after, because the signature on the `.msi` is what
+a user sees in the UAC prompt. Verified end to end with a throwaway certificate — an `.exe`
+and an `.msi` both came away with a real signature and a DigiCert timestamp.
+
+What is missing is a certificate, and the kind matters:
+
+- **Self-signed does not help.** The signature is written and no machine trusts the issuer,
+  so nothing that refuses an unsigned binary is any happier. The script reports that state
+  as exactly that rather than as success.
+- **An internal PKI certificate** is the answer for software distributed inside one
+  organisation: the domain already trusts its own root, so every member machine sees a
+  trusted publisher. It needs a Code Signing template published on the issuing CA and
+  enrolment permission.
+- **A public certificate** is the answer for the GitHub releases. An OV certificate builds
+  reputation over weeks; an EV certificate or Azure Trusted Signing carries it immediately.
+
+Configure it with `SHELLVIS_SIGN_THUMBPRINT` for a certificate in a store, or
+`SHELLVIS_SIGN_PFX` and `SHELLVIS_SIGN_PFX_PASSWORD` for a file; in Actions the secrets are
+`SIGN_THUMBPRINT`, `SIGN_PFX_BASE64` and `SIGN_PFX_PASSWORD`. With none of them set the
+build says the files are unsigned and carries on, which is how the public CI works. With
+one of them set the step *requires* a valid signature, so a pipeline that means to sign
+fails rather than shipping a package that only looks signed.
 
 The broker genuinely is optional inside a machine-wide install — the application works
 without it and says so, which is what a Windows Installer feature is for. Pick it in the
@@ -319,9 +347,9 @@ foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','
 }
 
 # One build. There is no scope switch any more: the package carries both.
-wix build install/Shellvis.wxs -arch x64 -d Version=0.8.9 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.9.0 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
-    -o artifacts/Shellvis-0.8.9.msi
+    -o artifacts/Shellvis-0.9.0.msi
 ```
 
 **WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee

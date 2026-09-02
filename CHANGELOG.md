@@ -4,6 +4,112 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.9.1
+
+- **A connector can be configured the moment the window is up.** The settings menu used to
+  show "still starting..." where Jira and the service desk belong, and configuring one
+  answered "try again in a moment" — on a freshly installed copy for long enough to walk
+  into. Nothing about listing or configuring a connector needs the conversation to exist, so
+  it no longer waits for one. Your stored settings were never affected.
+
+## 0.9.0
+
+- **The release is signed, once you have a certificate.** Signing is now part of building:
+  the four executables and the installer are signed and timestamped, so a signature outlives
+  the certificate that made it. Nothing is signed yet — that needs a certificate, and a
+  self-signed one is no help because the issuer has to be trusted where the software runs.
+  An internal PKI certificate covers your own machines; a public one covers the releases.
+  Until then the build says "unsigned" and carries on rather than pretending.
+
+## 0.8.9
+
+- **One installer, and it asks who the installation is for.** There were two downloads,
+  because the old belief was that Windows Installer fixes the scope when the package is
+  built. It does not. There is now a single `.msi` with a page between the licence and the
+  feature tree: into your profile without administrator rights, or into `%ProgramFiles%`
+  with the privileged broker service as a selectable feature. In the first case the service
+  is not merely unselected, it is absent — it cannot exist there.
+- **On a managed desktop, choose "for everyone".** Not for the service: Defender's rule
+  against unfamiliar executables refuses an unsigned program under a user-writable path, and
+  your profile is one. Measured with the identical file — allowed from one location, blocked
+  from the other, for you and for the system account both.
+
+## 0.8.8
+
+- **Ask about a period and get the period.** `mail_list` takes `since` and `until` — `7d`,
+  `36h`, `2w`, `today`, or a date — instead of only a number of messages. Asked what
+  happened last week it used to hand over the newest twenty, which in a busy folder is two
+  days; the answer still said "last week" and nothing contradicted it.
+- **A mail answer says how far it reached.** The header now gives how many matched, how many
+  are shown and which span they actually cover, and says when older ones were left out. An
+  empty result says whether the folder is empty or only the filter is.
+- **Find mail by what it says.** `mail_search` looks through the inbox, its subfolders and
+  sent mail, with an optional date window. It uses the Windows search index and, when that
+  has nothing, reads the newest messages and compares them directly — and the answer says
+  which of the two found it, so "nothing found" means both looked.
+
+## 0.8.7
+
+- **Shellvis lives on the taskbar's level.** It used to decide for itself when to get out of
+  the way: every seven tenths of a second it measured the foreground window, asked Windows
+  about presentations, and compared process names against a list. All three were guesses,
+  and they were wrong in both directions — the bar vanished behind ordinary windows and
+  still sat in front of a remote desktop session. It is now registered with Windows as a
+  desktop toolbar and does what the shell tells it: visible exactly when the taskbar is,
+  behind a full-screen application at the moment the taskbar goes too. It also says when it
+  comes back, not only when it steps aside.
+- **`window.yieldTo` is no longer read.** There is nothing left for a list of process names
+  to correct. An older `config.yaml` still loads.
+
+## 0.8.6
+
+- **A ticket list has a summary, not the title twice.** Jira's "summary" field is the
+  headline, so a column labelled *Zusammenfassung* that repeated it said nothing. The
+  connectors now fetch the description as well and the list carries Ticket, Status, Titel and
+  a real one-sentence summary of what the ticket is about.
+- **The table fills the window.** Ticket lists stopped two thirds of the way across, with
+  the last column wrapped to one word per line.
+
+## 0.8.5
+
+- **The service desk is its own product.** Jira and Jira Service Management are separate
+  connectors on separate addresses, with their own tools — `servicedesk_queues`,
+  `servicedesk_sla`, `servicedesk_my_open` and the rest — rather than one connector
+  pretending both live in the same place. An installation where they *are* the same Jira
+  enters the password once.
+- **"My tickets" cannot be widened.** The account filter on `jira_my_open` and
+  `servicedesk_my_open` is fixed rather than a default, because a default was overridable:
+  the model passed a query of its own and the answer came back listing everybody's tickets.
+  An open task counts as a ticket, which it previously did not.
+
+## 0.8.4
+
+- **The gear is in the console, next to the model.** It was on the bar, where it competed
+  with the six buttons that do the work, and the connectors were listed under their product
+  names with nothing saying they were connectors — so the report was that they were missing.
+
+## 0.8.3
+
+- **A settings button.** Connectors, the scheduler and the sticky notes were reachable only
+  by saying the right sentence to the model, which means reachable only by somebody who
+  already knew they were there. The menu makes nothing new possible; it makes it findable.
+- **Your own open tickets, in one call.** `jira_my_open` is scoped to the configured account
+  and needs no query written for it.
+
+## 0.8.2
+
+- **Connectors are configured in a dialog, not in the environment.** A connector that was
+  present but unconfigured registered no tools and was therefore invisible; the only way to
+  set it up was `setx` and a restart. Now the settings menu lists each one with its state and
+  asks for the address, the account and the password. The password goes from the keyboard to
+  the encrypted store and nowhere else — never through the model, never into `config.yaml`,
+  because the conversation is kept on disk and searchable.
+
+## 0.8.1
+
+- **A schedule can be changed rather than rebuilt.** `cron_edit` alters an existing job's
+  prompt, timing or name in place, instead of removing it and adding it back.
+
 ## 0.8.0
 
 - **Set up a schedule by saying so.** `cron_list`, `cron_add`, `cron_remove` and

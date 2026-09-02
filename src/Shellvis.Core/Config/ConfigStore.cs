@@ -390,14 +390,10 @@ public static class ConfigStore
         # when the machine has several microphones and the default is not the one you
         # speak into -- that is the usual reason dictation hears nothing. The transcript
         # lists the devices with their indices the first time you use the microphone.
-        # The bar floats above other windows, but steps behind anything that has taken over
-        # the screen: a window covering a whole monitor, or one Windows reports as a
-        # presentation or a full-screen application. Those are measurable. A remote desktop
-        # client in a WINDOW is neither, yet it captures the keyboard, so it is named instead.
-        # Add your own remote or kiosk clients here.
-        #
-        # window:
-        #   yieldTo: [mstsc, msrdc, msrdcw, CmRcViewer, vmconnect]
+        # The bar lives on the taskbar's level: it is registered with Windows as a desktop
+        # toolbar, so it is visible exactly when the taskbar is and drops behind a full-screen
+        # application at the moment the taskbar does. There is nothing to configure -- the
+        # window.yieldTo list that used to be here is no longer read.
 
         voice:
           deviceIndex: -1

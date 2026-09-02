@@ -204,21 +204,21 @@ public sealed class HookSection
 public sealed class WindowSection
 {
     /// <summary>
-    /// Processes the bar steps behind while they are in the foreground, even in a window.
+    /// No longer used. Kept so that a <c>config.yaml</c> written by an older version still
+    /// loads, and empty so that nothing reads as configured when it is not.
     ///
-    /// The bar already yields to anything that covers a whole monitor and to anything Windows
-    /// reports as a presentation or a full-screen application -- those are properties that can
-    /// be measured. A remote desktop client in a WINDOW has neither: it is not full-screen and
-    /// reports nothing unusual, yet it captures the keyboard, so the bar floating over it is
-    /// both in the way and unusable.
+    /// <b>What it was.</b> A list of process names the bar would step behind while they were in
+    /// the foreground, defaulted to the Microsoft remote desktop clients. It existed because the
+    /// bar decided for itself when to get out of the way, and a windowed remote client has no
+    /// measurable property that says "this one takes the keyboard" -- so it was named instead.
     ///
-    /// A list is the weak part of this and it is deliberately here rather than compiled in, so
-    /// a client this does not know about can be added without a build. Defaults cover the
-    /// Microsoft clients: mstsc is the classic Remote Desktop Connection, msrdc and
-    /// msrdcw the newer ones, CmRcViewer is Configuration Manager's remote control.
+    /// <b>Why it is gone.</b> Naming windows was the weak part of that design and it was
+    /// admitted as such in this very comment. The bar now registers as an application desktop
+    /// toolbar and moves only when the shell says a full-screen application has the screen,
+    /// which is the same signal that moves the taskbar. There is nothing left for a name list
+    /// to correct. See <c>Shellvis.Core.Desktop.TaskbarBand</c>.
     /// </summary>
-    public string[]? YieldTo { get; set; } =
-        ["mstsc", "msrdc", "msrdcw", "CmRcViewer", "vmconnect"];
+    public string[]? YieldTo { get; set; }
 }
 
 public sealed class VoiceSection

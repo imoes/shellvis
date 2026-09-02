@@ -3,78 +3,106 @@ using Shellvis.Core.Desktop;
 namespace Shellvis.DesktopProbe;
 
 /// <summary>
-/// The rule that decides whether the bar steps out of the way.
+/// Where the bar sits in the z-order, and what moves it.
 ///
-/// The bar is always-on-top, which is right almost always and wrong when the foreground window
-/// has taken over the screen -- a remote desktop session being the case this was built for. The
-/// decision has three parts: the notification state Windows reports, a list of process names,
-/// and this geometry. Only the geometry can be checked without a desktop, and it is also the
-/// only one with arithmetic in it, so it is the one worth pinning down.
+/// <b>What this used to check, and why it is gone.</b> This suite used to pin down a geometry
+/// rule: whether the foreground window covered its whole monitor, with a pixel or two of
+/// tolerance. That rule was one of three the bar used to guess when to get out of the way, and
+/// all three have been removed -- they were wrong in both directions, leaving the bar behind
+/// ordinary windows while still showing it over a remote desktop connection. The bar is now an
+/// application desktop toolbar and does what the shell tells it.
 ///
-/// The tolerance is the point. Requiring an exact match to the monitor makes the rule almost
-/// never fire, which is the failure the user would actually notice: the bar left sitting on top
-/// of a remote session because the window reported itself one pixel inside the screen.
+/// So what is worth checking is no longer arithmetic, it is the CONTRACT: the sequence of
+/// appbar notifications, and where each one leaves the bar. That runs without a desktop, which
+/// is the point of keeping it here.
 /// </summary>
 internal static class TopmostProbe
 {
     public static int Run()
     {
-        Console.WriteLine("-- when the bar steps behind the foreground window --");
+        Console.WriteLine("-- the bar's place in the z-order --");
 
         int failures = 0;
 
-        // A full-screen window on a 1920x1080 monitor at the origin.
-        failures += Check(
-            "a window exactly filling its monitor counts as covering it",
-            ScreenGeometry.CoversMonitor(0, 0, 1920, 1080, 0, 0, 1920, 1080));
+        var band = new TaskbarBand();
 
-        // Reported a pixel or two short, which real windows do.
-        failures += Check(
-            "and so does one reported two pixels short of the edges",
-            ScreenGeometry.CoversMonitor(2, 2, 1918, 1078, 0, 0, 1920, 1080));
+        // The ordinary state. Topmost, because the taskbar is topmost, and the whole intent is
+        // to be on its level.
+        failures += Check("a fresh bar is in the topmost band", band.Position == BandPosition.Topmost);
+        failures += Check("and has nothing to explain", band.Reason is null);
 
-        // Reported slightly larger, which they also do.
+        // The regression this exists for. The documented sample reads ABS_ALWAYSONTOP and goes
+        // topmost only when it is set; that flag lost its meaning in Windows 8, so following the
+        // sample drops the bar out of the band on a modern desktop -- and for a bar lying on the
+        // taskbar strip, out of the band means invisible. A state change must not move it.
         failures += Check(
-            "and one reported slightly larger than the monitor",
-            ScreenGeometry.CoversMonitor(-2, -2, 1922, 1082, 0, 0, 1920, 1080));
-
-        // A maximised window is NOT full-screen: the taskbar strip is still visible, so the
-        // bar has somewhere to sit and no reason to move.
-        failures += Check(
-            "a merely maximised window does not, because the taskbar strip is still there",
-            !ScreenGeometry.CoversMonitor(0, 0, 1920, 1032, 0, 0, 1920, 1080));
+            "a taskbar state change does not move the bar",
+            !band.Apply(TaskbarBand.StateChange, flag: false));
 
         failures += Check(
-            "nor does a large but ordinary window",
-            !ScreenGeometry.CoversMonitor(100, 80, 1500, 900, 0, 0, 1920, 1080));
+            "which leaves it topmost, whatever ABS_ALWAYSONTOP says",
+            band.Position == BandPosition.Topmost);
 
-        // The multi-monitor case, and the reason the comparison is against the window's own
-        // monitor. This window fills the LEFT screen, whose origin is negative -- judged
-        // against the primary monitor it would look like nothing at all.
+        // The taskbar moving is a placement question for the docked bar, not a z-order one.
         failures += Check(
-            "a window filling a secondary monitor is judged against THAT monitor",
-            ScreenGeometry.CoversMonitor(-1920, 0, 0, 1080, -1920, 0, 0, 1080));
+            "the taskbar moving does not move the bar in the z-order",
+            !band.Apply(TaskbarBand.PositionChanged, flag: false));
 
         failures += Check(
-            "and the same window is not full-screen on the primary one",
-            !ScreenGeometry.CoversMonitor(-1920, 0, 0, 1080, 0, 0, 1920, 1080));
+            "nor does the user tiling their windows",
+            !band.Apply(TaskbarBand.WindowArrange, flag: true));
 
-        // One edge short is enough to disqualify it: a window covering everything except a
-        // strip down one side has left room, and taking the bar out of the topmost band would
-        // hide it for no gain.
+        // The one thing that does move it, reported by the shell rather than guessed at -- and
+        // the same notification that moves the taskbar itself.
         failures += Check(
-            "falling short on a single edge is enough to disqualify a window",
-            !ScreenGeometry.CoversMonitor(0, 0, 1600, 1080, 0, 0, 1920, 1080));
+            "a full-screen application opening moves it",
+            band.Apply(TaskbarBand.FullScreenApp, flag: true));
+
+        failures += Check("to the bottom of the z-order", band.Position == BandPosition.Bottom);
+        failures += Check("and that is said out loud", band.Reason is { Length: > 0 });
+
+        // Reported twice, which the shell does. The bar must not report a change it did not
+        // make, or the console fills with the same line.
+        failures += Check(
+            "a repeated notification is not a change",
+            !band.Apply(TaskbarBand.FullScreenApp, flag: true));
+
+        // Everything else while a full-screen application has the screen must leave it there:
+        // coming back up over a game because the taskbar happened to resize is the defect.
+        failures += Check(
+            "a state change while full-screen leaves it at the bottom",
+            !band.Apply(TaskbarBand.StateChange, flag: false)
+                && band.Position == BandPosition.Bottom);
+
+        failures += Check(
+            "and so does the taskbar moving",
+            !band.Apply(TaskbarBand.PositionChanged, flag: false)
+                && band.Position == BandPosition.Bottom);
+
+        failures += Check(
+            "the last full-screen application closing brings it back",
+            band.Apply(TaskbarBand.FullScreenApp, flag: false));
+
+        failures += Check("to the topmost band", band.Position == BandPosition.Topmost);
+        failures += Check("with nothing left to explain", band.Reason is null);
+
+        band.Apply(TaskbarBand.FullScreenApp, flag: true);
+        band.Reset();
+
+        failures += Check(
+            "a reset forgets the full-screen state, for a registration remade after Explorer restarts",
+            band.Position == BandPosition.Topmost);
 
         Console.WriteLine();
         Console.WriteLine(failures == 0
-            ? "VERIFIED: the geometry rule fires on full-screen windows and not on ordinary ones."
+            ? "VERIFIED: only a full-screen application moves the bar, and the taskbar's own\n"
+                + "state does not -- which is the regression that made it vanish."
             : $"{failures} check(s) failed.");
 
         Console.WriteLine();
-        Console.WriteLine("NOT covered here: the notification-state check and the process-name");
-        Console.WriteLine("list both need a real foreground window, and the process list is a");
-        Console.WriteLine("list precisely because a windowed remote client has no shape to test.");
+        Console.WriteLine("NOT covered here: that the shell actually sends these notifications.");
+        Console.WriteLine("ABM_NEW needs a real window and a running Explorer, so registration is");
+        Console.WriteLine("checked by hand -- with a full-screen application and a remote session.");
 
         return failures == 0 ? 0 : 1;
     }

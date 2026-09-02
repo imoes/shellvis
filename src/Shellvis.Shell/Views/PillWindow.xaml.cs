@@ -755,6 +755,12 @@ public sealed partial class PillWindow : Window
         // The tray icon goes first: an icon whose owner window has already gone leaves a
         // ghost in the notification area until the user hovers over it.
         Safe(() => _tray?.Dispose());
+
+        // The appbar registration is the shell's, not ours: an appbar that is never removed
+        // stays on the shell's internal list, and the shell keeps sending notifications to a
+        // window that has gone.
+        Safe(UnregisterTopmostYield);
+
         Safe(() => _dictation?.Dispose());
         Safe(() => _hotkey?.Dispose());
         Safe(() => _spaceHook?.Dispose());

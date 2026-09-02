@@ -55,29 +55,51 @@ public sealed partial class OutlookTools(
         Description =
             "List messages from an Outlook folder, newest first. Folders: inbox, sent, "
             + "drafts. Set unreadOnly to see only what has not been read. Each entry "
-            + "carries an id you can pass to mail_read and mail_reply_draft.",
+            + "carries an id you can pass to mail_read and mail_reply_draft. "
+            + "For a question about a PERIOD -- last week, the last few days, since Monday "
+            + "-- give since (and optionally until) rather than raising the limit: 7d, 36h, "
+            + "2w, today, yesterday, or a date like 2026-08-25. Without a window you get the "
+            + "newest messages, which in a busy folder may cover two days rather than the "
+            + "week you were asked about. Read the header line: it says how many matched and "
+            + "which span the listing actually covers, and it says so when there are older "
+            + "ones you have not seen.",
         PreviewParameter = "folder",
         Glyph = "mail")]
     public async Task<string> ListMail(
         string folder = "inbox",
         int limit = 20,
         bool unreadOnly = false,
+        string? since = null,
+        string? until = null,
         CancellationToken cancellationToken = default)
     {
         if (!OutlookClient.IsAvailable)
             return Unavailable;
 
+        DateTime now = DateTime.Now;
+
+        if (!Bound(since, now, out DateTime? from, out string? sinceProblem))
+            return $"error: since {sinceProblem}";
+
+        if (!Bound(until, now, out DateTime? to, out string? untilProblem))
+            return $"error: until {untilProblem}";
+
+        if (from is { } a && to is { } b && a >= b)
+            return $"error: since ({a:yyyy-MM-dd HH:mm}) is not before until ({b:yyyy-MM-dd HH:mm}).";
+
         try
         {
-            IReadOnlyList<MailSummary> mail = await _outlook
-                .ListMailAsync(folder, Math.Clamp(limit, 1, 100), unreadOnly, cancellationToken)
+            MailPage page = await _outlook
+                .ListMailAsync(folder, Math.Clamp(limit, 1, 100), unreadOnly, from, to, cancellationToken)
                 .ConfigureAwait(false);
 
+            IReadOnlyList<MailSummary> mail = page.Messages;
+
             if (mail.Count == 0)
-                return unreadOnly ? $"no unread messages in {folder}." : $"no messages in {folder}.";
+                return Nothing(folder, unreadOnly, from, to, page.InFolder) + StartNotice();
 
             var sb = new StringBuilder();
-            sb.Append(mail.Count).Append(" message(s) in ").Append(folder).AppendLine(":");
+            sb.AppendLine(Header(folder, page, unreadOnly, from, to));
 
             foreach (MailSummary message in mail)
             {
@@ -88,7 +110,125 @@ public sealed partial class OutlookTools(
                     sb.Append("      ").AppendLine(message.Preview);
             }
 
+            // The truncation says so. A list that stops silently looks complete, and a model
+            // that believes it has seen everything answers as though it had -- which is
+            // exactly how "the highlights of last week" became the highlights of Tuesday.
+            if (page.Withheld > 0)
+            {
+                sb.Append("  ... ").Append(page.Withheld).Append(" older not shown; ").AppendLine(
+                    from is null
+                        ? "give since (7d, 2w, a date) to cover a period, or raise the limit."
+                        : "raise the limit to see the rest of this period.");
+            }
+
             return sb.ToString() + NotesAbout(PeopleIn(mail)) + StartNotice();
+        }
+        catch (Exception ex)
+        {
+            return Failure(ex);
+        }
+    }
+
+    [ShellvisTool(
+        "mail_search",
+        SideEffect.ReadOnly,
+        Description =
+            "Find messages by what they SAY, across the inbox, its subfolders and sent mail. "
+            + "Use this when the question is about a subject rather than about a period -- "
+            + "\"what did I promise about the FTP access\", \"the mail with the licence key\" "
+            + "-- because mail_list only ever returns the newest and cannot reach back. Give "
+            + "two or three distinctive words; they are all required, and single letters are "
+            + "ignored. Optionally narrow with since and until (7d, 2w, 2026-08-25). Each hit "
+            + "carries an id for mail_read. The answer says whether the search index or a walk "
+            + "of the newest messages produced it, so a result of nothing means both were "
+            + "tried and there is nothing to find.",
+        PreviewParameter = "query",
+        Glyph = "mail")]
+    public async Task<string> SearchMail(
+        string query,
+        int limit = 20,
+        string? since = null,
+        string? until = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!OutlookClient.IsAvailable)
+            return Unavailable;
+
+        string[] words = OutlookClient.Words(query);
+
+        if (words.Length == 0)
+        {
+            return "error: give at least one word of two or more letters to search for. "
+                + "A search with nothing in it would match the whole mailbox.";
+        }
+
+        DateTime now = DateTime.Now;
+
+        if (!Bound(since, now, out DateTime? from, out string? sinceProblem))
+            return $"error: since {sinceProblem}";
+
+        if (!Bound(until, now, out DateTime? to, out string? untilProblem))
+            return $"error: until {untilProblem}";
+
+        if (from is { } a && to is { } b && a >= b)
+            return $"error: since ({a:yyyy-MM-dd HH:mm}) is not before until ({b:yyyy-MM-dd HH:mm}).";
+
+        try
+        {
+            MailSearchResult found = await _outlook
+                .SearchMailAsync(query, Math.Clamp(limit, 1, 100), from, to, cancellationToken)
+                .ConfigureAwait(false);
+
+            MailPage page = found.Page;
+            string terms = string.Join(" ", words);
+
+            if (page.Messages.Count == 0)
+            {
+                // Both ways of looking are named, and that is the point of the sentence. An
+                // empty search result that does not say how hard it looked is indistinguishable
+                // from a search that silently failed -- which is exactly what a content-index
+                // query does on a store Windows Search has not indexed.
+                return $"nothing found for \"{terms}\". The search index returned no match, and "
+                    + $"the newest {found.Scanned} message(s) of the inbox and sent mail were "
+                    + "then read and compared as well. Both looked; there is nothing to find "
+                    + "with these words. Try fewer or different ones."
+                    + StartNotice();
+            }
+
+            var sb = new StringBuilder();
+
+            sb.Append(page.Messages.Count);
+
+            if (page.Matching > page.Messages.Count)
+                sb.Append(" of ").Append(page.Matching);
+
+            sb.Append(" match(es) for \"").Append(terms).Append("\" in ")
+              .Append(found.Folders).Append(" folder(s), via ")
+              .Append(found.Path == MailSearchPath.Index
+                  ? "the Windows Search index"
+                  : $"a walk of the newest {found.Scanned} message(s), because the index had none");
+
+            if (page.Newest is { } newest && page.Oldest is { } oldest)
+            {
+                sb.Append(", ").Append(newest.ToString("yyyy-MM-dd"))
+                  .Append(" back to ").Append(oldest.ToString("yyyy-MM-dd"));
+            }
+
+            sb.AppendLine(":");
+
+            foreach (MailSummary message in page.Messages)
+            {
+                sb.Append("  ").AppendLine(message.ToString());
+                sb.Append("      id: ").AppendLine(message.EntryId);
+            }
+
+            if (page.Withheld > 0)
+            {
+                sb.Append("  ... ").Append(page.Withheld)
+                  .AppendLine(" more match(es); add a word to narrow it or raise the limit.");
+            }
+
+            return sb.ToString() + StartNotice();
         }
         catch (Exception ex)
         {
@@ -304,6 +444,103 @@ public sealed partial class OutlookTools(
         "error: Outlook is not available for automation on this machine. The classic "
         + "desktop Outlook is required; the New Outlook store app exposes no COM interface.";
 
+    /// <summary>Read an optional bound, distinguishing "not given" from "not a date".</summary>
+    private static bool Bound(string? text, DateTime now, out DateTime? value, out string? problem)
+    {
+        value = null;
+        problem = null;
+
+        if (string.IsNullOrWhiteSpace(text))
+            return true;
+
+        if (!MailWindow.TryParse(text, now, out DateTime parsed, out problem))
+            return false;
+
+        value = parsed;
+        return true;
+    }
+
+    /// <summary>
+    /// The line above the listing: how many matched, and what this page covers.
+    ///
+    /// <b>The span is the load-bearing part.</b> The count alone would still let a model
+    /// summarise three days and call them a week; the two timestamps are what make that
+    /// visible without anyone having to add up the entries.
+    /// </summary>
+    private static string Header(
+        string folder,
+        MailPage page,
+        bool unreadOnly,
+        DateTime? since,
+        DateTime? until)
+    {
+        var sb = new StringBuilder();
+
+        sb.Append(page.Messages.Count);
+
+        if (page.Matching > page.Messages.Count)
+            sb.Append(" of ").Append(page.Matching);
+
+        sb.Append(unreadOnly ? " unread message(s) in " : " message(s) in ").Append(folder);
+
+        if (since is not null || until is not null)
+            sb.Append(", asked for ").Append(Window(since, until));
+
+        if (page.Newest is { } newest && page.Oldest is { } oldest)
+        {
+            sb.Append(", covering ").Append(newest.ToString("yyyy-MM-dd HH:mm"));
+
+            if (oldest.Date != newest.Date || oldest != newest)
+                sb.Append(" back to ").Append(oldest.ToString("yyyy-MM-dd HH:mm"));
+        }
+
+        return sb.Append(':').ToString();
+    }
+
+    /// <summary>
+    /// Nothing found, said in a way that cannot be mistaken for nothing existing.
+    ///
+    /// The folder total is the whole point of this sentence. "No messages in inbox" over a
+    /// mailbox holding three thousand is how a filter that matched nothing reads as an
+    /// answer -- the failure this project already met in the calendar, where a wrongly
+    /// formatted date returned an empty week that looked exactly like a free one.
+    /// </summary>
+    private static string Nothing(
+        string folder,
+        bool unreadOnly,
+        DateTime? since,
+        DateTime? until,
+        int inFolder)
+    {
+        var sb = new StringBuilder("no ");
+
+        if (unreadOnly)
+            sb.Append("unread ");
+
+        sb.Append("messages in ").Append(folder);
+
+        if (since is not null || until is not null)
+            sb.Append(' ').Append(Window(since, until));
+
+        sb.Append('.');
+
+        if (inFolder > 0 && (unreadOnly || since is not null || until is not null))
+        {
+            sb.Append(" The folder itself holds ").Append(inFolder)
+              .Append(", so this is the filter and not an empty folder.");
+        }
+
+        return sb.ToString();
+    }
+
+    private static string Window(DateTime? since, DateTime? until) => (since, until) switch
+    {
+        ({ } from, { } to) => $"{from:yyyy-MM-dd HH:mm} to {to:yyyy-MM-dd HH:mm}",
+        ({ } from, null) => $"since {from:yyyy-MM-dd HH:mm}",
+        (null, { } to) => $"before {to:yyyy-MM-dd HH:mm}",
+        _ => string.Empty,
+    };
+
     /// <summary>
     /// Turn a COM failure into something the model can act on.
     ///
@@ -389,16 +626,21 @@ public sealed partial class OutlookTools(
     private static bool HasTime(string? value) =>
         value is { Length: > 0 } && (value.Contains(':') || value.Contains('T'));
 
-    private static DateTime? ParseDate(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        // Invariant first so an ISO date from a model is read as written, then the
-        // local culture so a user-supplied German date also works.
-        return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out DateTime parsed)
-            || DateTime.TryParse(value, CultureInfo.CurrentCulture, DateTimeStyles.None, out parsed)
-                ? parsed
-                : null;
-    }
+    /// <summary>
+    /// One date, read the same way everywhere.
+    ///
+    /// <b>This used to have its own parser, and it was wrong.</b> It tried the invariant
+    /// culture first "so an ISO date from a model is read as written", then the local one --
+    /// and the invariant parser accepts a full stop as a date separator and reads the month
+    /// first, so a German <c>02.09.2026</c> came back as 9 February. It never fails, so the
+    /// local fallback was never reached, and the days above the twelfth escaped only because
+    /// a month field above twelve is invalid. Half the days of any month, silently, in
+    /// calendar_list.
+    ///
+    /// <see cref="MailWindow.TryParse"/> decides by shape instead and is now the only place
+    /// that reads a date in this file. It also accepts <c>7d</c> and <c>today</c>, which a
+    /// calendar range has no reason to refuse.
+    /// </summary>
+    private static DateTime? ParseDate(string? value) =>
+        MailWindow.TryParse(value, DateTime.Now, out DateTime parsed, out _) ? parsed : null;
 }

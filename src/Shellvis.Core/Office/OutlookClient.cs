@@ -141,14 +141,30 @@ public sealed partial class OutlookClient(ComApartment apartment)
         }
     }
 
-    /// <summary>List messages from a folder, newest first.</summary>
-    public Task<IReadOnlyList<MailSummary>> ListMailAsync(
+    /// <summary>
+    /// List messages from a folder, newest first, saying what the page left out.
+    ///
+    /// <b>Returns a page rather than a list, and that is the fix.</b> This method used to
+    /// read <c>items.Count</c> into a local and then throw it away, so a caller was handed
+    /// twenty messages with no way to learn that three thousand matched. Asked what happened
+    /// last week, the model summarised the newest twenty and called it the week. See
+    /// <see cref="MailPage"/>.
+    ///
+    /// <b>The window is applied in Outlook, not here.</b> A folder can hold tens of
+    /// thousands of items; fetching them to filter in C# takes minutes, which is the same
+    /// reason the sort happens there.
+    /// </summary>
+    /// <param name="since">Inclusive lower bound on the received time.</param>
+    /// <param name="until">Exclusive upper bound, so a day range does not swallow the next day.</param>
+    public Task<MailPage> ListMailAsync(
         string folder = "inbox",
         int limit = 20,
         bool unreadOnly = false,
+        DateTime? since = null,
+        DateTime? until = null,
         CancellationToken cancellationToken = default)
     {
-        return apartment.InvokeAsync<IReadOnlyList<MailSummary>>(() =>
+        return apartment.InvokeAsync<MailPage>(() =>
         {
             dynamic? outlook = null;
             dynamic? session = null;
@@ -165,17 +181,30 @@ public sealed partial class OutlookClient(ComApartment apartment)
                 mapiFolder = session.GetDefaultFolder(FolderId(folder));
                 items = mapiFolder.Items;
 
-                // Sorting in Outlook rather than in C# matters: the folder may hold
-                // tens of thousands of items and enumerating all of them to sort
-                // locally would take minutes.
+                // How much is here BEFORE any filter, so that "nothing in this window" can
+                // be told apart from "nothing here". An empty result that cannot say which
+                // of the two it is reads as an answer, and this project has already had a
+                // model answer from one.
+                int inFolder = items.Count;
+
+                string filter = ListFilter(unreadOnly, since, until);
+
+                if (filter.Length > 0)
+                    items = items.Restrict(filter);
+
+                // Sorted AFTER restricting, because Restrict returns a new collection and
+                // the order of the old one does not necessarily come with it. The previous
+                // order -- sort, then restrict -- happened to look right for the unread
+                // filter and was never anything but luck.
+                //
+                // In Outlook rather than in C# either way: the folder may hold tens of
+                // thousands of items, and enumerating all of them to sort locally would
+                // take minutes.
                 items.Sort("[ReceivedTime]", true);
 
-                if (unreadOnly)
-                    items = items.Restrict("[UnRead] = True");
-
                 var results = new List<MailSummary>();
-                int count = items.Count;
-                int take = Math.Min(limit, count);
+                int matching = items.Count;
+                int take = Math.Min(limit, matching);
 
                 for (int i = 1; i <= take; i++)
                 {
@@ -196,13 +225,58 @@ public sealed partial class OutlookClient(ComApartment apartment)
                     }
                 }
 
-                return results;
+                // The span the page actually covers, taken from what was returned rather
+                // than from what was asked for. Asked for a week and given three days, the
+                // caller can now see the three days.
+                return new MailPage(
+                    results,
+                    matching,
+                    inFolder,
+                    results.Count > 0 ? results[0].Received : null,
+                    results.Count > 0 ? results[^1].Received : null);
             }
             finally
             {
                 Com.ReleaseAll(outlook, session, mapiFolder, items);
             }
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Build the Restrict filter for a listing.
+    ///
+    /// <b>CURRENT culture on the dates, and this is the opposite of the rule everywhere
+    /// else.</b> Outlook's bracket syntax parses a date in the USER's short-date format, not
+    /// in any fixed one -- the calendar filter below carries the full account of how that was
+    /// found, including that an invariant <c>09/01/2026</c> was read as 9 January on this
+    /// German machine and that the bug was invisible for roughly half the days of any month
+    /// because a day number above 12 makes the month field invalid and Outlook then guesses
+    /// right.
+    ///
+    /// Note that <see cref="MailWindow.TryParse"/> does the opposite, on purpose: reading a
+    /// date the model wrote prefers a fixed format, writing one for Outlook must not. The two
+    /// must not be "unified".
+    /// </summary>
+    public static string ListFilter(bool unreadOnly, DateTime? since, DateTime? until)
+    {
+        var clauses = new List<string>(3);
+
+        if (unreadOnly)
+            clauses.Add("[UnRead] = True");
+
+        if (since is { } from)
+        {
+            clauses.Add(string.Format(
+                CultureInfo.CurrentCulture, "[ReceivedTime] >= '{0:g}'", from));
+        }
+
+        if (until is { } to)
+        {
+            clauses.Add(string.Format(
+                CultureInfo.CurrentCulture, "[ReceivedTime] < '{0:g}'", to));
+        }
+
+        return string.Join(" AND ", clauses);
     }
 
     /// <summary>

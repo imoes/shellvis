@@ -80,6 +80,14 @@ internal static class Program
                 "compaction" => await CompactionProbe.RunAsync().ConfigureAwait(false),
                 "office" => OfficeProbe.Run(),
                 "outlook" => await OutlookProbe.RunAsync().ConfigureAwait(false),
+
+                // The date arithmetic behind the mail and calendar tools, with no COM in it.
+                //
+                // A harness of its own because 'outlook' cannot run in the CI -- it needs
+                // Office installed and a real mailbox -- and these checks need neither. They
+                // were reachable only through 'outlook' until now, so the two defects they
+                // pin, both of which produced confidently wrong answers, were ungated.
+                "dates" => OutlookProbe.RunPureChecks(),
                 "providers" => ProviderProbe.Run(),
                 "hooks" => await HookProbe.RunAsync().ConfigureAwait(false),
                 "cron" => await CronProbe.RunAsync().ConfigureAwait(false),

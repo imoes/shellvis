@@ -95,16 +95,250 @@ internal static class OutlookProbe
         return failures;
     }
 
+    /// <summary>
+    /// The window mail_list asks for, and the filter it turns into. Checked without Outlook.
+    ///
+    /// This exists because of a subtler version of the calendar defect. Asked "what were the
+    /// highlights last week", the model called mail_list, got the newest twenty messages and
+    /// summarised them -- and there was no window to ask for, so twenty was the only lever it
+    /// had. In a busy folder that covers two days, the answer still says "last week", and
+    /// nothing in the result contradicted it: the count of matching messages was read from
+    /// Outlook and then discarded.
+    ///
+    /// Two things are pinned here. The parsing, which is the arithmetic. And the direction of
+    /// the culture rule, which is the trap: reading a date the model wrote prefers a FIXED
+    /// format, while writing one into an Outlook filter must use the USER's -- the opposite
+    /// of each other, and a "unification" of the two would resurrect a bug that took a live
+    /// Outlook to find.
+    /// </summary>
+    private static int WindowChecks()
+    {
+        Console.WriteLine("-- the window mail_list asks for --");
+        int failures = 0;
+
+        // A fixed "now", so the checks do not drift with the clock.
+        var now = new DateTime(2026, 9, 2, 14, 30, 0);
+
+        failures += Parses("7d", now, now.Date.AddDays(-7));
+        failures += Parses("2w", now, now.Date.AddDays(-14));
+        failures += Parses("36h", now, now.AddHours(-36));
+        failures += Parses("today", now, now.Date);
+        failures += Parses("yesterday", now, now.Date.AddDays(-1));
+        failures += Parses("2026-08-25", now, new DateTime(2026, 8, 25));
+
+        // The user's own short format, built from the current culture rather than written
+        // out -- so this check means the same thing on a German desktop and on the runner.
+        //
+        // THE regression, and it was live in both mail_list and calendar_list until this
+        // check found it. The parser used to try the invariant culture first; the invariant
+        // parser accepts a full stop as a separator and reads the month first, so a German
+        // 02.09.2026 was read as 9 February. It never fails, so the local fallback was never
+        // reached -- and only the days above the twelfth escaped, because a month above
+        // twelve is finally invalid. A deliberately ambiguous day is used here: one whose
+        // day and month can be swapped without either becoming invalid.
+        var ambiguous = new DateTime(2026, 9, 2);
+        string local = ambiguous.ToString("d", CultureInfo.CurrentCulture);
+
+        failures += Parses(local, now, ambiguous);
+
+        failures += Check2(
+            "and the calendar reads it the same way, from the same code",
+            OutlookTools.ResolveRange(local, local).Start.Date == ambiguous);
+
+        // The other half of the shape rule: a leading four-digit year is ISO whatever the
+        // machine's culture is, so a model writing ISO is never reinterpreted.
+        failures += Parses("2026-09-02", now, ambiguous);
+
+        // Refusals. Each one would otherwise become a silent window: a zero offset means
+        // "now", which matches nothing, and prose means whatever DateTime.TryParse decides.
+        failures += Refuses("", now);
+        failures += Refuses("0d", now);
+        failures += Refuses("-3d", now);
+        failures += Refuses("letzte Woche", now);
+        failures += Refuses("soon", now);
+
+        MailWindow.TryParse("nonsense", now, out _, out string? problem);
+
+        failures += Check2(
+            "and the refusal names the forms that do work",
+            problem is not null && problem.Contains("7d", StringComparison.Ordinal));
+
+        // ------------------------------------------------ the filter, and the culture trap
+        Console.WriteLine();
+
+        string none = OutlookClient.ListFilter(false, null, null);
+        failures += Check2("no criteria means no filter at all", none.Length == 0);
+
+        string unread = OutlookClient.ListFilter(true, null, null);
+        failures += Check2("unread alone is the unread clause", unread == "[UnRead] = True");
+
+        var since = new DateTime(2026, 8, 26, 8, 0, 0);
+        string window = OutlookClient.ListFilter(false, since, null);
+
+        Console.WriteLine($"    since {since:yyyy-MM-dd HH:mm} -> {window}");
+
+        failures += Check2(
+            "a lower bound is inclusive, so the first day of the window counts",
+            window.Contains("[ReceivedTime] >= '", StringComparison.Ordinal));
+
+        // THE regression. Outlook's bracket syntax reads the date in the user's short-date
+        // format; an invariant MM/dd/yyyy was read as dd.MM.yyyy on this German machine and
+        // the filter matched nothing -- invisibly, for about half the days of any month.
+        failures += Check2(
+            "the date is written in the CURRENT culture, not the invariant one",
+            window.Contains(
+                since.ToString("g", CultureInfo.CurrentCulture),
+                StringComparison.Ordinal));
+
+        // And the other direction, stated as a check so the pair cannot be collapsed: what
+        // the model writes is read with a fixed format first.
+        failures += Parses("2026-01-09", now, new DateTime(2026, 1, 9));
+
+        string both = OutlookClient.ListFilter(true, since, new DateTime(2026, 9, 2));
+
+        failures += Check2(
+            "criteria combine with AND rather than replacing each other",
+            both.Contains("[UnRead] = True", StringComparison.Ordinal)
+            && both.Contains(">=", StringComparison.Ordinal)
+            && both.Contains("<", StringComparison.Ordinal)
+            && both.Contains(" AND ", StringComparison.Ordinal));
+
+        failures += Check2(
+            "the upper bound is exclusive, so a day range does not swallow the next day",
+            both.Contains("[ReceivedTime] < '", StringComparison.Ordinal));
+
+        // ------------------------------------------------------- the search filter, and DASL
+        Console.WriteLine();
+
+        failures += Check2("two words are two words", OutlookClient.Words("ftp zugang").Length == 2);
+        failures += Check2("commas separate too", OutlookClient.Words("ftp, zugang").Length == 2);
+
+        // A single letter would match most of a mailbox. A search that returns everything is
+        // worse than one that returns nothing, because it looks as though it worked.
+        failures += Check2("single letters are dropped", OutlookClient.Words("a ftp b").Length == 1);
+        failures += Check2("and nothing searchable is no words", OutlookClient.Words("a b").Length == 0);
+        failures += Check2("as is an empty query", OutlookClient.Words(null).Length == 0);
+
+        string search = OutlookClient.SearchFilter(["ftp"], null, null);
+        Console.WriteLine($"    ftp -> {search}");
+
+        failures += Check2(
+            "a content search is a DASL query",
+            search.StartsWith("@SQL=", StringComparison.Ordinal));
+
+        failures += Check2(
+            "and looks in the subject AND the body, so a word in either counts",
+            search.Contains("httpmail:subject", StringComparison.Ordinal)
+            && search.Contains("httpmail:textdescription", StringComparison.Ordinal)
+            && search.Contains(" OR ", StringComparison.Ordinal));
+
+        failures += Check2(
+            "two words are required together rather than as a phrase",
+            OutlookClient.SearchFilter(["ftp", "kunde"], null, null)
+                .Contains(") AND (", StringComparison.Ordinal));
+
+        // O'Brien. Unescaped it closes the string early and the filter becomes something
+        // else entirely -- at best an error, at worst a different search.
+        failures += Check2(
+            "an apostrophe is escaped rather than closing the string",
+            OutlookClient.SearchFilter(["o'brien"], null, null)
+                .Contains("o''brien", StringComparison.Ordinal));
+
+        // THE pair. These two filters are built by two methods on the same class, and the
+        // date rule is deliberately OPPOSITE in each: Outlook's bracket syntax reads a date
+        // in the user's culture, a DASL comparison does not. Checked side by side so that
+        // "unifying" them is a failing build rather than a silent empty result.
+        string dasl = OutlookClient.SearchFilter(["ftp"], since, null);
+        string bracket = OutlookClient.ListFilter(false, since, null);
+
+        Console.WriteLine($"    DASL    -> ...{dasl[^28..]}");
+        Console.WriteLine($"    bracket -> {bracket}");
+
+        failures += Check2(
+            "the DASL date is invariant",
+            dasl.Contains(
+                since.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
+                StringComparison.Ordinal));
+
+        failures += Check2(
+            "while the bracket date is in the user's culture -- the two must stay different",
+            bracket.Contains(
+                since.ToString("g", CultureInfo.CurrentCulture),
+                StringComparison.Ordinal));
+
+        // ------------------------------------------------------------ what the page withheld
+        Console.WriteLine();
+
+        var page = new MailPage([], 312, 3142, null, null);
+        failures += Check2("a page knows how many it withheld", page.Withheld == 312);
+
+        var full = new MailPage(
+            [new MailSummary("1", "s", "f", now, false, false, string.Empty)],
+            1,
+            3142,
+            now,
+            now);
+
+        failures += Check2("and withholds nothing when it returned everything matching",
+            full.Withheld == 0);
+
+        Console.WriteLine();
+        return failures;
+    }
+
+    private static int Parses(string text, DateTime now, DateTime expected)
+    {
+        bool ok = MailWindow.TryParse(text, now, out DateTime actual, out _) && actual == expected;
+
+        Console.WriteLine(
+            $"  {(ok ? "ok  " : "FAIL")} '{text}' -> {expected:yyyy-MM-dd HH:mm}"
+            + (ok ? string.Empty : $"  (got {actual:yyyy-MM-dd HH:mm})"));
+
+        return ok ? 0 : 1;
+    }
+
+    private static int Refuses(string text, DateTime now)
+    {
+        bool refused = !MailWindow.TryParse(text, now, out _, out string? why);
+
+        Console.WriteLine(
+            $"  {(refused ? "ok  " : "FAIL")} '{text}' is refused"
+            + (refused && why is not null ? string.Empty : "  (accepted)"));
+
+        return refused ? 0 : 1;
+    }
+
     private static int Check2(string what, bool condition)
     {
         Console.WriteLine($"  {(condition ? "ok  " : "FAIL")} {what}");
         return condition ? 0 : 1;
     }
 
+    /// <summary>
+    /// Everything here that needs no Outlook, as a harness of its own.
+    ///
+    /// <b>Because the CI cannot run 'outlook'.</b> That harness needs Office installed and a
+    /// real mailbox, so it is deliberately absent from the gate -- and these checks, which
+    /// need neither, were reachable only through it. Both defects they pin produced
+    /// confidently wrong answers rather than errors, which is exactly the kind that survives
+    /// an ungated harness.
+    /// </summary>
+    public static int RunPureChecks()
+    {
+        int failures = RangeChecks() + WindowChecks();
+
+        Console.WriteLine(failures == 0
+            ? "VERIFIED: the calendar range covers the days it names, a mail window is the\n"
+                + "window that was asked for, and the two date formats stay opposite."
+            : $"{failures} check(s) failed.");
+
+        return failures == 0 ? 0 : 1;
+    }
+
     public static async Task<int> RunAsync()
     {
         // Checked first, and without Outlook, because this is where the defect was.
-        int rangeFailures = RangeChecks();
+        int rangeFailures = RangeChecks() + WindowChecks();
 
         if (!OutlookClient.IsAvailable)
         {
@@ -138,6 +372,7 @@ internal static class OutlookProbe
                 ("mail_open", SideEffect.Mutating),
                 ("mail_thread", SideEffect.ReadOnly),
                 ("mail_history", SideEffect.ReadOnly),
+                ("mail_search", SideEffect.ReadOnly),
             })
             {
                 var entry = registry.Tools.FirstOrDefault(t => t.Name == name);
@@ -185,6 +420,175 @@ internal static class OutlookProbe
             }
             failures += Check("mail_list unread", unread);
             Console.WriteLine("       " + Summarise(unread));
+
+            // ------------------------------------------------- the window, against the store
+            //
+            // The one part of this that a pure check cannot reach. The filter string is built
+            // correctly by WindowChecks; whether OUTLOOK agrees with it is a different
+            // question, and the calendar defect proved that a filter can be syntactically
+            // fine, silently match nothing, and read as an answer. So the window is asked for
+            // against the real mailbox and the returned dates are checked to be inside it.
+            string week = await tools
+                .ListMail("inbox", limit: 100, since: "7d")
+                .ConfigureAwait(false);
+
+            failures += Check("mail_list since 7d", week);
+            Console.WriteLine("       " + Summarise(week));
+
+            failures += Check2(
+                "the answer says which window was asked for",
+                week.Contains("asked for since", StringComparison.Ordinal));
+
+            DateTime cutoff = DateTime.Now.Date.AddDays(-7);
+            DateTime[] stamps = Timestamps(week);
+
+            failures += Check2(
+                $"and every message returned is inside it ({stamps.Length} checked)",
+                stamps.Length > 0 && stamps.All(d => d >= cutoff));
+
+            // The proof that the UPPER bound went out in the format Outlook reads, and it has
+            // to be arithmetic rather than a look at the result.
+            //
+            // A slice of 14 to 7 days ago came back empty on this mailbox. That is a perfectly
+            // possible quiet week -- and it is also exactly what a misread date looks like, so
+            // on its own it proves nothing. The three windows are therefore compared against
+            // each other: a fortnight cannot hold fewer than a week, and whatever it holds
+            // beyond the week must be precisely what the slice returns. If the upper bound
+            // were being dropped or misparsed, that identity breaks.
+            string fortnight = await tools
+                .ListMail("inbox", limit: 100, since: "14d")
+                .ConfigureAwait(false);
+
+            string slice = await tools
+                .ListMail("inbox", limit: 100, since: "14d", until: "7d")
+                .ConfigureAwait(false);
+
+            Console.WriteLine("       " + Summarise(fortnight));
+            Console.WriteLine("       " + Summarise(slice));
+
+            DateTime[] inFortnight = Timestamps(fortnight);
+            DateTime[] inSlice = Timestamps(slice);
+
+            failures += Check2(
+                $"a fortnight ({inFortnight.Length}) is never fewer than a week ({stamps.Length})",
+                inFortnight.Length >= stamps.Length);
+
+            failures += Check2(
+                $"and the slice ({inSlice.Length}) is exactly the difference, so the upper bound holds",
+                inSlice.Length == inFortnight.Length - stamps.Length);
+
+            if (inSlice.Length > 0)
+            {
+                failures += Check2(
+                    "with every message in it inside the slice",
+                    inSlice.All(d => d >= DateTime.Now.Date.AddDays(-14) && d < cutoff));
+            }
+            else
+            {
+                // A genuinely quiet week, now that the arithmetic above has said so. It must
+                // still not read as "the folder is empty".
+                failures += Check2(
+                    "an empty slice says the folder itself is not empty",
+                    slice.Contains("folder itself holds", StringComparison.Ordinal));
+            }
+
+            // A window with nothing in it, deliberately: tomorrow onwards.
+            string future = await tools
+                .ListMail("inbox", limit: 10, since: "2026-12-31")
+                .ConfigureAwait(false);
+
+            failures += Check2(
+                "a window that matches nothing distinguishes itself from an empty folder",
+                future.Contains("folder itself holds", StringComparison.Ordinal));
+
+            // Reversed bounds are a plausible model mistake and must be refused rather than
+            // silently producing an empty window.
+            string reversed = await tools
+                .ListMail("inbox", since: "7d", until: "14d")
+                .ConfigureAwait(false);
+
+            failures += Check2(
+                "reversed bounds are refused, not answered with nothing",
+                reversed.StartsWith("error:", StringComparison.Ordinal));
+
+            string nonsense = await tools.ListMail("inbox", since: "letzte Woche").ConfigureAwait(false);
+
+            failures += Check2(
+                "and prose instead of a date is refused with the forms that work",
+                nonsense.StartsWith("error:", StringComparison.Ordinal)
+                && nonsense.Contains("7d", StringComparison.Ordinal));
+
+            // -------------------------------------------------------------- mail_search
+            //
+            // The search is checked against a message the listing has already shown, so the
+            // expected hit is known without anybody having to have a particular mail. Whether
+            // the index or the walk finds it does not matter -- both are legitimate answers,
+            // and which one answered is in the output.
+            string? term = DistinctiveWord(inbox);
+            string? expected = ExtractFirstId(inbox);
+
+            if (term is not null && expected is not null)
+            {
+                string hit = await tools.SearchMail(term, limit: 50).ConfigureAwait(false);
+
+                failures += Check($"mail_search '{term}'", hit);
+                Console.WriteLine("       " + Summarise(hit));
+
+                bool same = hit.Contains(expected, StringComparison.Ordinal);
+
+                failures += Check2(
+                    "a word from a message in the inbox finds that message again",
+                    same);
+
+                // An id that does not match is worth showing rather than merely counting: the
+                // two sides come from different Outlook interfaces -- Items and Table -- and
+                // whether they agree on the shape of an entry id is exactly the question.
+                if (!same)
+                {
+                    string? got = ExtractFirstId(hit);
+
+                    Console.WriteLine($"       expected {Head(expected)}");
+                    Console.WriteLine($"       got      {Head(got)}");
+                }
+
+                failures += Check2(
+                    "and the answer says which way found it",
+                    hit.Contains("via the Windows Search index", StringComparison.Ordinal)
+                    || hit.Contains("via a walk", StringComparison.Ordinal));
+            }
+            else
+            {
+                Console.WriteLine("  ..   mail_search        skipped, no usable word in the newest subjects");
+            }
+
+            // An umlaut has to survive the round trip into a DASL string literal, which means
+            // this one check makes the file UTF-8 rather than ASCII. Deliberate: a search term
+            // the user would actually type is worth more than a uniform encoding, and the
+            // compiler reads UTF-8 without being asked.
+            string umlaut = await tools
+                .SearchMail("Grüße", limit: 5)
+                .ConfigureAwait(false);
+
+            failures += Check2(
+                "a search term with an umlaut is answered rather than failing",
+                !umlaut.StartsWith("error:", StringComparison.Ordinal));
+
+            // The empty result, which is the one that must not read as a silent failure.
+            string missing = await tools
+                .SearchMail("zzqqxx nichtvorhanden", limit: 5)
+                .ConfigureAwait(false);
+
+            Console.WriteLine("       " + Summarise(missing));
+
+            failures += Check2(
+                "nothing found says that BOTH ways looked",
+                missing.Contains("Both looked", StringComparison.Ordinal));
+
+            string tooShort = await tools.SearchMail("a b").ConfigureAwait(false);
+
+            failures += Check2(
+                "a query with nothing searchable in it is refused, not run",
+                tooShort.StartsWith("error:", StringComparison.Ordinal));
 
             // Reading one message end to end proves the id round-trips, which is what
             // every other mail operation depends on.
@@ -607,6 +1011,90 @@ internal static class OutlookProbe
     /// Report the shape of a result rather than its content: the first line carries
     /// the count, which is what proves the call worked.
     /// </summary>
+    /// <summary>
+    /// A word from the newest message's subject, long enough to be worth searching for.
+    ///
+    /// <b>Taken from the mailbox rather than written here.</b> A search check that looks for a
+    /// fixed word passes or fails on whether the user happens to have such a mail, which is
+    /// the wrong reason either way. Taking a word out of a message the listing has just shown
+    /// makes the expected hit knowable: that message must come back.
+    ///
+    /// Letters only, at least five of them, so the word is distinctive and needs no escaping
+    /// to be a fair test of the ordinary path -- the apostrophe case is checked separately and
+    /// without Outlook.
+    /// </summary>
+    private static string? DistinctiveWord(string listing)
+    {
+        foreach (string raw in listing.ReplaceLineEndings("\n").Split('\n'))
+        {
+            int open = raw.IndexOf('"');
+            int close = raw.LastIndexOf('"');
+
+            if (open < 0 || close <= open + 1)
+                continue;
+
+            foreach (string word in raw[(open + 1)..close].Split(
+                [' ', '\t', ':', ',', '.', '-', '/', '(', ')', '[', ']'],
+                StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (word.Length >= 5 && word.All(char.IsLetter))
+                    return word;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The received times out of a rendered listing, read back from the text.
+    ///
+    /// Read from the OUTPUT on purpose, rather than from a second call that returns objects.
+    /// What has to be true is that the answer the model sees stays inside the window it asked
+    /// for, and that is a property of the text. The header carries timestamps too, so only
+    /// entry lines are considered -- an entry is indented by two spaces and begins with its
+    /// date, optionally behind the UNREAD flag.
+    /// </summary>
+    private static DateTime[] Timestamps(string listing)
+    {
+        var found = new List<DateTime>();
+
+        foreach (string raw in listing.ReplaceLineEndings("\n").Split('\n'))
+        {
+            if (!raw.StartsWith("  ", StringComparison.Ordinal)
+                || raw.StartsWith("  ...", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string line = raw.Trim();
+
+            if (line.StartsWith("UNREAD ", StringComparison.Ordinal))
+                line = line[7..];
+
+            if (line.Length >= 16
+                && DateTime.TryParseExact(
+                    line[..16],
+                    "yyyy-MM-dd HH:mm",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.None,
+                    out DateTime stamp))
+            {
+                found.Add(stamp);
+            }
+        }
+
+        return [.. found];
+    }
+
+    /// <summary>An id shortened for the console: enough to compare, not enough to fill a line.</summary>
+    private static string Head(string? id) => id switch
+    {
+        null => "(none)",
+        { Length: 0 } => "(empty)",
+        { Length: <= 24 } => $"{id}  ({id.Length} chars)",
+        _ => $"{id[..24]}...  ({id.Length} chars)",
+    };
+
     private static string Summarise(string result)
     {
         string first = result.ReplaceLineEndings("\n").Split('\n')[0].Trim();

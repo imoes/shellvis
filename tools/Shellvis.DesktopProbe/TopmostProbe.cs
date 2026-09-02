@@ -86,6 +86,21 @@ internal static class TopmostProbe
         failures += Check("to the topmost band", band.Position == BandPosition.Topmost);
         failures += Check("with nothing left to explain", band.Reason is null);
 
+        // And the return is SAID. Only announcing the retreat is how a console ends up
+        // reading as two disappearances and no returns -- the complaint this began with,
+        // reproduced by the reporting instead of by the behaviour.
+        failures += Check(
+            "the return is announced too, not only the retreat",
+            band.Moved is { Length: > 0 } back && back.Contains("back", StringComparison.Ordinal));
+
+        band.Apply(TaskbarBand.FullScreenApp, flag: true);
+
+        failures += Check(
+            "and the two announcements are not the same sentence",
+            band.Moved != "The full-screen application has closed, so Shellvis is back on the taskbar's level.");
+
+        band.Apply(TaskbarBand.FullScreenApp, flag: false);
+
         band.Apply(TaskbarBand.FullScreenApp, flag: true);
         band.Reset();
 

@@ -82,6 +82,19 @@ public sealed class TaskbarBand
         : null;
 
     /// <summary>
+    /// What to say about the move that just happened, in either direction.
+    ///
+    /// <b>Both directions, and the return is the half that was missing.</b> The first version
+    /// only spoke when the bar stepped aside, so the console filled with "Shellvis has stepped
+    /// behind it" and never once said it had come back. A reader watching that has been told
+    /// their bar disappeared twice and returned never -- which is the complaint that started
+    /// this whole piece of work, produced by the reporting rather than by the behaviour.
+    /// </summary>
+    public string Moved => FullScreenAppOpen
+        ? Reason!
+        : "The full-screen application has closed, so Shellvis is back on the taskbar's level.";
+
+    /// <summary>
     /// Fold in one appbar notification.
     ///
     /// Returns true when the bar's place in the z-order changed, so the caller can act only

@@ -83,6 +83,11 @@ jobs:
           # that fails at random teaches people to ignore the gate. 'outlook' and 'officelive'
           # are absent for a plainer reason: they need Office installed and a real mailbox.
           #
+          # 'dates' is the part of 'outlook' that needs neither -- the calendar range and the
+          # mail window arithmetic. It was split out precisely because it was unreachable here,
+          # and both defects it pins answered wrongly rather than failing, which is the kind
+          # an ungated harness never catches.
+          #
           # Everything else runs. Six harnesses had been added without being added here --
           # clarify, markdown, notes, teams, process and agenda -- so a regression in the note
           # database, the Markdown parser or the reminder debounce would have sailed through
@@ -90,7 +95,8 @@ jobs:
           foreach ($harness in 'classify','config','skills','sessions','compaction',
                                'providers','endpoint','reflect','hooks','cron','thunderbird',
                                'stream','mcp','hass','broker','topmost','speech','whisper',
-                               'clarify','markdown','glyphs','notes','teams','process','agenda','connectors','notify','schedule') {
+                               'clarify','markdown','glyphs','notes','teams','process','agenda','connectors','notify','schedule',
+                               'dates') {
             Write-Host "--- $harness"
 
             # Captured as well as printed, so the reason can be put in an annotation. Run logs

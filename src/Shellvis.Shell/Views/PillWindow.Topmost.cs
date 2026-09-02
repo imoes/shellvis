@@ -60,13 +60,15 @@ public sealed partial class PillWindow
 
         _appBar = new Interop.AppBar(self);
 
-        _appBar.BandChanged += reason =>
+        _appBar.BandChanged += moved =>
         {
-            // Said once per change rather than per tick. A bar that moves behind another window
+            // Once per change, in BOTH directions. A bar that moves behind another window
             // without explanation is what gets reported as "Shellvis disappeared" -- which is
-            // how the machinery this replaced came to exist.
-            if (reason is not null)
-                AddRow(GlyphTool, reason, "window");
+            // how the machinery this replaced came to exist. Saying only that it stepped
+            // aside, and never that it came back, is the same fault half-fixed: the console
+            // then reads as two disappearances and no returns.
+            if (moved is { Length: > 0 })
+                AddRow(GlyphTool, moved, "window");
         };
 
         // The taskbar moved, changed size, or came back from autohide. The docked bar lies on

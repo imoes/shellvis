@@ -270,7 +270,7 @@ internal sealed class AppBar : IDisposable
             if (bar._band.Apply(notification, flag))
             {
                 bar.ApplyPosition();
-                bar.BandChanged?.Invoke(bar._band.Reason);
+                bar.BandChanged?.Invoke(bar._band.Moved);
             }
 
             if (notification == TaskbarBand.PositionChanged)

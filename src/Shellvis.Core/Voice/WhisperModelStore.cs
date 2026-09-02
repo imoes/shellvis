@@ -187,6 +187,14 @@ public static class WhisperModelStore
     /// directly -- means a cancelled download produces a file that passes an existence
     /// check and kills the process on load.
     /// </summary>
+    /// <returns>
+    /// <b>Null when it worked.</b> Otherwise a sentence saying what went wrong, ready to show.
+    ///
+    /// Spelled out because the shape invites the opposite reading: a <c>Task&lt;string?&gt;</c>
+    /// from something called Download looks like it returns the path. A caller written on that
+    /// assumption reported a finished download as a failure, after printing 100% and leaving
+    /// the file correctly in place. Use <see cref="PathFor"/> for the path.
+    /// </returns>
     public static async Task<string?> DownloadAsync(
         WhisperModel model,
         Action<int>? progress = null,

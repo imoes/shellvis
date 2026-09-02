@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.9.1-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.9.2-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -103,9 +103,22 @@ local-only feature.
 
 The model is chosen **during setup** and downloaded once, to
 `%LOCALAPPDATA%\Shellvis\Models`: `tiny` 74 MB, `base` 141 MB, `small` 465 MB,
-**`medium` 1.5 GB (recommended)**, or none. It is deliberately not shipped inside the
+**`medium` 1.5 GB (recommended)**, or none. It is deliberately not shipped *inside* the
 installer — it would be paid for by everyone including those who never dictate, and it
-exceeds GitHub's 100 MB asset limit. Until a model is present, dictation falls back to the
+exceeds GitHub's 100 MB asset limit — but the installer **fetches** it: a tick box on the
+last page, on by default, downloads it as the last thing the installation does.
+
+That runs *after* the transaction rather than inside it, and for a reason worth knowing: the
+model belongs to a person, not to a machine. A step inside the install would run as
+LocalSystem or as whoever elevated it, and on a managed desktop that is often not the person
+about to dictate — so the file would land in a profile nobody uses. It also detaches, so a
+download over a slow link is a console window you can close rather than a progress bar the
+installer cannot explain.
+
+Skip the box, or install silently, and nothing is lost: Shellvis fetches the model the first
+time you dictate. `Shellvis.Setup.exe --fetch-model` does it on demand, which is also the way
+to have it ready before travelling. It is idempotent — with the model already present it says
+so and downloads nothing. Until a model is there, dictation falls back to the
 Windows engine rather than being unavailable, and the console says which one it is using.
 Change it later with `voice.whisperModel` in `config.yaml`, or switch Whisper off entirely
 with `voice.engine: sapi`.
@@ -347,9 +360,9 @@ foreach ($p in 'src/Shellvis.Shell','src/Shellvis.Broker','src/Shellvis.Setup','
 }
 
 # One build. There is no scope switch any more: the package carries both.
-wix build install/Shellvis.wxs -arch x64 -d Version=0.9.0 -d Stage="$PWD/artifacts/stage" `
+wix build install/Shellvis.wxs -arch x64 -d Version=0.9.2 -d Stage="$PWD/artifacts/stage" `
     -bindpath "$PWD/install" -ext WixToolset.UI.wixext `
-    -o artifacts/Shellvis-0.9.0.msi
+    -o artifacts/Shellvis-0.9.2.msi
 ```
 
 **WiX 5, not 7.** Version 6 and later require accepting an Open Source Maintenance Fee

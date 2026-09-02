@@ -176,6 +176,38 @@
     -->
     <Property Id="WHISPERMODEL" Value="medium" Secure="yes" />
 
+    <!--
+      And the model is fetched as the last thing the installation does, from a tick box on
+      the final page. Ticked by default, because being asked which model to use and then
+      not getting it is the report this answers.
+    -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
+              Value="Download the speech model now, so dictation works offline" />
+
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+
+    <!--
+      AFTER the installation, not inside it, and the reason is whose profile it is.
+      The model lands in %LOCALAPPDATA%\Shellvis\Models, which belongs to a person. A
+      deferred action inside the transaction runs either as LocalSystem, putting a 1.5 GB
+      file in the service profile where nobody will find it, or as whoever elevated the
+      install, who on a managed desktop is often not the person about to dictate. This runs
+      impersonated from the Finish button, in the session that pressed it.
+      A download also has no business inside a transaction: minutes of a progress bar that
+      cannot explain itself, and a failure that would have to either roll the installation
+      back or be swallowed. Detached, it is a console window that can be closed and retried,
+      and the installation is complete either way.
+      The tick box is unconditional because MSI cannot cheaply express "a model was chosen
+      and is not already on disk". Shellvis.Setup decides that and says so, which is why
+      ticking it with the model already present costs one sentence rather than 1.5 GB.
+    -->
+    <CustomAction Id="FetchSpeechModel"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand="&quot;[INSTALLFOLDER]Shellvis.Setup.exe&quot; --fetch-model"
+                  Execute="immediate"
+                  Impersonate="yes"
+                  Return="asyncNoWait" />
+
     <UI>
       <!--
         The choice, on the main path. Between the licence and the feature tree, because the
@@ -323,6 +355,14 @@
       <Publish Dialog="WhisperDlg" Control="Back" Event="NewDialog" Value="CustomizeDlg" />
       <Publish Dialog="WhisperDlg" Control="Next" Event="NewDialog" Value="VerifyReadyDlg" />
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WhisperDlg" Order="10" />
+
+      <!--
+        Only on a fresh install, and only when the box is ticked. On a repair or an upgrade
+        the model is already there and the tool would say so, but asking at all would be
+        noise on a page nobody reads twice.
+      -->
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="FetchSpeechModel"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
     </UI>
 
 

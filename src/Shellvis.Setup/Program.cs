@@ -46,6 +46,11 @@ public static class Program
                 return installer.Install(parsed, source, target, !noAutostart) ? 0 : 1;
             }
 
+            // Run from the last page of the .msi, in the session that clicked Finish. See
+            // ModelFetch for why it is here and not inside the install transaction.
+            case "--fetch-model":
+                return ModelFetch.RunAsync(Value(args, "--fetch-model")).GetAwaiter().GetResult();
+
             case "--uninstall":
             {
                 string? mode = Value(args, "--uninstall");
@@ -106,6 +111,14 @@ public static class Program
                                       conversation history are left in place.
 
           --status                Report what is installed and whether the service runs.
+
+          --fetch-model [id]      Download the speech model for dictation into
+                                  %LOCALAPPDATA%\Shellvis\Models. Without an id it takes
+                                  the one from config.yaml, or the one chosen during
+                                  setup. Does nothing when the model is already there or
+                                  when "none" was chosen. The .msi runs this from its last
+                                  page; on its own it is also the way to fetch a model
+                                  before travelling.
 
         Options:
           --source <dir>          Where to copy from. Defaults to the installer's folder.

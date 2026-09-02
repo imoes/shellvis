@@ -73,18 +73,19 @@ public sealed partial class PillWindow
         // line and turns a list of things into a labelled group.
         Header(menu, "Connectors");
 
-        IReadOnlyList<ConnectorNeeds> connectors = _session?.ConnectorNeeds() ?? [];
+        // Read from disk when there is no session yet, rather than saying "still starting".
+        //
+        // That message was the report: on a freshly installed copy the menu offered nothing
+        // under Connectors but a disabled line, and the one thing this menu exists for was
+        // unreachable for as long as the session took to come up. Nothing about listing or
+        // configuring a connector needs a session; see InstalledConnectors.
+        IReadOnlyList<ConnectorNeeds> connectors = InstalledConnectors();
 
         if (connectors.Count == 0)
         {
-            // The two cases are not the same and the menu must not conflate them: a session
-            // that is still warming up will have connectors in a moment, and an installation
-            // with none needs telling where they go.
             menu.Items.Add(new MenuFlyoutItem
             {
-                Text = _session is null
-                    ? "   still starting..."
-                    : "   none installed",
+                Text = "   none installed",
                 IsEnabled = false,
             });
 

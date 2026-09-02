@@ -54,17 +54,55 @@ public sealed partial class PillWindow : IConnectorConfigurator
         return done.Task;
     }
 
+    /// <summary>
+    /// The installed connectors and what each one still needs, session or no session.
+    ///
+    /// <b>Why this does not go through the session.</b> It used to, and the report was that
+    /// the connectors had disappeared: the settings menu said "still starting..." where Jira
+    /// and the service desk should have been, and configuring one answered "the session is
+    /// still starting; try again in a moment". On a freshly installed copy that window is wide
+    /// enough to walk into -- four hundred and seventy files that Windows Defender wants to
+    /// look at before anything runs -- so the first thing a new user saw was a menu that could
+    /// not do the one thing it exists for.
+    ///
+    /// The dependency was never real. A connector's manifests are files on disk and its
+    /// settings are in the DPAPI store; neither needs a model, a provider or a conversation.
+    /// The loader only wanted a registry to put tools in, and one built for the purpose is
+    /// enough to read what is installed. When a session does exist it is asked instead, so
+    /// the state shown is the state of the session actually running.
+    /// </summary>
+    private IReadOnlyList<ConnectorNeeds> InstalledConnectors()
+    {
+        if (_session is not null)
+            return _session.ConnectorNeeds();
+
+        try
+        {
+            // A registry of its own, thrown away with the loader. The tools registered into
+            // it are never called; what is wanted is the manifests it read on the way.
+            var loader = new ConnectorLoader(new Core.Tools.ToolRegistry());
+            loader.LoadAll();
+
+            return loader.Needs();
+        }
+        catch (Exception)
+        {
+            // Reading the connectors must not be able to break the menu. An empty list is
+            // reported as "none installed", which is at least the truth about this attempt.
+            return [];
+        }
+    }
+
     private async Task<string> ConfigureConnectorAsync(string connector)
     {
-        if (_session is null)
-            return "the session is still starting; try again in a moment.";
+        IReadOnlyList<ConnectorNeeds> installed = InstalledConnectors();
 
-        ConnectorNeeds? needs = _session.ConnectorNeeds()
+        ConnectorNeeds? needs = installed
             .FirstOrDefault(n => n.Name.Equals(connector, StringComparison.OrdinalIgnoreCase));
 
         if (needs is null)
         {
-            IEnumerable<string> known = _session.ConnectorNeeds().Select(n => n.Name);
+            IEnumerable<string> known = installed.Select(n => n.Name);
             string list = string.Join(", ", known);
 
             return $"there is no connector called '{connector}'."
@@ -145,6 +183,18 @@ public sealed partial class PillWindow : IConnectorConfigurator
 
         if (written.Count == 0)
             return $"nothing was filled in; '{needs.Name}' is unchanged.";
+
+        // Saved either way; reloaded only if there is something to reload into.
+        //
+        // The values are in the DPAPI store the moment Save is pressed, which is the part
+        // that matters and the part that needs no session. Without one there is nothing to
+        // register the tools with yet, and the session that is starting will read the store
+        // as it comes up -- so this is a statement of fact rather than a failure.
+        if (_session is null)
+        {
+            return $"saved {string.Join(", ", written)} for '{needs.Name}'. The session is "
+                + "still starting and will pick them up as it does; nothing else is needed.";
+        }
 
         ConnectorStatus after = _session.ReloadConnector(needs.Name);
 

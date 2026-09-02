@@ -1,10 +1,17 @@
-# Builds both installers and attaches them to a GitHub Release.
+# Builds the installer, signs it if a certificate is configured, and attaches it to a
+# GitHub Release.
 #
-# WHY A WORKFLOW AND NOT A COMMITTED FILE. Each MSI is about 105 MB, almost all of it the
+# WHY A WORKFLOW AND NOT A COMMITTED FILE. The MSI is about 108 MB, almost all of it the
 # PowerShell SDK, and GitHub refuses any single file over 100 MB on push -- a hard limit,
-# not a warning. So the installers cannot live in the repository at all, and the place for
+# not a warning. So the installer cannot live in the repository at all, and the place for
 # a build output is a release asset anyway: it is tied to a tag, it is downloadable without
 # a clone, and it does not sit in everyone's working copy for ever.
+#
+# THIS WORKFLOW IS NOT COVERED BY THE BUILD GATE, and that has cost three broken releases.
+# build.yml runs on every push; this one runs only on a v* tag, so a change here reaches
+# nobody until a release is cut and then fails after twenty minutes of packaging. It is
+# runnable by hand for exactly that reason: after editing it, dispatch it once before
+# tagging anything.
 #
 # The version comes out of Directory.Build.props rather than the tag, so the number in the
 # package, in the file name and in the application can never disagree. A tag that does not
@@ -210,7 +217,6 @@ jobs:
             $s = Get-AuthenticodeSignature $msi.FullName
             Write-Host ('{0}: {1} {2}' -f $msi.Name, $s.Status, $s.SignerCertificate.Subject)
           }
-          if ((Get-ChildItem artifacts/*.msi).Count -ne 2) { throw 'expected two packages' }
 
       # Kept for a manual run too, where there is no release to attach them to. Short
       # retention: on a tag the release assets are the permanent copy, and this one is only

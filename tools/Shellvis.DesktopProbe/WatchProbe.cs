@@ -63,6 +63,11 @@ internal static class WatchProbe
             "silence",
             "SILENCE - nothing here needs attention",
             "  SILENCE  ",
+            "**SILENCE**",
+            "\"SILENCE\"",
+            "`SILENCE`",
+            "- SILENCE",
+            "## SILENCE",
             "",
         })
         {

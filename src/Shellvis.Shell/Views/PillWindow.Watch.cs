@@ -154,6 +154,18 @@ public sealed partial class PillWindow
     /// <summary>
     /// Put the arrivals to the model and turn its answer into an alert, or into nothing.
     /// </summary>
+    /// <remarks>
+    /// <b>The model's prose is held back until the verdict is in, and that is the whole
+    /// point of this method.</b> The first version rendered every event as it arrived and
+    /// only then decided whether to raise an alert -- so a look that found nothing worth
+    /// saying still wrote the word SILENCE into the conversation, three times in two hours,
+    /// and the streaming delta pulled the console open on its way past. Suppressing the
+    /// toast is not enough: nothing about a silent look should be visible at all.
+    ///
+    /// Tool events are still rendered as they happen. They are the record of what was
+    /// actually read, they are what makes an unprompted look accountable, and they are not
+    /// the part that turned out to be noise.
+    /// </remarks>
     private async Task AskAboutArrivalsAsync(WatchFindings findings)
     {
         var answer = new StringBuilder();
@@ -168,21 +180,49 @@ public sealed partial class PillWindow
 
         await _session!.RunTurnAsync(MailboxWatch.Prompt(findings), agentEvent =>
         {
-            // Rendered as usual, so tool calls and their results appear where every other
-            // tool call appears; the assistant text is also captured, because whether it
-            // said SILENCE decides if anything reaches the desktop.
-            Render(agentEvent);
+            switch (agentEvent)
+            {
+                // Captured, not shown. The final message is the verdict; a delta is the same
+                // verdict arriving in pieces, and rendering either one commits to an answer
+                // before there is anything to say.
+                case AgentEvent.AssistantMessage message:
+                    answer.Append(message.Text);
+                    return;
 
-            if (agentEvent is AgentEvent.AssistantMessage message)
-                answer.Append(message.Text);
+                case AgentEvent.AssistantDelta:
+                case AgentEvent.ReasoningDelta:
+                    return;
+
+                // The turn's ending would set the status line and, on a silent look, leave
+                // "Shellvis is standing by" where the user's own last turn had put
+                // something. Nobody asked, so nothing should move.
+                case AgentEvent.TurnFinished:
+                    return;
+
+                default:
+                    Render(agentEvent);
+                    return;
+            }
         }).ConfigureAwait(true);
 
         string said = answer.ToString();
 
         if (MailboxWatch.IsSilence(said))
+        {
+            // Nothing reaches the desktop and nothing reaches the conversation. The
+            // "looking at ..." line above already says a look happened; this says how it
+            // came out, so a reader can tell a silent look from one that never finished.
+            AddRow(GlyphTool, "nothing there was worth interrupting for", "watch");
             return;
+        }
 
         string headline = MailboxWatch.Headline(said);
+
+        // Now it is worth saying, so it goes where an answer goes: the conversation gets the
+        // full text, the console gets a line saying it happened.
+        RecordAnswer(Tidy(said));
+
+        AddRow(GlyphSpeaker, $"answered, {WordCount(said)} words", "answer", isAnnouncement: true);
 
         // NoteQuietly rather than the toast directly: the transcript gets the line, and the
         // alert waits until Windows says an interruption is allowed.

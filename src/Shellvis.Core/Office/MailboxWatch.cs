@@ -212,20 +212,30 @@ public static class MailboxWatch
 
     /// <summary>Whether the model's answer means "say nothing".</summary>
     /// <remarks>
-    /// Generous on purpose. A model that has been told to answer SILENCE will sometimes
-    /// answer "SILENCE." or "SILENCE - nothing here matters", and treating any of those as a
-    /// headline would put the word SILENCE on the user's desktop.
+    /// Generous on purpose. A model told to answer SILENCE will sometimes answer "SILENCE.",
+    /// "SILENCE - nothing here matters", or dress it up as <c>**SILENCE**</c>, and treating
+    /// any of those as a headline would put the word SILENCE on the user's desktop.
+    ///
+    /// So the decoration is stripped before the comparison rather than enumerated after it.
+    /// A prefix test alone reads <c>**SILENCE**</c> as prose, because the first character is
+    /// an asterisk -- and this model does emit markdown emphasis unasked.
     /// </remarks>
     public static bool IsSilence(string? answer)
     {
         if (string.IsNullOrWhiteSpace(answer))
             return true;
 
-        string first = answer.Trim().Split('\n')[0].Trim();
+        string first = answer.Trim().Split('\n')[0].Trim(Decoration);
 
-        return first.StartsWith("SILENCE", StringComparison.OrdinalIgnoreCase)
-            || first.Equals("silence.", StringComparison.OrdinalIgnoreCase);
+        return first.StartsWith("SILENCE", StringComparison.OrdinalIgnoreCase);
     }
+
+    /// <summary>
+    /// What a model wraps a single word in when it is being decorative: markdown emphasis,
+    /// quotes of either kind, a code fence, a heading marker, a quote marker, a list dash.
+    /// </summary>
+    private static readonly char[] Decoration =
+        [' ', '\t', '\r', '*', '_', '`', '"', '\'', '#', '>', '-', '[', ']', '(', ')', '.', ':'];
 
     /// <summary>
     /// The one line, cut to what a toast can hold.

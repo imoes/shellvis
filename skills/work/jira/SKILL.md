@@ -106,11 +106,19 @@ happened after the mail was sent. So a notification is a **trigger**, not a sour
 2. `jira_issue` for the state: status, priority, assignee, due date.
 3. `jira_comments` for the story. Newest first, five is usually enough.
 4. Then answer in this shape, and in this order:
+   - **the ticket, as a link** — `[JCUE-5915](https://…/browse/JCUE-5915)` with its title
    - **what changed** — the newest comment, in your own words, and who wrote it
    - **where the ticket stands now** — status, assignee, anything overdue
    - **what is being waited for**, if the comment says so
 
 Do not summarise the mail. The mail says a comment was added; the question is what it said.
+
+**A summary, and always the link.** Never reproduce the comments verbatim — a wall of Wiki
+markup is what the ticket is for. Two or three sentences of what it means, and the link so
+the reader can go and read it themselves. The link comes out of the tool result and cannot
+be written from memory: the address of the installation is configuration and is never in
+front of you. So carry it through exactly as it came, and if a result has no link in it, say
+the key and do not invent a URL.
 
 **A person writing about a ticket is a different case.** When a colleague mentions
 `IMIT-1234` in an ordinary mail, read the mail — that is what they wrote. Fetch the ticket

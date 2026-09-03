@@ -125,6 +125,23 @@ public sealed class ConnectorResult
     /// </summary>
     public string? Line { get; set; }
 
+    /// <summary>
+    /// A line above the result, for what the whole result is ABOUT.
+    ///
+    /// <b>Why a list needs one.</b> A line template describes an item, and some things are
+    /// true of the request rather than of any item in it. The case that produced this: the
+    /// comments on a Jira issue come back as a bare list, because a comment does not carry
+    /// the key of the issue it belongs to — so an answer built from them could name the
+    /// comments and had no way to link to the ticket. The reader was left to search for it by
+    /// hand, which is most of the work the answer was supposed to save.
+    ///
+    /// Takes both kinds of placeholder: <c>${VAR}</c> from the configuration, and
+    /// <c>{$name}</c> for an argument the tool was called with. So
+    /// <c>Ticket [{$key}](${JIRA_URL}/browse/{$key})</c> is a link the model could not have
+    /// constructed for itself — it never sees the address, which is deliberate.
+    /// </summary>
+    public string? Heading { get; set; }
+
     /// <summary>What to say when there is nothing. Naming the next step, not just "none".</summary>
     public string? Empty { get; set; }
 

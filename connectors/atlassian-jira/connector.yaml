@@ -88,7 +88,7 @@ tools:
         description: The issue key, such as IMIT-1234.
     result:
       line: |
-        {key}  {fields.summary}
+        [{key}](${JIRA_URL}/browse/{key})  {fields.summary}
         status: {fields.status.name}   priority: {fields.priority.name}   type: {fields.issuetype.name}
         reporter: {fields.reporter.displayName}   assignee: {fields.assignee.displayName}
         created: {fields.created}   due: {fields.duedate}
@@ -172,6 +172,12 @@ tools:
       question is "what is going on with X" rather than "what is X": answering from the
       description alone reports the state of the ticket on the day it was created.
       The text is Wiki markup on this installation, not Markdown.
+      ANSWER WITH A SUMMARY, NOT WITH THIS TEXT. Say what the newest comment actually
+      decided or asked for, in two or three sentences, and then KEEP THE TICKET LINK from
+      the first line of this result exactly as it came. The link is the point: a summary the
+      reader cannot check against the ticket makes them search for it by hand, and the
+      address of the installation is not something you can construct -- it is only ever in
+      this result.
     params:
       - name: key
         in: path
@@ -188,6 +194,7 @@ tools:
     result:
       items: comments
       total: total
+      heading: "Ticket [{$key}](${JIRA_URL}/browse/{$key})  -- open it to read the whole thread."
       line: "{created}  {author.displayName}: {body|400}"
       empty: >
         no comments on this issue. That is the answer: nothing has been said on it since it

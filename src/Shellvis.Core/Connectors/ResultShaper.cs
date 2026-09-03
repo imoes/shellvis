@@ -80,9 +80,17 @@ public static class ResultShaper
 
         if (items.Count == 0)
         {
-            return result.Empty is { Length: > 0 } empty
+            // The heading survives an empty result, and that is on purpose. "Nothing has
+            // been said on this ticket" is more use with a link to the ticket beside it than
+            // on its own, and an empty answer is exactly when somebody wants to go and look
+            // for themselves.
+            string nothing = result.Empty is { Length: > 0 } empty
                 ? empty
                 : "nothing found. That is the answer; do not fill it in.";
+
+            return result.Heading is { Length: > 0 } aboutNothing
+                ? aboutNothing + Environment.NewLine + nothing
+                : nothing;
         }
 
         int total = result.Total is { Length: > 0 } totalPath
@@ -92,6 +100,12 @@ public static class ResultShaper
                 : items.Count;
 
         var sb = new StringBuilder();
+
+        // What the whole result is about, before the count. Carries the link a model could
+        // not have built for itself: the address of the installation is configuration and is
+        // deliberately never in front of it.
+        if (result.Heading is { Length: > 0 } heading)
+            sb.AppendLine(heading);
 
         int shown = Math.Min(items.Count, MaxItems);
 
@@ -118,8 +132,15 @@ public static class ResultShaper
 
     private static string ShapeOne(JsonNode root, ConnectorResult? result)
     {
+        // A single object usually carries its own identity, so a heading is rarer here than
+        // on a list -- but it is honoured either way, because the alternative is a manifest
+        // where the same field works in one place and is silently ignored in another.
+        string about = result?.Heading is { Length: > 0 } heading
+            ? heading + Environment.NewLine
+            : string.Empty;
+
         if (result?.Line is { Length: > 0 } template)
-            return Line(root, template);
+            return about + Line(root, template);
 
         // No template: the flattened object, which is far better than the raw JSON and far
         // worse than a template. The manifest is expected to supply one; this is the
@@ -136,10 +157,10 @@ public static class ResultShaper
                     sb.Append(name).Append(": ").AppendLine(rendered);
             }
 
-            return sb.ToString();
+            return about + sb.ToString();
         }
 
-        return Render(root);
+        return about + Render(root);
     }
 
     /// <summary>Fill a line template. An unresolved placeholder becomes empty, not literal.</summary>

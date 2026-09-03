@@ -351,6 +351,48 @@ internal static class ConnectorProbe
 
         failures += Check("without one, the ordinary limit still applies", unclipped.Length > 300);
 
+        // A heading, for what the whole result is ABOUT rather than any item in it.
+        //
+        // The case that produced it: the comments on a Jira issue come back as a bare list,
+        // because a comment does not carry the key of the issue it belongs to. So an answer
+        // built from them could name the comments and had no way to link to the ticket, and
+        // the model cannot write that link itself -- the address of the installation is
+        // configuration and is deliberately never in front of it.
+        string headed = ResultShaper.Shape(
+            """{"total":2,"comments":[{"body":"erster"},{"body":"zweiter"}]}""",
+            new ConnectorResult
+            {
+                Items = "comments",
+                Total = "total",
+                Heading = "Ticket [JCUE-1](https://jira.example/browse/JCUE-1)",
+                Line = "{body}",
+            },
+            "jira_comments");
+
+        failures += Check(
+            "a heading comes before the count",
+            headed.StartsWith("Ticket [JCUE-1]", StringComparison.Ordinal)
+            && headed.Contains("2 result(s):", StringComparison.Ordinal));
+
+        // The empty case is where a link matters MOST: "nothing has been said" is more use
+        // with the ticket beside it, and that is exactly when somebody wants to look.
+        string headedEmpty = ResultShaper.Shape(
+            """{"total":0,"comments":[]}""",
+            new ConnectorResult
+            {
+                Items = "comments",
+                Total = "total",
+                Heading = "Ticket [JCUE-1](https://jira.example/browse/JCUE-1)",
+                Line = "{body}",
+                Empty = "nothing has been said on this ticket.",
+            },
+            "jira_comments");
+
+        failures += Check(
+            "and it survives an empty result rather than vanishing with it",
+            headedEmpty.Contains("JCUE-1", StringComparison.Ordinal)
+            && headedEmpty.Contains("nothing has been said", StringComparison.Ordinal));
+
         Console.WriteLine();
         return failures;
     }
@@ -483,6 +525,32 @@ internal static class ConnectorProbe
             // in front of the user in the approval dialog instead of inside a url.
             await Invoke(registry, "jira_issue", new { key = "IMIT-1234" });
             failures += Check("a path parameter reaches the path", server.LastPath == "/rest/api/2/issue/IMIT-1234", server.LastPath);
+
+            // The heading, with the ARGUMENT in it. The comments of an issue come back
+            // without its key, so this is the only way to put a link to the ticket beside
+            // its own comments -- and the model cannot write that link, because the address
+            // of the installation is never shown to it.
+            server.NextBody = """{"total":1,"comments":[{"created":"2026-06-23T11:20:18.917+0200","author":{"displayName":"Holzapfel, Matthias"},"body":"Ist in Arbeit."}]}""";
+
+            string comments = await Invoke(registry, "jira_comments", new { key = "IMIT-1234" });
+
+            failures += Check(
+                "the comment heading links to the ticket that was asked about",
+                comments.Contains($"[IMIT-1234]({server.BaseUrl}/browse/IMIT-1234)", StringComparison.Ordinal),
+                comments);
+
+            failures += Check(
+                "and the comments themselves come after it",
+                comments.Contains("Holzapfel", StringComparison.Ordinal)
+                && comments.IndexOf("IMIT-1234", StringComparison.Ordinal)
+                    < comments.IndexOf("Holzapfel", StringComparison.Ordinal),
+                comments);
+
+            failures += Check(
+                "no placeholder survives into the answer",
+                !comments.Contains("{$", StringComparison.Ordinal)
+                && !comments.Contains("${", StringComparison.Ordinal),
+                comments);
 
             // The queue API is behind an opt-in header. Without it the server answers 404,
             // which reads as "no such project" rather than "you forgot a header".

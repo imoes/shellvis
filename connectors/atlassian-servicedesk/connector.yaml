@@ -185,7 +185,7 @@ tools:
         required: true
     result:
       line: |
-        {key}  {fields.summary}
+        [{key}](${JIRA_SERVICEDESK_URL}/browse/{key})  {fields.summary}
         status: {fields.status.name}   priority: {fields.priority.name}   type: {fields.issuetype.name}
         reporter: {fields.reporter.displayName}   assignee: {fields.assignee.displayName}
         created: {fields.created}
@@ -204,6 +204,10 @@ tools:
       these rather than to answer from the mail, which is mostly template.
       Note that this reads BOTH public and internal comments, so treat anything here as
       internal unless the ticket says otherwise.
+      ANSWER WITH A SUMMARY, NOT WITH THIS TEXT, and keep the ticket link from the first
+      line of this result exactly as it came. A summary the reader cannot check against the
+      ticket makes them search for it by hand, and the address of the installation appears
+      nowhere else you can reach.
     params:
       - name: key
         in: path
@@ -217,6 +221,7 @@ tools:
     result:
       items: comments
       total: total
+      heading: "Ticket [{$key}](${JIRA_SERVICEDESK_URL}/browse/{$key})  -- open it to read the whole thread."
       line: "{created}  {author.displayName}: {body|400}"
       empty: >
         no comments on this ticket. Nothing has been said on it since it was raised.

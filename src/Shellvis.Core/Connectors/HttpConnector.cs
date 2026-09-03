@@ -227,7 +227,7 @@ public sealed class HttpConnector : IDisposable
         if (!response.IsSuccessStatusCode)
             return Failure(response, text);
 
-        return ResultShaper.Shape(text, Resolve(tool.Result), tool.Name);
+        return ResultShaper.Shape(text, Resolve(tool.Result, tool, arguments), tool.Name);
     }
 
     /// <summary>
@@ -243,18 +243,70 @@ public sealed class HttpConnector : IDisposable
     /// The two syntaxes cannot collide -- one requires the dollar -- which is why this can run
     /// before the shaper without touching its placeholders.
     /// </summary>
-    private static ConnectorResult? Resolve(ConnectorResult? result)
+    /// <summary>
+    /// Fill in everything the response cannot supply: configuration and the arguments.
+    ///
+    /// <b>Two kinds of placeholder, and the second one is why this grew.</b> <c>${VAR}</c>
+    /// comes from the configuration and is how a line can carry a link to the installation
+    /// without the address ever being in the package — or in front of the model.
+    /// <c>{$name}</c> is an argument the tool was called with, which the response sometimes
+    /// does not contain: the comments on a Jira issue arrive as a bare list, because a
+    /// comment does not know the key of the issue it belongs to. Without this there was no
+    /// way to put a link to the ticket next to its own comments.
+    ///
+    /// Applied to the heading, the line and the empty text alike. An empty result is exactly
+    /// when a link matters most: "nothing has been said on this ticket" is more use with the
+    /// ticket beside it.
+    /// </summary>
+    private static ConnectorResult? Resolve(
+        ConnectorResult? result,
+        ConnectorTool tool,
+        IReadOnlyDictionary<string, object?> arguments)
     {
-        if (result?.Line is not { Length: > 0 } line || !line.Contains("${", StringComparison.Ordinal))
-            return result;
+        if (result is null)
+            return null;
 
         return new ConnectorResult
         {
             Items = result.Items,
-            Line = Expand(line),
-            Empty = result.Empty,
             Total = result.Total,
+            Heading = Fill(result.Heading, tool, arguments),
+            Line = Fill(result.Line, tool, arguments),
+            Empty = Fill(result.Empty, tool, arguments),
         };
+    }
+
+    private static string? Fill(
+        string? template,
+        ConnectorTool tool,
+        IReadOnlyDictionary<string, object?> arguments)
+    {
+        if (template is not { Length: > 0 })
+            return template;
+
+        string filled = template.Contains("${", StringComparison.Ordinal)
+            ? Expand(template)
+            : template;
+
+        if (!filled.Contains("{$", StringComparison.Ordinal))
+            return filled;
+
+        foreach (ConnectorParameter parameter in tool.Params)
+        {
+            string token = "{$" + parameter.Name + "}";
+
+            if (!filled.Contains(token, StringComparison.Ordinal))
+                continue;
+
+            // The value that actually went out, defaults included, so a heading naming an
+            // argument says what was asked rather than what the caller typed.
+            filled = filled.Replace(
+                token,
+                Value(arguments, parameter) ?? string.Empty,
+                StringComparison.Ordinal);
+        }
+
+        return filled;
     }
 
     private string Failure(HttpResponseMessage response, string body)

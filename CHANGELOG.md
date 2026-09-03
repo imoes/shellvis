@@ -4,6 +4,49 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.9.6
+
+- **Ask about a ticket and get a summary, with the link.** The answer used to be the comment
+  thread verbatim — a wall of Wiki markup, which is what the ticket itself is for. It is now
+  two or three sentences of what the newest comment decided or asked for, and the ticket key
+  as a link so you can go and read the rest yourself. The link is carried through from the
+  tool result and cannot be invented: the address of your installation is configuration and
+  is never shown to the model.
+
+## 0.9.5
+
+- **A fenced code block wraps instead of scrolling sideways.** A long line used to run off
+  the edge of the answer window with no way to see the end of it.
+
+## 0.9.4
+
+- **A ticket notification is a reason to read the ticket, not to summarise the mail.** When a
+  Jira or service desk mail arrives, Shellvis fetches the issue and its newest comments and
+  answers from those. The mail is almost entirely template; the one sentence that matters is
+  a comment, and the ticket also holds everything that happened after the mail was sent.
+- **Outlook is watched, and speaks up when it matters.** Four things now produce a
+  notification of their own accord: an appointment about to start, a new mail worth
+  interrupting you for, a meeting request, and a mail about a ticket. Silence is the normal
+  answer — the question is put to the model, and most of the time nothing is worth saying.
+
+## 0.9.3
+
+- **Forward a mail with a comment.** Your note goes above the original text, which is carried
+  into the forward rather than referred to.
+- **Reply to everyone, or to one particular person.** Either a name or an address works; a
+  name is resolved against the address book. The original mail flows into the reply, so an
+  answer reads as an answer.
+- **Create an appointment, with a Teams meeting.** Subject, time, a comment in the body, and
+  attendees; ask for it and the meeting link is added. An appointment with attendees is saved
+  as an unsent meeting and opened for you — the invitation goes out when you press Send, and
+  not before. Nothing here sends anything: replies, forwards and new mail all become drafts.
+
+## 0.9.2
+
+- **The speech model is fetched during installation.** Dictation used to wait for a 74 MB
+  download the first time you asked for it. The installer now offers to fetch it at the end,
+  so the first thing you dictate works straight away.
+
 ## 0.9.1
 
 - **A connector can be configured the moment the window is up.** The settings menu used to

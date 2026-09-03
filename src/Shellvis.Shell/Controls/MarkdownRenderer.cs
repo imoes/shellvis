@@ -212,13 +212,30 @@ internal static class MarkdownRenderer
     }
 
     /// <summary>
-    /// A fenced block, scrolling sideways rather than wrapping or being cut.
+    /// A fenced block: wrapped at word boundaries, and still able to scroll sideways.
     ///
-    /// <b>Why not simply let it wrap.</b> A wrapped command line is a command line that cannot
-    /// be read back: the break lands wherever the width happens to fall, and a path or a
-    /// pipeline reads as two broken ones. The old code put the text straight into the flow,
-    /// which wraps -- and a table beside it was clipped outright. Both are the same mistake in
-    /// different clothes: wide content has to be given somewhere to go.
+    /// <b>The first version did not wrap at all, and the reason was half right.</b> It said a
+    /// wrapped command line cannot be read back, because the break lands wherever the width
+    /// happens to fall and a path or a pipeline reads as two broken ones. That is true of a
+    /// path. It is not true of the other thing that ends up in a fence, which is a tool result
+    /// pasted verbatim: asked to give a Jira comment unchanged, the model fenced four hundred
+    /// characters of German prose, and the answer arrived as a single line you had to drag
+    /// sideways to read. Reported exactly that way.
+    ///
+    /// <c>WrapWholeWords</c> is the distinction rather than a guess about content: the text
+    /// engine breaks only where it already sees a break opportunity, so nothing has to decide
+    /// what kind of text it is looking at.
+    ///
+    /// <b>What that means in practice, measured rather than assumed.</b> Prose wraps at its
+    /// spaces, which is the fix. A Windows path wraps too -- the engine counts a backslash as
+    /// a break opportunity, so
+    /// <c>C:\Users\...\leerzeichen\der</c> / <c>\sehr\lang\ist\datei.xml</c> came back over
+    /// two lines. That is not what this comment said on the first attempt, and it is worth
+    /// being straight about: a path is no longer guaranteed to stay on one line. It breaks at
+    /// a separator, which is where a file dialog and a browser break one too, and the
+    /// alternative was the defect that was reported. What still cannot be broken is a token
+    /// with no opportunity in it at all -- a hash, a base64 blob -- and that is what the
+    /// horizontal scroller is still here for.
     /// </summary>
     private static Paragraph RenderCode(MarkdownBlock.Code code, Palette palette, double available)
     {
@@ -234,8 +251,14 @@ internal static class MarkdownRenderer
             FontSize = palette.Size - 1,
             Foreground = palette.Muted,
 
-            // No wrapping, so the lines are the lines the model wrote.
-            TextWrapping = TextWrapping.NoWrap,
+            // Wrapped only where there is a space to wrap at. See the note above: this is
+            // the whole fix, and NoWrap was the whole defect.
+            TextWrapping = TextWrapping.WrapWholeWords,
+
+            // A width to wrap AT. Without it the block is measured unbounded inside the
+            // InlineUIContainer and wrapping never happens -- the same trap the tables hit,
+            // and the reason MaxWidth on the scroller alone was not enough.
+            MaxWidth = available,
             IsTextSelectionEnabled = true,
         };
 

@@ -261,7 +261,8 @@ jobs:
             scope at build time. It does not: MSI 4.5 single package authoring covers both,
             which is what this package now uses.
 
-            Dictation downloads its speech model on first use; the installer asks which one.
+            The installer fetches the speech model for dictation at the end, so the first
+            thing you dictate works straight away.
             Requires the Windows App Runtime 2.4.0, and Office for the Office and Outlook
             tools. See the README for what is verified and what is not.
         run: |

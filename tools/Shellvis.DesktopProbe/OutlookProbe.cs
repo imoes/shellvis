@@ -266,6 +266,54 @@ internal static class OutlookProbe
                 since.ToString("g", CultureInfo.CurrentCulture),
                 StringComparison.Ordinal));
 
+        // ------------------------------------------------------------- finding a ticket key
+        //
+        // Pure, and it has to be: the watcher decides whether an arriving mail is a ticket
+        // notification before there is a model in the loop, so a wrong answer here is a
+        // notification about the wrong ticket with nothing to catch it.
+        Console.WriteLine();
+
+        failures += Check2(
+            "a key in a subject is found",
+            TicketKeys.Primary("[JCUE-5915] Massive CUE-Performanceprobleme") == "JCUE-5915");
+
+        failures += Check2(
+            "the SUBJECT wins over the body, which is full of links and footers",
+            TicketKeys.Primary("AW: [IMIT-1234] Drucker", "see also JCUE-9999 and IMIT-5") == "IMIT-1234");
+
+        failures += Check2(
+            "a hand-forwarded mail with nothing in the subject falls back to the body",
+            TicketKeys.Primary("Fwd: kannst du da mal schauen", "es geht um IMIT-777") == "IMIT-777");
+
+        failures += Check2(
+            "the same key three times is one ticket, not three",
+            TicketKeys.FindAll("IMIT-1 in the subject, IMIT-1 in the body, IMIT-1 in the footer")
+                is [_]);
+
+        // Each of these matched before the rules were tightened, and each would have produced
+        // a notification about a ticket that does not exist.
+        failures += Check2(
+            "a hyphenated word is not a ticket",
+            TicketKeys.FindAll("Teil-3 und Version-2 und e-1").Count == 0);
+
+        failures += Check2(
+            "lower case is not a ticket, because prose is lower case and keys are not",
+            TicketKeys.FindAll("imit-1234").Count == 0);
+
+        failures += Check2(
+            "a single letter is not a project",
+            TicketKeys.FindAll("A-1").Count == 0);
+
+        failures += Check2(
+            "and a bracket or a colon around it does not hide it",
+            TicketKeys.FindAll("[IMIT-1] IMIT-2: done (IMIT-3)") is [_, _, _]);
+
+        failures += Check2(
+            "a notification is told apart from a person by its sender",
+            TicketKeys.LooksAutomated("jira@example.com")
+            && TicketKeys.LooksAutomated("no-reply@host", "IT Servicedesk")
+            && !TicketKeys.LooksAutomated("anna.meier@example.com", "Meier, Anna"));
+
         // ------------------------------------------------------ splitting a recipient list
         //
         // This exists because getting it wrong broke a feature invisibly. Splitting on commas
@@ -730,6 +778,71 @@ internal static class OutlookProbe
             failures += Check2(
                 "an end before the start is refused",
                 backwards.StartsWith("error:", StringComparison.Ordinal));
+
+            // ------------------------------------------------------- the watcher's own look
+            //
+            // Read-only, and the one part of the watcher a harness cannot fake: whether the
+            // calendar restriction and the inbox scan actually find anything in a real
+            // mailbox, and whether the classification holds up against real senders.
+            var pretend = new WatchState { SeenUpTo = DateTime.Now.AddHours(-24) };
+
+            WatchFindings look = await client
+                .LookAsync(pretend, DateTime.Now, TimeSpan.FromHours(12))
+                .ConfigureAwait(false);
+
+            Console.WriteLine(
+                $"       found {look.Appointments.Count} appointment(s) in the next 12h and "
+                + $"{look.Arrivals.Count} arrival(s) in the last 24h");
+
+            failures += Check2(
+                "a look at a real mailbox returns without throwing",
+                true);
+
+            foreach (Arrival arrival in look.Arrivals.Take(4))
+            {
+                Console.WriteLine(
+                    $"       {arrival.Received:HH:mm}  {arrival.Kind}"
+                    + (arrival.TicketKey is { } k ? $" {k}" : string.Empty));
+            }
+
+            failures += Check2(
+                "every arrival carries an id, which is what any follow-up needs",
+                look.Arrivals.All(a => a.EntryId.Length > 0));
+
+            failures += Check2(
+                "every arrival is newer than the mark, so nothing already seen comes back",
+                look.Arrivals.All(a => a.Received > pretend.SeenUpTo));
+
+            failures += Check2(
+                "a ticket notification, if any arrived, carries a key",
+                look.Arrivals.All(a => a.Kind != ArrivalKind.TicketNotification || a.TicketKey is not null));
+
+            // Printed, not merely counted. The first version of the calendar restriction
+            // returned appointments from outside the window and there was no way to tell
+            // which ones without seeing them; a check that only says "some are wrong" costs
+            // another run to learn anything.
+            foreach (Upcoming outside in look.Appointments
+                .Where(a => a.MinutesAway < -1 || a.MinutesAway > 12 * 60 + 1)
+                .Take(4))
+            {
+                Console.WriteLine(
+                    $"       OUTSIDE: {outside.Start:ddd yyyy-MM-dd HH:mm} "
+                    + $"({outside.MinutesAway} min) \"{outside.Subject}\"");
+            }
+
+            failures += Check2(
+                "appointments are inside the window that was asked for",
+                look.Appointments.All(a => a.MinutesAway >= -1 && a.MinutesAway <= 12 * 60 + 1));
+
+            // A FIRST look must be silent. This is what stops Shellvis greeting somebody
+            // with an hour of history every time it starts.
+            WatchFindings first = await client
+                .LookAsync(new WatchState(), DateTime.Now, TimeSpan.FromHours(12))
+                .ConfigureAwait(false);
+
+            failures += Check2(
+                "a first look reports no mail at all, only sets the mark",
+                first.Arrivals.Count == 0);
 
             // -------------------------------------------------------------------- cleaning up
             int removed = 0;

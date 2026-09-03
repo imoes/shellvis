@@ -200,6 +200,44 @@ public sealed class HookSection
 /// <summary>
 /// Dictation settings.
 /// </summary>
+/// <summary>
+/// Watching Outlook, and deciding when that is worth saying something about.
+///
+/// <b>Every number here exists to keep it quiet.</b> A watcher that speaks too often is not
+/// a lesser version of a useful one, it is worse than none: an alert for a routine arrival
+/// teaches you to dismiss the next one unread, and then the one that mattered goes with it.
+/// So the interval decides how soon it can notice, and the floor decides how often it may
+/// interrupt, and they are separate on purpose.
+/// </summary>
+public sealed class WatchSection
+{
+    /// <summary>Whether Outlook is watched at all.</summary>
+    public bool Enabled { get; set; } = true;
+
+    /// <summary>
+    /// Minutes between looks. Cheap: a folder query and a calendar restriction, no model.
+    /// </summary>
+    public int EveryMinutes { get; set; } = 3;
+
+    /// <summary>
+    /// How far ahead an appointment counts as starting soon.
+    ///
+    /// Fifteen, because that is roughly the time it takes to notice, read what the meeting
+    /// is about and find the room or the link. Outlook's own default reminder is fifteen for
+    /// the same reason.
+    /// </summary>
+    public int LeadMinutes { get; set; } = 15;
+
+    /// <summary>
+    /// The least time between two questions to the model.
+    ///
+    /// Ten, and it is not about cost. A turn against a local model takes one to three
+    /// minutes on this machine; a watcher asking every three minutes would keep the model
+    /// permanently busy answering itself, and the user's own question would queue behind it.
+    /// </summary>
+    public int QuietMinutes { get; set; } = 10;
+}
+
 /// <summary>How the floating bar behaves towards other windows.</summary>
 public sealed class WindowSection
 {
@@ -336,6 +374,8 @@ public sealed class ShellvisConfig
     public VoiceSection Voice { get; set; } = new();
 
     public WindowSection Window { get; set; } = new();
+
+    public WatchSection Watch { get; set; } = new();
 
     /// <summary>
     /// Hooks, keyed by event name, each holding a list of commands.

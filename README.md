@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.9.3-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.9.4-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -137,7 +137,7 @@ dictation, and the sentence "recognition runs on this machine" is not printed. K
 the DPAPI secret store or in `AZURE_SPEECH_KEY` / `GOOGLE_SPEECH_KEY`, never in `config.yaml`.
 Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 
-### 106 tools
+### 108 tools
 
 | Area | Tools |
 |---|---|
@@ -156,7 +156,7 @@ Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 | Browser | 15 `browser_*` tools |
 | Home Assistant | `ha_list_entities` `ha_get_state` `ha_list_services` `ha_call_service` |
 | Scheduler | `cron_list` `cron_add` `cron_edit` `cron_remove` `cron_enable` — each write registers or updates a real Windows task |
-| Connectors | `connector_list` `connector_install`, plus whatever the installed packages add |
+| Connectors | `connector_list` `connector_install`, plus whatever the installed packages add — the Atlassian ones bring `jira_comments` and `servicedesk_comments` |
 | Skills & memory | `skills_list` `skill_view` `skill_manage` `memory` |
 | Asking | `clarify` |
 | Privileged | six `broker_*` tools, only when the service is installed |

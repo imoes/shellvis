@@ -81,6 +81,11 @@ internal static class Program
                 "office" => OfficeProbe.Run(),
                 "outlook" => await OutlookProbe.RunAsync().ConfigureAwait(false),
 
+                // When the mailbox watcher may interrupt you, and what it says. Pure: every
+                // rule here is a rule about NOT interrupting, and those cannot be judged by
+                // using the feature for ten minutes.
+                "watch" => WatchProbe.Run(),
+
                 // The date arithmetic behind the mail and calendar tools, with no COM in it.
                 //
                 // A harness of its own because 'outlook' cannot run in the CI -- it needs

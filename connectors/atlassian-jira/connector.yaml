@@ -159,6 +159,40 @@ tools:
       line: "[{key}](${JIRA_URL}/browse/{key})  [{fields.status.name}]  {fields.priority.name}  due {fields.duedate}  title: {fields.summary}  about: {fields.description|220}"
       empty: "nothing is assigned to you that is still open."
 
+  - name: jira_comments
+    method: GET
+    path: /rest/api/2/issue/{key}/comment
+    effect: read
+    preview: key
+    description: >
+      The comments on an issue, newest first. This is where a ticket's actual story is:
+      the summary says what it is called, the description says what it was when it was
+      raised, and the comments say what has happened since and what anybody is waiting for.
+      Reach for this whenever a notification mail about a ticket arrives, or when the
+      question is "what is going on with X" rather than "what is X": answering from the
+      description alone reports the state of the ticket on the day it was created.
+      The text is Wiki markup on this installation, not Markdown.
+    params:
+      - name: key
+        in: path
+        required: true
+        description: The issue key, such as IMIT-1234.
+      - name: orderBy
+        in: query
+        default: "-created"
+        description: Newest first by default. Use "created" for oldest first.
+      - name: maxResults
+        in: query
+        default: "5"
+        description: How many comments. Five covers "what is going on"; raise it for a history.
+    result:
+      items: comments
+      total: total
+      line: "{created}  {author.displayName}: {body|400}"
+      empty: >
+        no comments on this issue. That is the answer: nothing has been said on it since it
+        was raised, so the description is all there is.
+
   - name: jira_transitions
     method: GET
     path: /rest/api/2/issue/{key}/transitions

@@ -94,6 +94,28 @@ A search that returns nothing has answered. It means no issue matches, not that 
 went wrong — say so and stop. If the result surprises you, widen the query rather than
 concluding the system is broken.
 
+## A mail about a ticket: go and read the ticket
+
+A Jira or service desk notification is almost entirely template. The one sentence that
+matters is a comment, and that comment is already in the ticket — along with everything that
+happened after the mail was sent. So a notification is a **trigger**, not a source.
+
+1. Take the key from the **subject**. It is there in brackets, and the subject is where it
+   means "this mail is about that ticket"; a notification body also names related issues,
+   footers and links.
+2. `jira_issue` for the state: status, priority, assignee, due date.
+3. `jira_comments` for the story. Newest first, five is usually enough.
+4. Then answer in this shape, and in this order:
+   - **what changed** — the newest comment, in your own words, and who wrote it
+   - **where the ticket stands now** — status, assignee, anything overdue
+   - **what is being waited for**, if the comment says so
+
+Do not summarise the mail. The mail says a comment was added; the question is what it said.
+
+**A person writing about a ticket is a different case.** When a colleague mentions
+`IMIT-1234` in an ordinary mail, read the mail — that is what they wrote. Fetch the ticket
+only if the answer needs it, and never in place of what they said.
+
 ## Reading
 
 `jira_issue` gives the full text of one issue. The description is Wiki markup, not

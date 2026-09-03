@@ -613,6 +613,7 @@ public sealed partial class PillWindow : Window
         RegisterHotkey();
         RegisterHoldToTalk();
         RegisterTopmostYield();
+        RegisterMailboxWatch();
 
         // Warmed here rather than on the first key press. The model takes about a second and a
         // half to load, and paying that at the moment someone holds the space bar means the
@@ -760,6 +761,7 @@ public sealed partial class PillWindow : Window
         // stays on the shell's internal list, and the shell keeps sending notifications to a
         // window that has gone.
         Safe(UnregisterTopmostYield);
+        Safe(UnregisterMailboxWatch);
 
         Safe(() => _dictation?.Dispose());
         Safe(() => _hotkey?.Dispose());

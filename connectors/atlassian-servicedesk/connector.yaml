@@ -191,6 +191,36 @@ tools:
         created: {fields.created}
         {fields.description}
 
+  - name: servicedesk_comments
+    method: GET
+    path: /rest/api/2/issue/{key}/comment
+    effect: read
+    preview: key
+    description: >
+      The comments on a service desk ticket, newest first. On a service desk this matters
+      more than anywhere else: the ticket text is what the customer wrote once, and everything
+      since -- what was tried, what is being waited for, whether it is with the customer or
+      with us -- is in the comments. A notification mail about a ticket is a reason to read
+      these rather than to answer from the mail, which is mostly template.
+      Note that this reads BOTH public and internal comments, so treat anything here as
+      internal unless the ticket says otherwise.
+    params:
+      - name: key
+        in: path
+        required: true
+      - name: orderBy
+        in: query
+        default: "-created"
+      - name: maxResults
+        in: query
+        default: "5"
+    result:
+      items: comments
+      total: total
+      line: "{created}  {author.displayName}: {body|400}"
+      empty: >
+        no comments on this ticket. Nothing has been said on it since it was raised.
+
   - name: servicedesk_comment
     method: POST
     path: /rest/api/2/issue/{key}/comment

@@ -89,6 +89,9 @@ internal sealed partial class AgentSession : IDisposable
     /// </summary>
     private ConnectorLoader? _connectors;
 
+    /// <summary>The mailbox client the tools use, shared with the window's watcher.</summary>
+    public Shellvis.Core.Office.OutlookClient? Outlook { get; private init; }
+
     /// <summary>What each installed connector still needs.</summary>
     public IReadOnlyList<ConnectorNeeds> ConnectorNeeds() =>
         _connectors?.Needs() ?? [];
@@ -163,6 +166,16 @@ internal sealed partial class AgentSession : IDisposable
         var notes = new NoteStore();
 
         registry.RegisterFrom(new OutlookTools(comApartment, notes));
+
+        // The SAME client the window's mailbox watcher uses.
+        //
+        // There is a rule in this project against a second route to the mailbox -- see
+        // RunToolAsync in PillWindow.Links -- and the watcher needs one thing the tools do
+        // not offer, because the model has no business calling it: a look at what has just
+        // arrived. Handing out this instance keeps the rule's point intact. One apartment,
+        // one client, one "Outlook had to be started" latch, so the notice is said once
+        // whichever of the two caused it.
+        var outlook = new Shellvis.Core.Office.OutlookClient(comApartment);
 
         // Teams through the deep links it registers with Windows. Registered
         // unconditionally: without Teams the launcher refuses the scheme with a sentence
@@ -326,6 +339,7 @@ internal sealed partial class AgentSession : IDisposable
             _processes = processes,
             _unattended = unattended,
             _connectors = connectors,
+            Outlook = outlook,
         };
 
         // Held separately from the loop so a scheduled run is not affected by an

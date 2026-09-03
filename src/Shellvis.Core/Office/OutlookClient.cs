@@ -431,16 +431,28 @@ public sealed partial class OutlookClient(ComApartment apartment)
 
                 // 0 is olMailItem.
                 mail = outlook.CreateItem(0);
-                mail.To = to;
                 mail.Subject = subject;
                 mail.Body = body;
 
-                if (!string.IsNullOrWhiteSpace(cc))
-                    mail.CC = cc;
+                // Resolved rather than assigned to .To, which is what this used to do.
+                // Assigning the string leaves an unresolved recipient that looks fine until
+                // somebody presses Send; the reply and forward tools ask the address book, so
+                // a new message asking it too is the difference between "name or address
+                // works" being true everywhere and being true in two places out of three.
+                DraftAddressing addressing = Address(mail, to, cc);
+
+                if (!addressing.AnyResolved)
+                {
+                    return $"error: none of '{to}' could be resolved to a recipient, so no "
+                        + "draft was saved. Give a full name as it appears in the address "
+                        + "book, or an email address.";
+                }
 
                 mail.Save();
 
-                return $"saved a draft to {to} with subject \"{subject}\". It has NOT been sent.";
+                return $"saved a draft {addressing.Describe()} with subject \"{subject}\". "
+                    + "It has NOT been sent."
+                    + Environment.NewLine + "      id: " + Str(() => mail.EntryID);
             }
             finally
             {

@@ -304,15 +304,23 @@ public sealed partial class OutlookTools(
         "mail_reply_draft",
         SideEffect.Mutating,
         Description =
-            "Write a reply to an Outlook message and save it as a DRAFT. It is never "
-            + "sent; the user reviews and sends it. Set replyAll to include every "
-            + "recipient of the original.",
+            "Write a reply to an Outlook message and save it as a DRAFT. It is never sent; "
+            + "the user reviews and sends it, and the original message is quoted underneath "
+            + "whatever you write. THREE ways to address it, and they are exclusive: by "
+            + "default it goes to the sender; replyAll includes every recipient of the "
+            + "original; and 'to' replaces them all with the people you name, which is the "
+            + "one to use when a thread of nine concerns one of them. In 'to' a full name "
+            + "works as well as an address -- Outlook's address book resolves it, and the "
+            + "answer says who it resolved to, so 'reply to Kluge' is a legitimate "
+            + "instruction. Separate several with a semicolon or a comma.",
         PreviewParameter = "messageId",
         Glyph = "mail")]
     public async Task<string> ReplyDraft(
         string messageId,
         string body,
         bool replyAll = false,
+        string? to = null,
+        string? cc = null,
         CancellationToken cancellationToken = default)
     {
         if (!OutlookClient.IsAvailable)
@@ -321,10 +329,147 @@ public sealed partial class OutlookTools(
         if (string.IsNullOrWhiteSpace(messageId) || string.IsNullOrWhiteSpace(body))
             return "error: a message id and a reply body are required.";
 
+        // Refused rather than silently preferring one. "Reply to everybody, but only to
+        // Kluge" is not a thing, and picking a winner would mean the model's mistake becomes
+        // a mail addressed to the wrong nine people.
+        if (replyAll && !string.IsNullOrWhiteSpace(to))
+        {
+            return "error: replyAll and 'to' contradict each other. Use replyAll for every "
+                + "recipient of the original, or 'to' for the people you name.";
+        }
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(to))
+            {
+                return await _outlook
+                    .ReplyToAsync(messageId, body, to, cc, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            return await _outlook
+                .ReplyDraftAsync(messageId, body, replyAll, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            return Failure(ex);
+        }
+    }
+
+    [ShellvisTool(
+        "calendar_create",
+        SideEffect.Mutating,
+        Description =
+            "Create an appointment in Outlook and OPEN it. With attendees it becomes a "
+            + "meeting that is saved but NOT sent -- the invitation goes out when the user "
+            + "presses Send, the same rule that makes a reply a draft. Give start as "
+            + "'2026-09-04 14:00', or 'tomorrow 14:00' / 'today 09:30'; a date without a "
+            + "time is refused rather than booked at midnight. Give either end or "
+            + "durationMinutes (60 by default). In attendees a full name works as well as an "
+            + "address and the answer says who it resolved to. Set teams for a Teams "
+            + "meeting. The answer repeats the date WITH ITS WEEKDAY -- check it against what "
+            + "was asked for before telling the user it is arranged.",
+        PreviewParameter = "subject",
+        Glyph = "calendar")]
+    public async Task<string> CreateAppointment(
+        string subject,
+        string start,
+        string? end = null,
+        int durationMinutes = 60,
+        string? body = null,
+        string? attendees = null,
+        bool teams = false,
+        string? location = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!OutlookClient.IsAvailable)
+            return Unavailable;
+
+        if (string.IsNullOrWhiteSpace(subject))
+            return "error: a subject is required. An appointment nobody can identify is noise.";
+
+        DateTime now = DateTime.Now;
+
+        if (!MailWindow.TryParseMoment(start, now, out DateTime from, out string? problem))
+            return $"error: start {problem}";
+
+        DateTime to;
+
+        if (!string.IsNullOrWhiteSpace(end))
+        {
+            if (!MailWindow.TryParseMoment(end, now, out to, out string? endProblem))
+                return $"error: end {endProblem}";
+        }
+        else
+        {
+            if (durationMinutes <= 0)
+                return "error: durationMinutes has to be more than zero.";
+
+            to = from.AddMinutes(Math.Min(durationMinutes, 60 * 24));
+        }
+
+        if (to <= from)
+        {
+            return $"error: the end ({to:ddd yyyy-MM-dd HH:mm}) is not after the start "
+                + $"({from:ddd yyyy-MM-dd HH:mm}).";
+        }
+
+        // Said rather than refused. A meeting in the past is occasionally deliberate -- a
+        // record of something that already happened -- and guessing which case it is would
+        // be worse than mentioning it.
+        string note = from < now
+            ? "  Note: this start is in the past."
+            : string.Empty;
+
+        try
+        {
+            string created = await _outlook
+                .CreateAppointmentAsync(subject, from, to, body, attendees, teams, location, cancellationToken)
+                .ConfigureAwait(false);
+
+            return created + note;
+        }
+        catch (Exception ex)
+        {
+            return Failure(ex);
+        }
+    }
+
+    [ShellvisTool(
+        "mail_forward_draft",
+        SideEffect.Mutating,
+        Description =
+            "Forward an Outlook message to somebody, with a comment of your own at the top, "
+            + "and save it as a DRAFT. Never sent. The attachments, the quoted original and "
+            + "the Fw: subject come with it, because Outlook's own forward is used rather "
+            + "than a new message -- a forward that quietly loses the attachment is worse "
+            + "than none, since the covering note says the file is enclosed. In 'to' a full "
+            + "name works as well as an address; the answer says who it resolved to, and "
+            + "names anything the address book did not recognise instead of leaving a draft "
+            + "addressed to a typo.",
+        PreviewParameter = "to",
+        Glyph = "mail")]
+    public async Task<string> ForwardDraft(
+        string messageId,
+        string to,
+        string comment,
+        string? cc = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!OutlookClient.IsAvailable)
+            return Unavailable;
+
+        if (string.IsNullOrWhiteSpace(messageId))
+            return "error: a message id is required. Get one from mail_list or mail_search.";
+
+        if (string.IsNullOrWhiteSpace(to))
+            return "error: somebody to forward it to is required, as a name or an address.";
+
         try
         {
             return await _outlook
-                .ReplyDraftAsync(messageId, body, replyAll, cancellationToken)
+                .ForwardDraftAsync(messageId, to, comment ?? string.Empty, cc, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception ex)

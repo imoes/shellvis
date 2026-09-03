@@ -266,6 +266,34 @@ internal static class OutlookProbe
                 since.ToString("g", CultureInfo.CurrentCulture),
                 StringComparison.Ordinal));
 
+        // ------------------------------------------------------ splitting a recipient list
+        //
+        // This exists because getting it wrong broke a feature invisibly. Splitting on commas
+        // as well as semicolons turned "Kluge, Thomas" -- which is how this address book
+        // lists people -- into "Kluge" and "Thomas", so replying to one named person resolved
+        // nobody and reported the tool as broken.
+        Console.WriteLine();
+
+        failures += Check2(
+            "a name with a comma in it stays one recipient",
+            OutlookClient.SplitRecipients("Kluge, Thomas") is [_]);
+
+        failures += Check2(
+            "two such names separated by a semicolon are two",
+            OutlookClient.SplitRecipients("Kluge, Thomas; Meier, Anna") is [_, _]);
+
+        failures += Check2(
+            "a comma-separated list of ADDRESSES is split, because a comma cannot be part of one",
+            OutlookClient.SplitRecipients("a@x.de, b@y.de") is [_, _]);
+
+        failures += Check2(
+            "and the two kinds mix",
+            OutlookClient.SplitRecipients("a@x.de; Kluge, Thomas") is [_, _]);
+
+        failures += Check2(
+            "an empty list is no recipients rather than one empty one",
+            OutlookClient.SplitRecipients("  ").Count == 0);
+
         // ------------------------------------------------------------ what the page withheld
         Console.WriteLine();
 
@@ -392,6 +420,7 @@ internal static class OutlookProbe
         using (var apartment = new ComApartment("Shellvis probe COM"))
         {
             var tools = new OutlookTools(apartment);
+            var client = new OutlookClient(apartment);
 
             // ------------------------------------------------------------- mail
             string inbox = await tools.ListMail("inbox", limit: 5).ConfigureAwait(false);
@@ -589,6 +618,131 @@ internal static class OutlookProbe
             failures += Check2(
                 "a query with nothing searchable in it is refused, not run",
                 tooShort.StartsWith("error:", StringComparison.Ordinal));
+
+            // ------------------------------------------- forwarding and answering one person
+            //
+            // Everything created here is removed again at the end. A harness that leaves
+            // three drafts and a meeting in somebody's mailbox every run is a harness they
+            // stop running, and these are the operations where "it looked like it worked" is
+            // the failure: a draft addressed to an unresolved name is indistinguishable from
+            // a finished one until somebody presses Send.
+            var toRemove = new List<string>();
+
+            if (expected is not null)
+            {
+                OutlookClient.Mailbox mine = await client.OwnMailboxAsync().ConfigureAwait(false);
+                string me = mine.Address;
+
+                // The DISPLAY name, not Environment.UserName. The address book knows
+                // "Kluge, Thomas"; it has never heard of "mutkluge", and the first run of
+                // this check failed for that reason rather than for a fault in the tool.
+                string myName = mine.Name;
+
+                string forwarded = await tools
+                    .ForwardDraft(expected, me, "Testkommentar vom Prüfstand.")
+                    .ConfigureAwait(false);
+
+                failures += Check("mail_forward_draft", forwarded);
+                Console.WriteLine("       " + Summarise(forwarded));
+
+                failures += Check2(
+                    "a forward says who it resolved the recipient to",
+                    forwarded.Contains('<', StringComparison.Ordinal)
+                    || forwarded.Contains(me, StringComparison.OrdinalIgnoreCase));
+
+                failures += Check2(
+                    "and says it was not sent",
+                    forwarded.Contains("NOT been sent", StringComparison.Ordinal));
+
+                if (ExtractFirstId(forwarded) is { } forwardId)
+                    toRemove.Add(forwardId);
+
+                // A NAME rather than an address, which is the half of the requirement that
+                // needs the address book rather than a string assignment.
+                string byName = await tools
+                    .ReplyDraft(expected, "Antwort nur an eine Person.", to: myName)
+                    .ConfigureAwait(false);
+
+                failures += Check($"mail_reply_draft to a name ({myName})", byName);
+                Console.WriteLine("       " + Summarise(byName));
+
+                failures += Check2(
+                    "a reply to one person quotes the original underneath",
+                    byName.Contains("quoted below", StringComparison.Ordinal));
+
+                if (ExtractFirstId(byName) is { } replyId)
+                    toRemove.Add(replyId);
+
+                // The two ways of addressing contradict each other and must not be guessed at.
+                string both = await tools
+                    .ReplyDraft(expected, "x", replyAll: true, to: me)
+                    .ConfigureAwait(false);
+
+                failures += Check2(
+                    "replyAll together with 'to' is refused rather than resolved by guessing",
+                    both.StartsWith("error:", StringComparison.Ordinal));
+
+                string nobody = await tools
+                    .ForwardDraft(expected, "Zzqq Nichtvorhanden", "x")
+                    .ConfigureAwait(false);
+
+                failures += Check2(
+                    "an unresolvable recipient saves nothing and says so",
+                    nobody.StartsWith("error:", StringComparison.Ordinal));
+            }
+
+            // ------------------------------------------------------------ creating a meeting
+            string when = DateTime.Now.Date.AddDays(1).AddHours(15)
+                .ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+
+            string made = await tools
+                .CreateAppointment($"Shellvis probe {DateTime.Now:HHmmss}", when, durationMinutes: 30,
+                    body: "Angelegt vom Prüfstand, wird gleich entfernt.")
+                .ConfigureAwait(false);
+
+            failures += Check("calendar_create", made);
+            Console.WriteLine("       " + Summarise(made));
+
+            failures += Check2(
+                "an appointment without attendees says nobody was told",
+                made.Contains("nobody else was told", StringComparison.Ordinal));
+
+            failures += Check2(
+                "and repeats the date with its weekday, so a wrong one is visible",
+                made.Contains(DateTime.Now.Date.AddDays(1).ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    StringComparison.Ordinal));
+
+            if (ExtractFirstId(made) is { } madeId)
+                toRemove.Add(madeId);
+
+            // A date with no time would be midnight, which is never what anybody meant.
+            string midnight = await tools.CreateAppointment("x", "2026-12-24").ConfigureAwait(false);
+
+            failures += Check2(
+                "a date without a time is refused rather than booked at midnight",
+                midnight.StartsWith("error:", StringComparison.Ordinal)
+                && midnight.Contains("midnight", StringComparison.Ordinal));
+
+            string backwards = await tools
+                .CreateAppointment("x", "tomorrow 15:00", end: "tomorrow 14:00")
+                .ConfigureAwait(false);
+
+            failures += Check2(
+                "an end before the start is refused",
+                backwards.StartsWith("error:", StringComparison.Ordinal));
+
+            // -------------------------------------------------------------------- cleaning up
+            int removed = 0;
+
+            foreach (string id in toRemove)
+            {
+                if (await client.DeleteItemAsync(id).ConfigureAwait(false))
+                    removed++;
+            }
+
+            failures += Check2(
+                $"the probe removed everything it created ({removed} of {toRemove.Count})",
+                removed == toRemove.Count);
 
             // Reading one message end to end proves the id round-trips, which is what
             // every other mail operation depends on.

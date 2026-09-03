@@ -52,6 +52,81 @@ public sealed record MailPage(
 /// </summary>
 public static class MailWindow
 {
+    /// <summary>
+    /// A moment in the FUTURE, for something being created rather than searched.
+    ///
+    /// <b>Why this is not <see cref="TryParse"/>.</b> That one reads backwards: "7d" means
+    /// seven days ago, because every question about mail is about mail that has arrived. An
+    /// appointment is the opposite, and quietly reusing the backwards reading would book
+    /// meetings in the past. So the relative forms here are the two that are unambiguous in
+    /// either direction -- today and tomorrow, with a time -- and everything else has to be
+    /// an actual date. The date itself is read by the same shape rule, because that part is
+    /// the same problem.
+    ///
+    /// A model asked for "tomorrow at two" can compute the date, and gets it wrong often
+    /// enough that this project already prints weekdays for it. So whatever comes out of here
+    /// is echoed back to the caller with its weekday: a wrong date should be visible in the
+    /// answer rather than only in the calendar.
+    /// </summary>
+    public static bool TryParseMoment(
+        string? text,
+        DateTime now,
+        out DateTime value,
+        out string? problem)
+    {
+        value = default;
+        problem = null;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            problem = "no date and time given.";
+            return false;
+        }
+
+        string trimmed = text.Trim();
+
+        foreach ((string word, int offset) in new[] { ("today", 0), ("tomorrow", 1) })
+        {
+            if (!trimmed.StartsWith(word, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            string rest = trimmed[word.Length..].Trim();
+            DateTime day = now.Date.AddDays(offset);
+
+            if (rest.Length == 0)
+            {
+                problem = $"'{word}' needs a time, for example '{word} 14:00'.";
+                return false;
+            }
+
+            if (TimeSpan.TryParse(rest, CultureInfo.CurrentCulture, out TimeSpan clock)
+                || TimeSpan.TryParse(rest, CultureInfo.InvariantCulture, out clock))
+            {
+                value = day + clock;
+                return true;
+            }
+
+            problem = $"'{rest}' is not a time. Use 14:00 or 9:30.";
+            return false;
+        }
+
+        if (!TryParse(trimmed, now, out value, out problem))
+            return false;
+
+        // A date with no time is midnight, which is a real answer for a window and a useless
+        // one for a meeting. Said rather than silently booked at 00:00.
+        if (value.TimeOfDay == TimeSpan.Zero
+            && !trimmed.Contains(':', StringComparison.Ordinal))
+        {
+            problem = $"'{trimmed}' has no time of day, so it would be midnight. "
+                + "Give a time, for example '2026-09-04 14:00'.";
+
+            return false;
+        }
+
+        return true;
+    }
+
     /// <summary>The shapes only ISO writes, matched exactly so no culture can reinterpret them.</summary>
     private static readonly string[] IsoFormats =
     [

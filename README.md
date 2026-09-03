@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.9.2-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.9.3-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -137,7 +137,7 @@ dictation, and the sentence "recognition runs on this machine" is not printed. K
 the DPAPI secret store or in `AZURE_SPEECH_KEY` / `GOOGLE_SPEECH_KEY`, never in `config.yaml`.
 Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 
-### 104 tools
+### 106 tools
 
 | Area | Tools |
 |---|---|
@@ -148,7 +148,7 @@ Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 | Gallery | `psgallery_search` `psgallery_info` `psgallery_install` `psgallery_installed` |
 | Office (headless) | `word_create` `sheet_create` `slides_create` and four readers |
 | Office (live) | `office_open_documents` `office_read_open` `office_export_pdf` |
-| Outlook | `mail_list` `mail_search` `mail_read` `mail_open` `mail_thread` `mail_history` `mail_reply_draft` `mail_compose_draft` `calendar_list` `contacts_find` |
+| Outlook | `mail_list` `mail_search` `mail_read` `mail_open` `mail_thread` `mail_history` `mail_reply_draft` `mail_forward_draft` `mail_compose_draft` `calendar_list` `calendar_create` `contacts_find` |
 | Tasks | `task_list` `task_create` `task_complete` |
 | Teams | `teams_chat_open` `teams_meeting_join` |
 | Assistant | `agenda_due` `agenda_today` `note_add` `note_search` `note_due` `note_close` `note_stick` `note_stickies` |

@@ -4,6 +4,22 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.9.9
+
+- **Das Vorzimmer shows the state of the desk.** Unread mail, how much of it came from a
+  person rather than from a system, ticket post, meeting requests, what is left today and
+  what is overdue. A badge marks what has grown since you last opened it — never the total,
+  and never a number that fell: a notice that appears when you have just tidied up is one
+  nobody believes twice. The numbers are counted, not sorted, and the page says so — which
+  mail needs an answer today is decided by reading it.
+
+## 0.9.8
+
+- **The rules your desk is kept by are on one page.** What gets sorted before anything is
+  said, when you are interrupted, and what is never sent — in a window of its own, behind a
+  button beside the answer. Not the browser: the page belongs to the application, and a
+  reference you have to leave the application to read is one nobody reads.
+
 ## 0.9.6
 
 - **Ask about a ticket and get a summary, with the link.** The answer used to be the comment

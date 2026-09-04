@@ -46,7 +46,14 @@ public sealed partial class PillWindow
     {
         bool first = _vorzimmer is null;
 
-        _vorzimmer ??= new VorzimmerWindow();
+        if (_vorzimmer is null)
+        {
+            _vorzimmer = new VorzimmerWindow();
+
+            // The button on the page. Subscribed once, when the window is made, so a second
+            // open does not stack a second handler and count the desk twice.
+            _vorzimmer.RefreshRequested += () => _ = CountTheDeskAsync(saveBaseline: false);
+        }
 
         _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
 
@@ -85,8 +92,20 @@ public sealed partial class PillWindow
     /// </param>
     private async Task CountTheDeskAsync(bool saveBaseline)
     {
-        if (_counting || _session?.Outlook is null || _vorzimmer is null)
+        if (_vorzimmer is null)
             return;
+
+        // Already counting: say nothing and do nothing. The count in flight ends in a
+        // render, which is what puts the button back -- so the press is not lost, it is
+        // answered by the other one.
+        if (_counting)
+            return;
+
+        if (_session?.Outlook is null)
+        {
+            _vorzimmer.Trouble("Outlook ist nicht erreichbar");
+            return;
+        }
 
         _counting = true;
 
@@ -107,6 +126,7 @@ public sealed partial class PillWindow
             // mailbox that has gone offline, is a normal state of the world; the page keeps
             // its dashes and the next tick tries again.
             AddRow(GlyphWarning, $"could not count the desk: {ex.Message}", "desk", isWarning: true);
+            _vorzimmer?.Trouble("konnte nicht gezählt werden");
         }
         finally
         {

@@ -248,6 +248,53 @@
     padding-top: .7rem;
   }
 
+  /* ------------------------------------------------------------- freshness
+     The time of the count and the button that redoes it, on the heading's own
+     line. Both are here rather than in a corner because "is this current?" is
+     the first question anybody asks of a page full of numbers, and the answer
+     has to be where they are already looking. */
+  .head-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem 1.5rem;
+  }
+
+  .freshness {
+    display: flex;
+    align-items: baseline;
+    gap: .6rem;
+  }
+
+  .freshness > span {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+  }
+
+  /* Before the first count there is nothing to be stale about, but there is
+     also nothing to trust: said in the accent rather than in body grey so it
+     does not read as a measurement. */
+  .freshness > span.stale { color: var(--tab); }
+
+  .freshness > button {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    letter-spacing: .06em;
+    background: none;
+    border: 1px solid var(--rule);
+    color: var(--ink-soft);
+    padding: .18rem .55rem .22rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .freshness > button:hover:not(:disabled) { border-color: var(--tab); color: var(--ink); }
+  .freshness > button:focus-visible { outline: 2px solid var(--tab); outline-offset: 2px; }
+  .freshness > button:disabled { color: var(--ink-faint); cursor: default; }
+  .freshness > button[hidden] { display: none !important; }
+
   /* -------------------------------------------------------------- the desk
      The live numbers. Everything here is counted rather than judged, which is
      why it sits in its own strip above the trays instead of inside them. */
@@ -647,7 +694,16 @@
   <section class="band">
     <div class="band-head">
       <p class="eyebrow">Stand</p>
-      <h2>Was gerade auf dem Schreibtisch liegt</h2>
+
+      <div class="head-row">
+        <h2>Was gerade auf dem Schreibtisch liegt</h2>
+
+        <div class="freshness">
+          <span id="counted-at" class="stale">noch nicht gezählt</span>
+          <button type="button" id="refresh" hidden>Jetzt zählen</button>
+        </div>
+      </div>
+
       <p>
         Gezählt, nicht sortiert. Ein Badge zeigt, was seit dem letzten Öffnen dazugekommen
         ist — die Zahl daneben ist der ganze Stapel.
@@ -1072,6 +1128,8 @@
     var notice = document.getElementById("refreshed");
     var noticeWhat = document.getElementById("refreshed-what");
     var takenAt = document.getElementById("taken-at");
+    var countedAt = document.getElementById("counted-at");
+    var refresh = document.getElementById("refresh");
 
     document.getElementById("refreshed-close").addEventListener("click", function () {
       notice.hidden = true;
@@ -1133,7 +1191,18 @@
       if (desk.takenAt) {
         takenAt.textContent = "Gezählt um " + desk.takenAt
           + ". Die Zahlen kommen aus dem Postfach auf diesem Rechner und verlassen ihn nicht.";
+
+        /* The same time next to the heading, which is where it is actually read. Without it
+         * a page that refreshed and found nothing changed looks exactly like a page that
+         * did not refresh at all -- and the two were indistinguishable until this line. */
+        countedAt.textContent = "gezählt um " + desk.takenAt;
+        countedAt.classList.remove("stale");
       }
+
+      /* Whatever happened, the button is usable again. Left disabled on a failed count it
+       * would be a dead control on a stale page. */
+      refresh.disabled = false;
+      refresh.textContent = "Jetzt zählen";
 
       /* The notice, and only when something actually grew. An update that changed nothing is
        * not an update worth a line: this page is refreshed on a timer, and a banner on every
@@ -1153,12 +1222,31 @@
     }
 
     if (window.chrome && window.chrome.webview) {
+      /* The button exists only where it can do something. On a shared copy of this page
+       * there is no mailbox to count, and a button that does nothing when pressed is worse
+       * than no button. */
+      refresh.hidden = false;
+
+      refresh.addEventListener("click", function () {
+        refresh.disabled = true;
+        refresh.textContent = "zählt ...";
+        window.chrome.webview.postMessage("refresh");
+      });
+
       window.chrome.webview.addEventListener("message", function (event) {
         try {
           var data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
 
           if (data && data.counts) {
             render(data);
+          } else if (data && data.problem) {
+            /* The count could not be taken. The button has to come back either way: a
+             * control left saying "zählt ..." for ever is worse than one that says the
+             * attempt failed. */
+            countedAt.textContent = data.problem;
+            countedAt.classList.add("stale");
+            refresh.disabled = false;
+            refresh.textContent = "Nochmal";
           }
         } catch (ignored) {
           /* A malformed message leaves the page as it was. Rendering half a snapshot would
@@ -1169,6 +1257,11 @@
       /* Say the page is ready, so the first snapshot is not sent into a document that has
        * not run its script yet. */
       window.chrome.webview.postMessage("ready");
+    } else {
+      /* No bridge: this is a copy of the page away from the machine. "Noch nicht gezählt"
+       * would suggest a count is coming; it is not, and saying which is the honest half of
+       * showing dashes. */
+      countedAt.textContent = "ohne Postfach keine Zahlen";
     }
   })();
 </script>

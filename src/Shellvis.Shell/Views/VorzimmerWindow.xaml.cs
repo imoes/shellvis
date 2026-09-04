@@ -188,11 +188,37 @@ public sealed partial class VorzimmerWindow : Window
             }
         };
 
-        // The page says when it is ready, and the first snapshot waits for that. Posting
-        // into a document whose script has not run yet loses the message silently, and what
+        // Two messages come back from the page, and they are told apart by name rather
+        // than by order.
+        //
+        // "ready" -- the script has run. The first snapshot waits for it, because posting
+        // into a document whose script has not started loses the message silently, and what
         // that looks like is a page of dashes that never fills in.
-        View.CoreWebView2.WebMessageReceived += (_, _) =>
+        //
+        // "refresh" -- somebody pressed the button. Asked for rather than assumed: the page
+        // is refreshed on the watcher's own timer, and a refresh that found nothing changed
+        // looks exactly like no refresh at all, so there has to be a way to say "now".
+        View.CoreWebView2.WebMessageReceived += (_, args) =>
         {
+            string message;
+
+            try
+            {
+                message = args.TryGetWebMessageAsString();
+            }
+            catch (Exception)
+            {
+                // Not a string message. Nothing this page sends looks like that, so it is
+                // not something to act on.
+                return;
+            }
+
+            if (message == "refresh")
+            {
+                RefreshRequested?.Invoke();
+                return;
+            }
+
             _ready = true;
 
             if (_pending is not null)
@@ -207,6 +233,15 @@ public sealed partial class VorzimmerWindow : Window
 
     private bool _ready;
     private string? _pending;
+
+    /// <summary>
+    /// Raised when the page asks to be counted again.
+    ///
+    /// An event rather than a call into the owner: this window knows how to draw a desk and
+    /// nothing about how to measure one. The pill owns the Outlook client, the comparison
+    /// point and the guard against two counts at once.
+    /// </summary>
+    public event Action? RefreshRequested;
 
     /// <summary>
     /// Hand the page what is on the desk.
@@ -246,6 +281,16 @@ public sealed partial class VorzimmerWindow : Window
                 CultureInfo.CurrentCulture,
                 $"im Posteingang · die Aufteilung zählt die neuesten {desk.Scanned}")
             : "im Posteingang";
+
+    /// <summary>
+    /// Tell the page the count could not be taken, and why.
+    ///
+    /// Without this the button pressed on a machine with no Outlook stays on "zählt ..."
+    /// for the life of the window: the render that would have restored it never arrives.
+    /// A dead control on a stale page is the worst of the three possible outcomes.
+    /// </summary>
+    public void Trouble(string why) =>
+        Send(JsonSerializer.Serialize(new { problem = why }, PayloadFormat));
 
     private void Send(string json)
     {

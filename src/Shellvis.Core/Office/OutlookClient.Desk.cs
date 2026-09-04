@@ -1,9 +1,24 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+
+using Shellvis.Core.Desk;
 
 namespace Shellvis.Core.Office;
 
 public sealed partial class OutlookClient
 {
+    /// <summary>
+    /// The MAPI property that carries a message's own identifier.
+    ///
+    /// PR_INTERNET_MESSAGE_ID. Named because a proptag is unreadable and looks like a typo,
+    /// and reached through PropertyAccessor because the object model does not expose it: it
+    /// is the only thing about a mail that stays the same when the mail is filed, so it is
+    /// what the cache is keyed on.
+    /// </summary>
+    private const string MessageIdProperty =
+        "http://schemas.microsoft.com/mapi/proptag/0x1035001F";
+
     /// <summary>
     /// How far back the classification of unread mail looks.
     /// </summary>
@@ -28,12 +43,21 @@ public sealed partial class OutlookClient
     /// real mailbox; the scan over the result is capped because the classification is the
     /// expensive half and the recent end is the part that matters.
     /// </summary>
-    public Task<DeskSnapshot> TakeSnapshotAsync(DateTime now, CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// <b>The objects come back with the counts, out of the same walk.</b> The cache needs a
+    /// row per thing and the page needs a number per kind, and both come from reading the
+    /// same items -- so they are read once. Indexing in a second pass would double the COM
+    /// traffic on the one operation that runs on a timer, and on a mailbox of four thousand
+    /// messages that is the difference between a background task and a noticeable one.
+    /// </remarks>
+    public Task<DeskReading> TakeSnapshotAsync(DateTime now, CancellationToken cancellationToken = default)
     {
         return apartment.InvokeAsync(() =>
         {
             dynamic? outlook = null;
             dynamic? session = null;
+
+            var seen = new List<DeskObject>();
 
             try
             {
@@ -49,23 +73,25 @@ public sealed partial class OutlookClient
                 // dynamic result cannot be deconstructed -- it can only be converted into a
                 // variable whose type is written out.
                 (int Unread, int People, int Automated, int Requests, int Tickets, int Scanned) mail =
-                    CountUnread(session, cancellationToken);
+                    CountUnread(session, now, seen, cancellationToken);
 
-                (int Left, DateTime? Next) day = CountToday(session, now, cancellationToken);
+                (int Left, DateTime? Next) day = CountToday(session, now, seen, cancellationToken);
 
-                int overdue = CountOverdue(session, now, cancellationToken);
+                int overdue = CountOverdue(session, now, seen, cancellationToken);
 
-                return new DeskSnapshot(
-                    Unread: mail.Unread,
-                    FromPeople: mail.People,
-                    Automated: mail.Automated,
-                    MeetingRequests: mail.Requests,
-                    TicketMail: mail.Tickets,
-                    AppointmentsToday: day.Left,
-                    NextAppointment: day.Next,
-                    OverdueTasks: overdue,
-                    Scanned: mail.Scanned,
-                    TakenAt: now);
+                return new DeskReading(
+                    new DeskSnapshot(
+                        Unread: mail.Unread,
+                        FromPeople: mail.People,
+                        Automated: mail.Automated,
+                        MeetingRequests: mail.Requests,
+                        TicketMail: mail.Tickets,
+                        AppointmentsToday: day.Left,
+                        NextAppointment: day.Next,
+                        OverdueTasks: overdue,
+                        Scanned: mail.Scanned,
+                        TakenAt: now),
+                    seen);
             }
             finally
             {
@@ -77,6 +103,8 @@ public sealed partial class OutlookClient
     /// <summary>Unread mail, and what kind of sender it came from.</summary>
     private static (int Unread, int People, int Automated, int Requests, int Tickets, int Scanned) CountUnread(
         dynamic session,
+        DateTime now,
+        List<DeskObject> seen,
         CancellationToken cancellationToken)
     {
         dynamic? folder = null;
@@ -116,33 +144,52 @@ public sealed partial class OutlookClient
 
                     scanned++;
 
-                    // The class, not the subject. "Besprechungsanfrage:" is a localised
-                    // prefix; IPM.Schedule.Meeting.Request is not.
-                    if (Str(() => item.MessageClass)
-                        .StartsWith("IPM.Schedule.Meeting.Request", StringComparison.OrdinalIgnoreCase))
-                    {
-                        requests++;
-                        continue;
-                    }
-
+                    string subject = Str(() => item.Subject);
                     string address = Str(() => item.SenderEmailAddress);
                     string name = Str(() => item.SenderName);
+                    DateTime received = Date(() => item.ReceivedTime);
 
-                    if (TicketKeys.LooksAutomated(address, name))
+                    // The class, not the subject. "Besprechungsanfrage:" is a localised
+                    // prefix; IPM.Schedule.Meeting.Request is not.
+                    bool request = Str(() => item.MessageClass)
+                        .StartsWith("IPM.Schedule.Meeting.Request", StringComparison.OrdinalIgnoreCase);
+
+                    bool automatic = !request && TicketKeys.LooksAutomated(address, name);
+
+                    // A ticket key in the subject AND an automated sender. The key alone is
+                    // not enough: a colleague writing "wegen IMIT-1234" is a person with a
+                    // question, not a notification, and this project already made that
+                    // mistake once in the other direction.
+                    string? key = automatic ? TicketKeys.Primary(subject, string.Empty) : null;
+
+                    if (request)
+                        requests++;
+                    else if (automatic)
                     {
                         automated++;
 
-                        // A ticket key in the subject AND an automated sender. The key alone
-                        // is not enough: a colleague writing "wegen IMIT-1234" is a person
-                        // with a question, not a notification, and this project already made
-                        // that mistake once in the other direction.
-                        if (TicketKeys.Primary(Str(() => item.Subject), string.Empty) is not null)
+                        if (key is not null)
                             tickets++;
-
-                        continue;
                     }
+                    else
+                        people++;
 
-                    people++;
+                    seen.Add(new DeskObject(
+                        Id: DeskObject.MakeId(DeskKind.Mail, MessageKey(item, subject, address, received)),
+                        Kind: DeskKind.Mail,
+                        Subject: subject,
+                        WhoName: name,
+                        WhoAddress: address,
+                        When: received,
+                        Due: null,
+                        State: request ? "meeting request" : "unread",
+                        TicketKey: key,
+                        Thread: Str(() => item.ConversationID) is { Length: > 0 } thread ? thread : null,
+                        EntryId: Str(() => item.EntryID),
+                        Facts: null,
+                        Enrichment: null,
+                        FirstSeen: now,
+                        LastSeen: now));
                 }
                 finally
                 {
@@ -158,10 +205,50 @@ public sealed partial class OutlookClient
         }
     }
 
+    /// <summary>
+    /// A message's own identifier, or a made-up one that behaves like it.
+    ///
+    /// <b>The fallback matters more than it looks.</b> Not everything in an inbox has an
+    /// internet message id: a meeting request, a delivery report and anything created
+    /// locally may have none. Keying those on the entry id would be keying on a value that
+    /// changes the moment the item is filed, so instead they get a hash of the three things
+    /// that do not change -- when it arrived, who from, and what it was called. Two
+    /// different messages colliding on all three is a mail sent twice in the same second by
+    /// the same person with the same subject, which is one thing as far as a desk cares.
+    /// </summary>
+    private static string MessageKey(dynamic item, string subject, string address, DateTime received)
+    {
+        string own = Str(() =>
+        {
+            dynamic? accessor = null;
+
+            try
+            {
+                accessor = item.PropertyAccessor;
+                return accessor?.GetProperty(MessageIdProperty);
+            }
+            finally
+            {
+                Com.Release(accessor);
+            }
+        });
+
+        if (own.Length > 0)
+            return own;
+
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"{received:O}|{address}|{subject}")));
+
+        return "shellvis-" + Convert.ToHexStringLower(hash)[..24];
+    }
+
     /// <summary>What is still to come today, and when the next one starts.</summary>
     private static (int Left, DateTime? Next) CountToday(
         dynamic session,
         DateTime now,
+        List<DeskObject> seen,
         CancellationToken cancellationToken)
     {
         dynamic? folder = null;
@@ -206,6 +293,31 @@ public sealed partial class OutlookClient
 
                     left++;
                     next ??= start;
+
+                    // GlobalAppointmentID, not EntryID: one occurrence of a series shares it
+                    // with the series, which is what makes "the Monday meeting" one thing to
+                    // remember rather than fifty-two.
+                    string global = Str(() => item.GlobalAppointmentID);
+                    string entry = Str(() => item.EntryID);
+
+                    seen.Add(new DeskObject(
+                        Id: DeskObject.MakeId(
+                            DeskKind.Appointment,
+                            global.Length > 0 ? global : entry),
+                        Kind: DeskKind.Appointment,
+                        Subject: Str(() => item.Subject),
+                        WhoName: Str(() => item.Organizer),
+                        WhoAddress: string.Empty,
+                        When: start,
+                        Due: null,
+                        State: Str(() => item.Location),
+                        TicketKey: null,
+                        Thread: null,
+                        EntryId: entry,
+                        Facts: null,
+                        Enrichment: null,
+                        FirstSeen: now,
+                        LastSeen: now));
                 }
                 finally
                 {
@@ -222,7 +334,11 @@ public sealed partial class OutlookClient
     }
 
     /// <summary>Tasks whose due date has passed and which are not finished.</summary>
-    private static int CountOverdue(dynamic session, DateTime now, CancellationToken cancellationToken)
+    private static int CountOverdue(
+        dynamic session,
+        DateTime now,
+        List<DeskObject> seen,
+        CancellationToken cancellationToken)
     {
         dynamic? folder = null;
         dynamic? items = null;
@@ -257,8 +373,32 @@ public sealed partial class OutlookClient
                     if (due == DateTime.MinValue || due.Date == NoDate.Date)
                         continue;
 
-                    if (due.Date < now.Date)
+                    bool late = due.Date < now.Date;
+
+                    if (late)
                         overdue++;
+
+                    // Only the dated, open ones are remembered. An undated task is a
+                    // someday-item and filling the cache with hundreds of them would push
+                    // the things that have a date out of view in every listing.
+                    seen.Add(new DeskObject(
+                        Id: DeskObject.MakeId(DeskKind.Task, Str(() => item.EntryID)),
+                        Kind: DeskKind.Task,
+                        Subject: Str(() => item.Subject),
+                        WhoName: string.Empty,
+                        WhoAddress: string.Empty,
+                        When: Date(() => item.CreationTime) is { } made && made != DateTime.MinValue
+                            ? made
+                            : due,
+                        Due: due,
+                        State: late ? "overdue" : "open",
+                        TicketKey: TicketKeys.Primary(Str(() => item.Subject), string.Empty),
+                        Thread: null,
+                        EntryId: Str(() => item.EntryID),
+                        Facts: null,
+                        Enrichment: null,
+                        FirstSeen: now,
+                        LastSeen: now));
                 }
                 finally
                 {

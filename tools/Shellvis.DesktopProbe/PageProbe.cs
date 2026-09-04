@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 
+using Shellvis.Core.Desk;
 using Shellvis.Core.Office;
 
 namespace Shellvis.DesktopProbe;
@@ -210,6 +211,51 @@ internal static class PageProbe
 
         Check("and an unmeasured baseline counts as nothing to compare against",
             after.NewSince(DeskSnapshot.Nothing).Count == 0);
+
+        // -------------------------------------------------------------- the slider
+        //
+        // The control on the page and the setting in the code have to agree about two
+        // things: the range, and what a number of days is called. Neither agreement is
+        // checked by a compiler -- the page is markup and the wording is duplicated in
+        // JavaScript because the label has to move while the thumb does, before any
+        // message reaches the host.
+        Console.WriteLine("\n-- the slider and the setting agree --");
+
+        Check("the slider covers exactly the period the setting allows",
+            html.Contains($@"min=""{DeskWindow.Least}""", StringComparison.Ordinal)
+                && html.Contains($@"max=""{DeskWindow.Most}""", StringComparison.Ordinal),
+            $"{DeskWindow.Least} to {DeskWindow.Most} days");
+
+        Check("it is hidden until there is a mailbox behind it",
+            Regex.IsMatch(html, @"id=""remember-row""[^>]*\shidden"),
+            "a control that cannot do anything is worse than no control");
+
+        foreach (int days in new[] { 2, 14, 31, 62, 92 })
+        {
+            string said = new DeskWindow(days).Describe();
+
+            Check($"{days} days is called '{said}' on the page too",
+                html.Contains(said, StringComparison.Ordinal),
+                "the label moves with the thumb, so the wording exists twice and must match");
+        }
+
+        // The one case with a number in the middle of it, compared in halves.
+        //
+        // C# writes "die letzten 7 Tage" as one interpolated string; the page builds it by
+        // concatenation, because the label has to update from the slider's value without a
+        // round trip. Comparing the finished sentence would fail on a difference that does
+        // not exist at runtime, so the wording is pinned and the joining is not.
+        string few = new DeskWindow(7).Describe();
+
+        Check("a few days is worded the same way on both sides",
+            html.Contains("die letzten \" + days + \" Tage", StringComparison.Ordinal)
+                && few.StartsWith("die letzten ", StringComparison.Ordinal)
+                && few.EndsWith(" Tage", StringComparison.Ordinal),
+            few);
+
+        Check("the page says what the slider does NOT change",
+            html.Contains("Gespeichert wird ein Vierteljahr", StringComparison.Ordinal),
+            "keeping three months and consulting three months are different things");
 
         // ------------------------------------------------------------------- the theme
         Console.WriteLine("\n-- both themes are designed, not one --");

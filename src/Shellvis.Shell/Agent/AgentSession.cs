@@ -92,6 +92,22 @@ internal sealed partial class AgentSession : IDisposable
     /// <summary>The mailbox client the tools use, shared with the window's watcher.</summary>
     public Shellvis.Core.Office.OutlookClient? Outlook { get; private init; }
 
+    /// <summary>
+    /// The remembered desk, shared with the window's indexing pass.
+    ///
+    /// The tools read it; the pass that counts the mailbox writes it. One store, so there is
+    /// one place that owns the file and one place that closes it.
+    /// </summary>
+    public Shellvis.Core.Desk.DeskStore? Desk { get; private init; }
+
+    /// <summary>
+    /// How far back "remembering" reaches, which the slider on the reference page moves.
+    ///
+    /// Shared with the tools by reference on purpose: the setting has to take effect on the
+    /// next tool call, not on the next start.
+    /// </summary>
+    public Shellvis.Core.Desk.DeskWindow? DeskWindow { get; private init; }
+
     /// <summary>What each installed connector still needs.</summary>
     public IReadOnlyList<ConnectorNeeds> ConnectorNeeds() =>
         _connectors?.Needs() ?? [];
@@ -263,6 +279,27 @@ internal sealed partial class AgentSession : IDisposable
 
         registry.RegisterFrom(new NoteTools(notes));
 
+        // The remembered desk: every mail, ticket and task walked past in the last three
+        // months, with what was worked out about it.
+        //
+        // ONE store, handed to both readers. The tools read it and the window's indexing
+        // pass writes it, and giving each its own connection would work -- SQLite in WAL
+        // mode tolerates several -- but it would also mean two objects owning the same file
+        // with no single place to close it. The session owns it, because the session already
+        // owns the other two databases for the same reason.
+        // The retention comes from the configuration, or the setting would be a number in a
+        // file that nothing reads -- which is the fault this session has already found three
+        // times in other places.
+        var desk = new Shellvis.Core.Desk.DeskStore(
+            retention: TimeSpan.FromDays(Math.Clamp(settings.Desk.KeepDays, 7, 400)));
+
+        // The window is a live object rather than a number read once: the slider on the
+        // reference page moves it while the session runs, and a tool holding a copy of
+        // whatever it was at startup would ignore the control until a restart.
+        var deskWindow = new Shellvis.Core.Desk.DeskWindow(settings.Desk.RememberDays);
+
+        registry.RegisterFrom(new DeskTools(desk, deskWindow));
+
         // Configuring the scheduler in words, because the alternative was hand-editing
         // jobs.json in the right snake_case shape and restarting -- which is not a feature
         // anybody has. Every write asks, and no mode waives that: a scheduled job is the one
@@ -340,6 +377,8 @@ internal sealed partial class AgentSession : IDisposable
             _unattended = unattended,
             _connectors = connectors,
             Outlook = outlook,
+            Desk = desk,
+            DeskWindow = deskWindow,
         };
 
         // Held separately from the loop so a scheduled run is not affected by an

@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using Shellvis.Core.Config;
+using Shellvis.Core.Desk;
 using Shellvis.Core.Office;
 
 namespace Shellvis.Shell.Views;
@@ -53,6 +55,7 @@ public sealed partial class PillWindow
             // The button on the page. Subscribed once, when the window is made, so a second
             // open does not stack a second handler and count the desk twice.
             _vorzimmer.RefreshRequested += () => _ = CountTheDeskAsync(saveBaseline: false);
+            _vorzimmer.RememberDaysChanged += RememberOver;
         }
 
         _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
@@ -111,14 +114,16 @@ public sealed partial class PillWindow
 
         try
         {
-            DeskSnapshot desk = await _session.Outlook
+            DeskReading reading = await _session.Outlook
                 .TakeSnapshotAsync(DateTime.Now)
                 .ConfigureAwait(true);
 
-            _vorzimmer.Show(desk, _deskBaseline);
+            Remember(reading);
+
+            _vorzimmer.Show(reading.Counts, _deskBaseline, _session.DeskWindow?.Days ?? 30);
 
             if (saveBaseline)
-                SaveDesk(desk);
+                SaveDesk(reading.Counts);
         }
         catch (Exception ex)
         {
@@ -131,6 +136,109 @@ public sealed partial class PillWindow
         finally
         {
             _counting = false;
+        }
+    }
+
+    /// <summary>
+    /// Write what the walk saw into the remembered desk, and forget what is out of date.
+    ///
+    /// <b>A ticket a mail mentions gets a row of its own, even though the walk never saw the
+    /// ticket.</b> Without it the link points at nothing and the useful question -- "what do
+    /// we know about IMIT-1234" -- comes back empty while three notifications about it sit in
+    /// the cache. The row starts almost blank on purpose: the key is all that is actually
+    /// known, and filling the subject in from the mail's subject would be inventing a title
+    /// for somebody else's ticket. The Jira tools overwrite it with the real thing the first
+    /// time the ticket is fetched.
+    ///
+    /// <b>Pruning rides along here rather than on a schedule of its own.</b> The retention is
+    /// then enforced by the thing that also fills the store, so there is no arrangement in
+    /// which the cache grows because a separate job stopped running.
+    /// </summary>
+    private void Remember(DeskReading reading)
+    {
+        try
+        {
+            if (_session?.Desk is not { } store)
+                return;
+
+            foreach (DeskObject thing in reading.Objects)
+            {
+                store.See(thing);
+
+                if (thing.TicketKey is not { Length: > 0 } key)
+                    continue;
+
+                string ticketId = DeskObject.MakeId(DeskKind.Ticket, key);
+
+                store.See(new DeskObject(
+                    Id: ticketId,
+                    Kind: DeskKind.Ticket,
+                    Subject: string.Empty,
+                    WhoName: string.Empty,
+                    WhoAddress: string.Empty,
+                    When: thing.When,
+                    Due: null,
+                    State: string.Empty,
+                    TicketKey: key,
+                    Thread: null,
+                    EntryId: null,
+                    Facts: null,
+                    Enrichment: null,
+                    FirstSeen: thing.When,
+                    LastSeen: reading.Counts.TakenAt));
+
+                store.Link(thing.Id, ticketId, "about");
+            }
+
+            store.Prune(reading.Counts.TakenAt);
+        }
+        catch (Exception ex)
+        {
+            // The cache is an accelerator, not a source of truth. A store that cannot be
+            // written costs speed and memory of what was learned; it must not cost the
+            // count, which has already been taken by the time this runs.
+            AddRow(GlyphWarning, $"the desk could not be remembered: {ex.Message}", "desk", isWarning: true);
+        }
+    }
+
+    /// <summary>
+    /// The slider moved: take it now, and keep it for next time.
+    ///
+    /// <b>Two writes, and they are not the same write.</b> The live window is what the tools
+    /// read on their next call, so it changes immediately -- a setting that needed a restart
+    /// to take effect would make the control look broken. The config file is what survives a
+    /// restart, and it is written straight away rather than on shutdown, because a setting
+    /// that is lost when the application is killed is a setting somebody has to make twice.
+    /// </summary>
+    private void RememberOver(int days)
+    {
+        if (_session?.DeskWindow is not { } window)
+            return;
+
+        window.Days = days;
+
+        try
+        {
+            ConfigLoadResult loaded = ConfigStore.Load();
+
+            // Clamped by the window rather than here, so there is one place that decides
+            // what a legal period is.
+            loaded.Config.Desk.RememberDays = window.Days;
+
+            ConfigStore.Save(loaded.Config);
+
+            AddRow(GlyphTool, $"remembering over {window.Describe()}", "desk");
+        }
+        catch (Exception ex)
+        {
+            // The live setting stands; only its survival is lost. Said out loud, because a
+            // setting that quietly reverts on the next start is worse than one that failed
+            // visibly now.
+            AddRow(
+                GlyphWarning,
+                $"the period is set for this session but could not be saved: {ex.Message}",
+                "desk",
+                isWarning: true);
         }
     }
 

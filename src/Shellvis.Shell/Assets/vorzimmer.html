@@ -295,6 +295,58 @@
   .freshness > button:disabled { color: var(--ink-faint); cursor: default; }
   .freshness > button[hidden] { display: none !important; }
 
+  /* ------------------------------------------------------------- remember
+     The one control on this page that changes behaviour rather than reporting
+     it, so it is styled as a control and not as a figure. */
+  .remember {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem .9rem;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--tab);
+    background: var(--card);
+    padding: .7rem .9rem .75rem;
+  }
+
+  .remember[hidden] { display: none !important; }
+
+  .remember > label {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
+
+  /* accent-color rather than a hand-built track: the native control already
+     knows how to be dragged with a mouse, a finger and the arrow keys, and
+     rebuilding it out of divs is how a slider stops being reachable from the
+     keyboard. */
+  .remember > input[type="range"] {
+    flex: 1 1 14rem;
+    min-width: 10rem;
+    accent-color: var(--tab);
+  }
+
+  .remember > input[type="range"]:focus-visible {
+    outline: 2px solid var(--tab);
+    outline-offset: 3px;
+  }
+
+  .remember > output {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    color: var(--ink);
+    min-width: 11rem;
+  }
+
+  .remember > .remember-note {
+    flex: 1 1 100%;
+    font-size: .7rem;
+    color: var(--ink-faint);
+  }
+
   /* -------------------------------------------------------------- the desk
      The live numbers. Everything here is counted rather than judged, which is
      why it sits in its own strip above the trays instead of inside them. */
@@ -772,6 +824,19 @@
       </div>
     </div>
 
+    <!-- How far back "remembering" reaches. A slider because it is a setting with no
+         right answer: somebody who wants "lately" to mean this week and somebody who
+         wants it to mean the quarter are both right about their own desk. -->
+    <div class="remember" id="remember-row" hidden>
+      <label for="remember">Erinnern über</label>
+      <input type="range" id="remember" min="2" max="92" step="1" value="30">
+      <output id="remember-said" for="remember">den letzten Monat</output>
+      <span class="remember-note">
+        Gespeichert wird ein Vierteljahr. Der Regler sagt nur, wie viel davon
+        Shellvis heranzieht, wenn Sie „neulich" sagen.
+      </span>
+    </div>
+
     <p class="counted-not-sorted" id="taken-at">
       Die Zahlen erscheinen im Shellvis-Fenster. Auf einer geteilten Seite bleiben sie leer —
       sie kommen aus dem Postfach auf dem Rechner und verlassen ihn nicht.
@@ -1140,6 +1205,25 @@
      * kind of noise as an alert for every mail. */
     var asked = false;
 
+    var rememberRow = document.getElementById("remember-row");
+    var remember = document.getElementById("remember");
+    var rememberSaid = document.getElementById("remember-said");
+
+    /* The pending write of the slider's value, so dragging it across the whole range
+     * writes once at the end rather than ninety times on the way. */
+    var rememberSoon = 0;
+
+    /* What a number of days is called. The same words the tools use in their answers, so
+     * the setting and the sentence that obeys it read alike. */
+    function saidAs(days) {
+      if (days <= 2) { return "die letzten zwei Tage"; }
+      if (days <= 7) { return "die letzten " + days + " Tage"; }
+      if (days <= 14) { return "die letzten zwei Wochen"; }
+      if (days <= 31) { return "den letzten Monat"; }
+      if (days <= 62) { return "die letzten zwei Monate"; }
+      return "das ganze Vierteljahr";
+    }
+
     document.getElementById("refreshed-close").addEventListener("click", function () {
       notice.hidden = true;
     });
@@ -1191,6 +1275,14 @@
 
       if (desk.scannedNote) {
         put("data-note", "unread", desk.scannedNote);
+      }
+
+      /* The stored setting, sent with the snapshot. Applied only while the slider is not
+       * being dragged: overwriting the thumb under somebody's finger because a refresh
+       * arrived mid-gesture is the worst kind of fight to lose. */
+      if (desk.rememberDays && !rememberSoon && document.activeElement !== remember) {
+        remember.value = String(desk.rememberDays);
+        rememberSaid.textContent = saidAs(Number(desk.rememberDays));
       }
 
       if (desk.nextAppointment) {
@@ -1255,6 +1347,24 @@
        * there is no mailbox to count, and a button that does nothing when pressed is worse
        * than no button. */
       refresh.hidden = false;
+
+      rememberRow.hidden = false;
+
+      /* The label follows the thumb immediately; the setting is written when the dragging
+       * settles. Writing on every input event would put a config save and a tool-visible
+       * change behind every pixel of the drag. */
+      remember.addEventListener("input", function () {
+        rememberSaid.textContent = saidAs(Number(remember.value));
+
+        if (rememberSoon) {
+          window.clearTimeout(rememberSoon);
+        }
+
+        rememberSoon = window.setTimeout(function () {
+          rememberSoon = 0;
+          window.chrome.webview.postMessage("remember:" + remember.value);
+        }, 400);
+      });
 
       refresh.addEventListener("click", function () {
         asked = true;

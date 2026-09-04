@@ -238,6 +238,40 @@ public sealed class WatchSection
     public int QuietMinutes { get; set; } = 10;
 }
 
+/// <summary>
+/// The remembered desk: how far back it is kept, and how far back it is consulted.
+///
+/// <b>Two different numbers, and confusing them is the whole reason this section exists.</b>
+/// The store keeps a quarter of a year because that is roughly how long a thing on a desk
+/// stays relevant, and because forgetting is a feature: an enrichment about a ticket that
+/// closed in June reads as current in September and is not.
+///
+/// How much of that quarter is brought to bear on a question is a separate choice, and it is
+/// the user's. Somebody who wants "what has been going on" to mean this week and somebody who
+/// wants it to mean the quarter are both right about their own desk, so it is a setting --
+/// and, because it is the kind of setting nobody edits a file for, a slider on the page.
+/// </summary>
+public sealed class DeskSection
+{
+    /// <summary>
+    /// How far back the assistant looks when it is remembering, in days.
+    ///
+    /// Thirty by default: a month covers the mail somebody would still expect an answer
+    /// about, and it is short enough that a search comes back with the thing rather than
+    /// with everything. The slider on the reference page writes this.
+    /// </summary>
+    public int RememberDays { get; set; } = 30;
+
+    /// <summary>
+    /// How long anything is kept at all, in days.
+    ///
+    /// Ninety-two, which is a quarter. Configurable but not on the page: shortening it
+    /// destroys what is already remembered, and that is not a thing to put behind a control
+    /// somebody drags to see what it does.
+    /// </summary>
+    public int KeepDays { get; set; } = 92;
+}
+
 /// <summary>How the floating bar behaves towards other windows.</summary>
 public sealed class WindowSection
 {
@@ -376,6 +410,9 @@ public sealed class ShellvisConfig
     public WindowSection Window { get; set; } = new();
 
     public WatchSection Watch { get; set; } = new();
+
+    /// <summary>How far back the desk is remembered, and how far back it is consulted.</summary>
+    public DeskSection Desk { get; set; } = new();
 
     /// <summary>
     /// Hooks, keyed by event name, each holding a list of commands.

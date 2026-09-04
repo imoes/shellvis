@@ -219,6 +219,20 @@ public sealed partial class VorzimmerWindow : Window
                 return;
             }
 
+            // "remember:30" -- the slider settled on a new window. Parsed strictly and
+            // ignored when it is not a number: a page can only send what this page's script
+            // sends, but a message handler that trusts its input is a habit worth not having.
+            if (message.StartsWith("remember:", StringComparison.Ordinal)
+                && int.TryParse(
+                    message.AsSpan("remember:".Length),
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out int days))
+            {
+                RememberDaysChanged?.Invoke(days);
+                return;
+            }
+
             _ready = true;
 
             if (_pending is not null)
@@ -243,6 +257,9 @@ public sealed partial class VorzimmerWindow : Window
     /// </summary>
     public event Action? RefreshRequested;
 
+    /// <summary>Raised when the slider settles on a new remembering window, in days.</summary>
+    public event Action<int>? RememberDaysChanged;
+
     /// <summary>
     /// Hand the page what is on the desk.
     ///
@@ -250,7 +267,7 @@ public sealed partial class VorzimmerWindow : Window
     /// opened, and the difference is what earns a badge. Passing null means nothing is known
     /// yet, which is not the same as nothing being new -- see <c>DeskSnapshot.NewSince</c>.
     /// </summary>
-    public void Show(DeskSnapshot now, DeskSnapshot? before)
+    public void Show(DeskSnapshot now, DeskSnapshot? before, int rememberDays)
     {
         string json = JsonSerializer.Serialize(
             new Payload(
@@ -262,7 +279,8 @@ public sealed partial class VorzimmerWindow : Window
                 // acknowledgement has to be finer-grained than the gesture it confirms.
                 TakenAt: now.TakenAt.ToString("HH:mm:ss", CultureInfo.CurrentCulture),
                 NextAppointment: now.NextAppointmentLabel,
-                ScannedNote: ScannedNote(now)),
+                ScannedNote: ScannedNote(now),
+                RememberDays: rememberDays),
             PayloadFormat);
 
         if (_ready)
@@ -319,7 +337,8 @@ public sealed partial class VorzimmerWindow : Window
         IReadOnlyDictionary<string, int> New,
         string TakenAt,
         string NextAppointment,
-        string ScannedNote);
+        string ScannedNote,
+        int RememberDays);
 
     /// <summary>
     /// camelCase, because the script reads <c>counts</c> and <c>takenAt</c>.

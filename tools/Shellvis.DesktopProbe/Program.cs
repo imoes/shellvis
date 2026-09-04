@@ -38,6 +38,10 @@ internal static class Program
                 "markdown" => MarkdownProbe.Run(),
                 "glyphs" => GlyphProbe.Run(),
 
+                // The remembered desk. Pure: every failure mode of a cache is silent, and
+                // none of them needs a mailbox to provoke.
+                "desk" => DeskProbe.Run(),
+
                 // The reference page: that it is in the build, and that it renders without
                 // reaching the network. Both failures are silent, which is why they are
                 // here rather than left to somebody pressing the button.

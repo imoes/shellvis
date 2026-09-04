@@ -256,7 +256,11 @@ public sealed partial class VorzimmerWindow : Window
             new Payload(
                 Counts: now.Counts,
                 New: now.NewSince(before),
-                TakenAt: now.TakenAt.ToString("HH:mm", CultureInfo.CurrentCulture),
+                // Seconds, and they are not a detail. With minutes only, pressing "count
+                // it now" twice inside one minute changed nothing on screen -- same time,
+                // same numbers -- so the button looked broken while working perfectly. The
+                // acknowledgement has to be finer-grained than the gesture it confirms.
+                TakenAt: now.TakenAt.ToString("HH:mm:ss", CultureInfo.CurrentCulture),
                 NextAppointment: now.NextAppointmentLabel,
                 ScannedNote: ScannedNote(now)),
             PayloadFormat);

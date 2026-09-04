@@ -1131,6 +1131,15 @@
     var countedAt = document.getElementById("counted-at");
     var refresh = document.getElementById("refresh");
 
+    /* The pending "gezählt" -> "Jetzt zählen" restore, so two counts in quick succession
+     * do not race each other back. */
+    var restore = 0;
+
+    /* Whether a person asked for this count. The watcher refreshes on its own every few
+     * minutes, and flashing a confirmation at somebody who pressed nothing is the same
+     * kind of noise as an alert for every mail. */
+    var asked = false;
+
     document.getElementById("refreshed-close").addEventListener("click", function () {
       notice.hidden = true;
     });
@@ -1200,9 +1209,29 @@
       }
 
       /* Whatever happened, the button is usable again. Left disabled on a failed count it
-       * would be a dead control on a stale page. */
+       * would be a dead control on a stale page.
+       *
+       * And it says so for a moment before going back. An instant count with an unchanged
+       * number is otherwise indistinguishable from a button that does nothing, which is
+       * exactly how this was reported. */
       refresh.disabled = false;
-      refresh.textContent = "Jetzt zählen";
+
+      if (restore) {
+        window.clearTimeout(restore);
+        restore = 0;
+      }
+
+      if (asked) {
+        asked = false;
+        refresh.textContent = "gezählt";
+
+        restore = window.setTimeout(function () {
+          refresh.textContent = "Jetzt zählen";
+          restore = 0;
+        }, 1400);
+      } else {
+        refresh.textContent = "Jetzt zählen";
+      }
 
       /* The notice, and only when something actually grew. An update that changed nothing is
        * not an update worth a line: this page is refreshed on a timer, and a banner on every
@@ -1228,8 +1257,17 @@
       refresh.hidden = false;
 
       refresh.addEventListener("click", function () {
+        asked = true;
         refresh.disabled = true;
         refresh.textContent = "zählt ...";
+
+        /* The label goes with it. A count on a warm mailbox can come back in well under a
+         * second, so the "zählt ..." on the button may never be seen at all -- and then the
+         * only evidence left is a timestamp that may not have moved. Changing the label too
+         * guarantees the press is acknowledged before the answer arrives. */
+        countedAt.textContent = "zählt ...";
+        countedAt.classList.add("stale");
+
         window.chrome.webview.postMessage("refresh");
       });
 

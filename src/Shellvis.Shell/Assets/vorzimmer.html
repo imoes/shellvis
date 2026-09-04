@@ -1,0 +1,833 @@
+<title>Das Vorzimmer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* ------------------------------------------------------------------ tokens
+     The complete light palette lives on bare :root, so the un-stamped
+     "system" state resolves fully. The two blocks below redefine only
+     these values -- no component ever declares a colour of its own. */
+  :root {
+    --paper:      #E4E7E2;
+    --card:       #F1F3EE;
+    --ink:        #1B2320;
+    --ink-soft:   #4C554F;
+    --ink-faint:  #7A837C;
+    --tab:        #2F5D50;
+    --tab-ink:    #F1F3EE;
+    --stamp:      #A8322A;
+    --rule:       #C2C8BF;
+    --rule-soft:  #D7DCD4;
+
+    --f-display: "Zilla Slab", Georgia, "Times New Roman", serif;
+    --f-body:    "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --f-mono:    "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+
+    --step--1: 0.78rem;
+    --step-0:  0.975rem;
+    --step-1:  1.18rem;
+    --step-2:  1.5rem;
+    --step-3:  2.1rem;
+    --step-4:  3.1rem;
+
+    --shadow: 0 1px 0 rgba(27, 35, 32, .04), 0 2px 10px rgba(27, 35, 32, .05);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #141816;
+      --card:       #1D2220;
+      --ink:        #E2E6DF;
+      --ink-soft:   #A6AFA7;
+      --ink-faint:  #79837A;
+      --tab:        #74AE99;
+      --tab-ink:    #101413;
+      --stamp:      #DC7168;
+      --rule:       #333B37;
+      --rule-soft:  #262D29;
+      --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 12px rgba(0, 0, 0, .35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #141816;
+    --card:       #1D2220;
+    --ink:        #E2E6DF;
+    --ink-soft:   #A6AFA7;
+    --ink-faint:  #79837A;
+    --tab:        #74AE99;
+    --tab-ink:    #101413;
+    --stamp:      #DC7168;
+    --rule:       #333B37;
+    --rule-soft:  #262D29;
+    --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 12px rgba(0, 0, 0, .35);
+  }
+
+  /* ------------------------------------------------------------------- base */
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: var(--step-0);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 1140px;
+    margin: 0 auto;
+    padding: clamp(1.5rem, 4vw, 3.25rem) clamp(1.1rem, 4vw, 2.5rem) 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(2.25rem, 4vw, 3.5rem);
+  }
+
+  h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
+
+  p { margin: 0; }
+
+  a { color: var(--tab); text-decoration-thickness: 1px; text-underline-offset: .18em; }
+  a:focus-visible, .rule:focus-visible {
+    outline: 2px solid var(--tab);
+    outline-offset: 3px;
+  }
+
+  code, .mono { font-family: var(--f-mono); font-size: .92em; }
+
+  code {
+    background: color-mix(in srgb, var(--tab) 10%, transparent);
+    color: var(--ink);
+    padding: .08em .34em;
+    border-radius: 2px;
+  }
+
+  /* An eyebrow is a filing label: mono, spaced, small, in folder green. */
+  .eyebrow {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--tab);
+    margin: 0;
+  }
+
+  /* --------------------------------------------------------------- masthead */
+  .masthead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: clamp(1.5rem, 4vw, 3rem);
+    align-items: start;
+    padding-bottom: clamp(1.25rem, 3vw, 2rem);
+    border-bottom: 3px double var(--rule);
+  }
+
+  .masthead h1 {
+    font-size: var(--step-4);
+    font-weight: 700;
+    line-height: 1.02;
+    letter-spacing: -.015em;
+    margin: .5rem 0 0;
+  }
+
+  .lede {
+    max-width: 54ch;
+    margin-top: .9rem;
+    font-size: var(--step-1);
+    color: var(--ink-soft);
+  }
+
+  .lede strong { color: var(--ink); font-weight: 600; }
+
+  /* The single loud thing on the page, and it is the one hard boundary. */
+  .stamp {
+    justify-self: end;
+    max-width: 15.5rem;
+    border: 2px double var(--stamp);
+    color: var(--stamp);
+    padding: .8rem 1rem .85rem;
+    transform: rotate(-1.4deg);
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+  }
+
+  .stamp b {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    font-weight: 500;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    line-height: 1.35;
+  }
+
+  .stamp span { font-size: var(--step--1); line-height: 1.4; }
+
+  /* ---------------------------------------------------------------- section */
+  .band { display: flex; flex-direction: column; gap: 1.35rem; }
+
+  .band-head { display: flex; flex-direction: column; gap: .4rem; }
+
+  .band-head h2 {
+    font-size: var(--step-2);
+    font-weight: 600;
+    letter-spacing: -.01em;
+  }
+
+  /* :not(.eyebrow), because ".band-head p" outranks the bare ".eyebrow" class and would
+     quietly repaint the filing label in body grey. Excluding it is honest; raising the
+     other selector's specificity to win a fight it should not be in is not. */
+  .band-head p:not(.eyebrow) { max-width: 68ch; color: var(--ink-soft); }
+
+  /* ----------------------------------------------------------------- trays
+     Three, and they are deliberately not equal: the rule says name the
+     first, count the second, and give the third a number only. The grid
+     widths say the same thing before a word is read. */
+  .trays {
+    display: grid;
+    grid-template-columns: 1.35fr 1fr .62fr;
+    gap: 1rem;
+  }
+
+  .tray {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--tab);
+    box-shadow: var(--shadow);
+    padding: 1.1rem 1.15rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: .7rem;
+  }
+
+  .tray h3 { font-size: var(--step-1); font-weight: 600; }
+
+  .tray p { color: var(--ink-soft); font-size: var(--step--1); }
+
+  .tray ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    border-top: 1px solid var(--rule-soft);
+    padding-top: .7rem;
+  }
+
+  .tray li { display: flex; gap: .55rem; align-items: baseline; }
+
+  .tray li::before {
+    content: "";
+    flex: 0 0 auto;
+    width: .4rem;
+    height: .4rem;
+    background: var(--tab);
+    transform: translateY(-.15em);
+  }
+
+  .tray-third { justify-content: space-between; }
+
+  /* p.count, not .count: ".tray p" above is a class AND an element, so it outranks a
+     bare class and silently reset this to caption size. The number is the point of the
+     third tray -- it lost that fight once already. */
+  .tray p.count {
+    font-family: var(--f-mono);
+    font-size: var(--step-4);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--tab);
+  }
+
+  .tray p.count-note {
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule-soft);
+    padding-top: .7rem;
+  }
+
+  /* ------------------------------------------------------------- threshold */
+  .threshold {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+    padding: 1.15rem 1.2rem 1.3rem;
+    display: flex;
+    flex-direction: column;
+    gap: .85rem;
+  }
+
+  .panel > h3 { font-size: var(--step-1); font-weight: 600; }
+
+  .panel ol {
+    margin: 0;
+    padding-left: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+    color: var(--ink-soft);
+  }
+
+  .panel ol strong { color: var(--ink); font-weight: 600; }
+
+  .silence {
+    display: flex;
+    flex-direction: column;
+    gap: .8rem;
+    justify-content: center;
+    text-align: left;
+  }
+
+  .silence .word {
+    font-family: var(--f-mono);
+    font-size: clamp(1.6rem, 5vw, 2.5rem);
+    letter-spacing: .1em;
+    color: var(--tab);
+    line-height: 1;
+  }
+
+  .silence p:not(.eyebrow):not(.word) { color: var(--ink-soft); }
+
+  .silence ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+  }
+
+  .silence li {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    border: 1px solid var(--rule);
+    padding: .18rem .5rem;
+    color: var(--ink-soft);
+  }
+
+  /* The output contract, spanning both panels: one line, 140 characters. */
+  .contract {
+    grid-column: 1 / -1;
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--tab);
+    background: var(--card);
+    padding: 1rem 1.15rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: .35rem 1.4rem;
+    align-items: baseline;
+  }
+
+  .contract dt {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--tab);
+  }
+
+  .contract dd { margin: 0; color: var(--ink-soft); }
+
+  .contract .good, .contract .bad {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+  }
+
+  .contract .good { color: var(--ink); }
+  .contract .bad { color: var(--ink-faint); text-decoration: line-through; }
+
+  /* ------------------------------------------------------------- six rules
+     A tab per card carrying the German term, because the term IS the
+     source: these rules come out of German office-management guidance. */
+  .rules {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+    gap: 1.6rem 1rem;
+  }
+
+  .rule {
+    position: relative;
+    background: var(--card);
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+    padding: 1.35rem 1.15rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    transition: border-color .15s ease;
+  }
+
+  .rule:hover { border-color: var(--tab); }
+
+  .rule .tab {
+    position: absolute;
+    top: -.72rem;
+    left: -1px;
+    background: var(--tab);
+    color: var(--tab-ink);
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    font-weight: 500;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .18rem .55rem .2rem;
+  }
+
+  .rule h3 { font-size: var(--step-1); font-weight: 600; }
+
+  .rule p { color: var(--ink-soft); font-size: var(--step--1); }
+
+  .rule .tools {
+    margin-top: auto;
+    padding-top: .7rem;
+    border-top: 1px solid var(--rule-soft);
+    font-family: var(--f-mono);
+    font-size: .72rem;
+    color: var(--ink-faint);
+    word-break: break-word;
+  }
+
+  /* ---------------------------------------------------------------- morning
+     Numbered, and here the numbers are earned: it is an order of
+     operations, and step 4 depends on what step 2 turned up. */
+  .morning { display: flex; flex-direction: column; gap: 0; }
+
+  .step {
+    display: grid;
+    grid-template-columns: 3.1rem minmax(0, 1fr);
+    gap: 1.15rem;
+    padding: .95rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    align-items: baseline;
+  }
+
+  .step:first-child { border-top: 1px solid var(--rule); }
+
+  .step .n {
+    font-family: var(--f-mono);
+    font-size: var(--step-1);
+    font-variant-numeric: tabular-nums;
+    color: var(--tab);
+  }
+
+  .step .what { display: flex; flex-direction: column; gap: .2rem; }
+
+  .step .what b { font-weight: 600; }
+
+  .step .what span { color: var(--ink-soft); font-size: var(--step--1); }
+
+  /* --------------------------------------------------------------- machined */
+  .machined {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+
+  .machined div {
+    background: var(--card);
+    padding: 1rem 1.05rem 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+
+  .machined b {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    font-weight: 500;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--tab);
+  }
+
+  .machined span { color: var(--ink-soft); font-size: var(--step--1); }
+
+  /* ---------------------------------------------------------------- colophon */
+  .colophon {
+    border-top: 3px double var(--rule);
+    padding-top: 1.3rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1.2rem 2rem;
+    color: var(--ink-faint);
+    font-size: var(--step--1);
+  }
+
+  .colophon h3 {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    font-weight: 500;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--tab);
+    margin-bottom: .35rem;
+  }
+
+  .colophon p + p { margin-top: .4rem; }
+
+  /* ------------------------------------------------------------------ narrow */
+  @media (max-width: 900px) {
+    .masthead { grid-template-columns: 1fr; }
+    .stamp { justify-self: start; transform: rotate(-1deg); }
+    .trays { grid-template-columns: 1fr; }
+    .threshold { grid-template-columns: 1fr; }
+    .contract { grid-template-columns: 1fr; gap: .2rem; }
+    .contract dt { margin-top: .6rem; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rule { transition: none; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <div>
+      <p class="eyebrow">Shellvis &middot; Sekretariat</p>
+      <h1>Das Vorzimmer</h1>
+      <p class="lede">
+        Der Auftrag ist nicht, alles zu berichten, was auf dem Schreibtisch liegt.
+        Der Auftrag ist, <strong>den Tag beherrschbar zu machen</strong> — vorsortieren,
+        vorausdenken, und nichts fallen lassen, was zugesagt wurde.
+      </p>
+    </div>
+
+    <div class="stamp">
+      <b>Es wird nichts gesendet</b>
+      <span>
+        Antworten, Weiterleitungen und Termine werden als Entwurf angelegt und geöffnet.
+        Gesendet wird, wenn ein Mensch auf Senden drückt. Das ist keine Regel zum Merken:
+        es gibt kein Sende-Werkzeug, und es wird keines geben.
+      </span>
+    </div>
+  </header>
+
+  <!-- ------------------------------------------------------------ triage -->
+  <section class="band">
+    <div class="band-head">
+      <p class="eyebrow">Vorsortierung</p>
+      <h2>Drei Ablagen, nicht dreißig Zeilen</h2>
+      <p>
+        Post wird sortiert, bevor ein Wort darüber fällt. Die drei Ablagen sind absichtlich
+        nicht gleich breit: die erste wird benannt, die zweite gezählt, die dritte bekommt
+        nur eine Zahl. Eine Zusammenfassung, die dreißig Dinge aufzählt, hat die Arbeit
+        nicht gemacht.
+      </p>
+    </div>
+
+    <div class="trays">
+      <article class="tray">
+        <h3>Braucht heute eine Antwort</h3>
+        <p>Benannt, mit wer und was. Namentlich, weil hier gehandelt werden muss.</p>
+        <ul>
+          <li>Wer wartet, und worauf</li>
+          <li>Welche Frist in der Mail steht</li>
+          <li>Ob schon eine Antwort rausgegangen ist — <code>mail_history</code> zeigt beide Richtungen</li>
+        </ul>
+      </article>
+
+      <article class="tray">
+        <h3>Muss man wissen, nicht beantworten</h3>
+        <p>Gezählt. Benannt wird nur, was einen Plan ändert.</p>
+        <ul>
+          <li>Ein verschobener Termin</li>
+          <li>Eine Zusage von jemand anderem</li>
+          <li>Ein Ticket, das sich bewegt hat</li>
+        </ul>
+      </article>
+
+      <article class="tray tray-third">
+        <h3>Alles andere</h3>
+        <p class="count">17</p>
+        <p class="count-note">
+          Wird nicht aufgezählt. Nur die Zahl — danach kann jederzeit gefragt werden.
+        </p>
+      </article>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- threshold -->
+  <section class="band">
+    <div class="band-head">
+      <p class="eyebrow">Die Schwelle</p>
+      <h2>Wann unterbrochen wird — und wann nicht</h2>
+      <p>
+        Alle drei Minuten wird nachgesehen, was in Outlook angekommen ist: Termine mit
+        15&nbsp;Minuten Vorlauf, neue Post, Terminanfragen, Ticket-Benachrichtigungen. Danach
+        mindestens 10&nbsp;Minuten Ruhe, bevor erneut gefragt wird. Der Normalfall ist
+        Schweigen.
+      </p>
+    </div>
+
+    <div class="threshold">
+      <article class="panel">
+        <h3>Unterbrochen wird nur dafür</h3>
+        <ol>
+          <li>
+            <strong>Ein Termin, der bald beginnt</strong> und auf den man vielleicht nicht
+            vorbereitet ist — besonders mit Teams-Link oder einem Weg dorthin.
+          </li>
+          <li>
+            <strong>Eine Terminanfrage, die kollidiert.</strong> Vorher
+            <code>calendar_list</code> prüfen, nicht behaupten.
+          </li>
+          <li>
+            <strong>Jemand wartet auf eine Antwort</strong>, oder in der Mail steht eine
+            Frist.
+          </li>
+          <li>
+            <strong>Eine Ticket-Benachrichtigung zu einem eigenen Ticket.</strong> Nicht die
+            Mail zusammenfassen: den Schlüssel nehmen, <code>jira_issue</code> und
+            <code>jira_comments</code> aufrufen, und sagen, was der neueste Kommentar
+            entschieden hat. Die Mail ist der Auslöser, das Ticket ist die Quelle.
+          </li>
+        </ol>
+      </article>
+
+      <article class="panel silence">
+        <p class="eyebrow">Die normale Antwort</p>
+        <p class="word">SILENCE</p>
+        <p>
+          Und sie ist die richtige. Ein Hinweis auf jede Mail bringt einem bei, den nächsten
+          ungelesen wegzuklicken — und damit ist auch der verloren, der zählte.
+        </p>
+        <ul>
+          <li>Rundschreiben</li>
+          <li>Automatische Berichte</li>
+          <li>Routinepost</li>
+          <li>Alles, was man binnen einer Stunde selbst findet</li>
+        </ul>
+      </article>
+
+      <dl class="contract">
+        <dt>Form</dt>
+        <dd>Genau eine Zeile, höchstens 140 Zeichen, in der Sprache des Lesers.</dd>
+        <dt>Inhalt</dt>
+        <dd>
+          <span class="good">„Weber braucht das FTP-Passwort bis 16:00"</span>
+          &nbsp;—&nbsp;
+          <span class="bad">„neue Mail von Weber"</span>
+        </dd>
+        <dt>Grund</dt>
+        <dd>Die Sache selbst, nicht die Tatsache, dass etwas passiert ist.</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- six rules -->
+  <section class="band">
+    <div class="band-head">
+      <p class="eyebrow">Sechs Regeln</p>
+      <h2>Was der Beruf tatsächlich verlangt</h2>
+      <p>
+        Aus deutschen Ratgebern zum Office Management — abzüglich dessen, was Software nicht
+        kann. Der Reiter trägt den Fachbegriff, weil der Begriff die Quelle ist.
+      </p>
+    </div>
+
+    <div class="rules">
+      <article class="rule" tabindex="0">
+        <span class="tab">Vorsortierung</span>
+        <h3>Sortieren, bevor man spricht</h3>
+        <p>
+          Drei Ablagen, in dieser Reihenfolge. Und aus dem Tag drei Dinge wählen, nicht
+          dreißig aufzählen: das Wählen ist die Arbeit.
+        </p>
+        <p class="tools">mail_list &middot; mail_thread</p>
+      </article>
+
+      <article class="rule" tabindex="0">
+        <span class="tab">Rücken freihalten</span>
+        <h3>Arbeit vom Schreibtisch nehmen</h3>
+        <p>
+          Nicht eine längere Liste darauf legen. Der Rest verschwindet hinter einer Zahl,
+          nach der gefragt werden kann.
+        </p>
+        <p class="tools">agenda_today &middot; agenda_due</p>
+      </article>
+
+      <article class="rule" tabindex="0">
+        <span class="tab">Wiedervorlage</span>
+        <h3>Nichts fällt auf den Boden</h3>
+        <p>
+          Taucht in einer Mail eine Zusage, ein Datum oder eine Bitte auf, wird sie mit
+          Fälligkeit notiert — in der Outlook-Aufgabenliste, wo ohnehin hingesehen wird.
+          Eine Zusage, die nur im Gespräch steht, ist mit dem Fenster weg.
+        </p>
+        <p class="tools">task_create &middot; task_list</p>
+      </article>
+
+      <article class="rule" tabindex="0">
+        <span class="tab">Vorausdenken</span>
+        <h3>Nach vorn sehen, nicht zurück</h3>
+        <p>
+          Eine Erinnerung nach dem Termin ist wertlos. Vor dem Termin: was es ist, wer darin
+          sitzt, und was seit der Einladung dazu kam. Vor einer Frist: solange noch Zeit
+          zum Handeln ist, nicht am Tag selbst.
+        </p>
+        <p class="tools">calendar_list &middot; mail_history</p>
+      </article>
+
+      <article class="rule" tabindex="0">
+        <span class="tab">Wort und Schrift</span>
+        <h3>Schreiben, wie der Mensch schreibt</h3>
+        <p>
+          Vor einem Entwurf den Verlauf lesen und drei Dinge übernehmen: die Sprache der
+          eingehenden Mail, den Ton der eigenen früheren Antworten, und die Anrede, die
+          dort schon benutzt wird. Wer nach vier Jahren beim Sie ist, bleibt beim Sie.
+          Ein Entwurf im falschen Ton ist schlimmer als keiner — er muss neu geschrieben
+          werden, nicht korrigiert.
+        </p>
+        <p class="tools">mail_thread &middot; mail_history</p>
+      </article>
+
+      <article class="rule" tabindex="0">
+        <span class="tab">Verschwiegenheit</span>
+        <h3>Es bleibt auf dieser Maschine</h3>
+        <p>
+          Was über Menschen bekannt wird, wird niemandem außer dem Nutzer erzählt und
+          verlässt den Rechner nicht. Gesendet wird nie — siehe oben.
+        </p>
+        <p class="tools">kein Sende-Werkzeug</p>
+      </article>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ morning -->
+  <section class="band">
+    <div class="band-head">
+      <p class="eyebrow">Ein Morgen, durchgearbeitet</p>
+      <h2>„Was liegt heute an?"</h2>
+      <p>
+        Hier sind die Nummern verdient: es ist eine Reihenfolge, und Schritt 4 hängt davon
+        ab, was Schritt 2 ergeben hat.
+      </p>
+    </div>
+
+    <div class="morning">
+      <div class="step">
+        <span class="n">1</span>
+        <span class="what">
+          <b>Der Kalender für heute</b>
+          <span>Wochentage und Uhrzeiten kommen aus dem Ergebnis, nicht aus eigener Rechnung.</span>
+        </span>
+      </div>
+      <div class="step">
+        <span class="n">2</span>
+        <span class="what">
+          <b>Ungelesene Post, in die drei Ablagen</b>
+          <span>Erst sortieren, dann sprechen.</span>
+        </span>
+      </div>
+      <div class="step">
+        <span class="n">3</span>
+        <span class="what">
+          <b>Die Aufgabenliste</b>
+          <span>Was überfällig ist, ist im Ergebnis schon als überfällig markiert.</span>
+        </span>
+      </div>
+      <div class="step">
+        <span class="n">4</span>
+        <span class="what">
+          <b>Für die ein oder zwei Mails, die heute eine Antwort brauchen: den Verlauf lesen</b>
+          <span>Vorher wird nicht gesagt, worum es geht.</span>
+        </span>
+      </div>
+      <div class="step">
+        <span class="n">5</span>
+        <span class="what">
+          <b>Antworten: was fest steht, die drei Dinge, was überfällig ist</b>
+          <span>
+            Jede Mail verlinkt, damit sie in Outlook aufgeht. Entwürfe werden angeboten,
+            nicht unaufgefordert geschrieben.
+          </span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ----------------------------------------------------------- machined -->
+  <section class="band">
+    <div class="band-head">
+      <p class="eyebrow">Nicht dem Urteil überlassen</p>
+      <h2>Was Code entscheidet</h2>
+      <p>
+        Die Teile, die nicht ausfallen dürfen, hängen nicht am Gedächtnis eines Modells.
+      </p>
+    </div>
+
+    <div class="machined">
+      <div>
+        <b>Erinnerungen</b>
+        <span>Laufen als geplante Aufträge, nicht aus dem Gedächtnis heraus.</span>
+      </div>
+      <div>
+        <b>Fälligkeiten</b>
+        <span>Stehen in Outlook, nicht in diesem Gespräch.</span>
+      </div>
+      <div>
+        <b>Senden</b>
+        <span>Nicht möglich, weil die Fähigkeit nicht existiert.</span>
+      </div>
+      <div>
+        <b>Wochentage und Überfälligkeit</b>
+        <span>Werden gerechnet, nicht geschätzt — zweimal falsch gewesen, mit dem Datum vor der Nase.</span>
+      </div>
+      <div>
+        <b>Ein leeres Ergebnis</b>
+        <span>
+          Ist eine Antwort. „Diese Woche keine Termine" ist vollkommen in Ordnung; sechs
+          erfundene Termine waren es nicht, und die hat es hier gegeben.
+        </span>
+      </div>
+      <div>
+        <b>Herkunft</b>
+        <span>
+          Jede Behauptung über eine Mail, einen Termin oder eine Aufgabe kommt aus einem
+          Werkzeugergebnis — und wird als Link dorthin zurückgeschrieben.
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- colophon -->
+  <footer class="colophon">
+    <div>
+      <h3>Woher die Regeln kommen</h3>
+      <p>
+        Deutsche Ratgeber zum Office Management: eine Liste von zwanzig Aufgaben und sechzehn
+        Eigenschaften, ein Kompetenzprofil, und Handreichungen zur Assistenz auf
+        Vorstandsebene. Worin sie übereinstimmen, ist nicht Ablage oder Tippgeschwindigkeit.
+      </p>
+    </div>
+    <div>
+      <h3>Was nicht übernommen wurde</h3>
+      <p>
+        „Gepflegtes Äußeres" und „souveränes Auftreten" stehen auf jeder dieser Listen.
+        Beides ist hier nicht zu haben.
+      </p>
+    </div>
+    <div>
+      <h3>Wo es steht</h3>
+      <p>
+        <span class="mono">skills/assistant/secretary</span> und
+        <span class="mono">skills/assistant/daily-briefing</span> für das Urteil,
+        <span class="mono">MailboxWatch</span> für die Schwelle.
+      </p>
+      <p>Das Urteil ist der Teil, der bleibt: was zählt, was warten kann, und wie es gesagt wird.</p>
+    </div>
+  </footer>
+
+</div>

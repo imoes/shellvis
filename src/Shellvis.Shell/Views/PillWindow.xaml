@@ -239,6 +239,8 @@
                         <!-- Settings, beside the model chip. -->
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <!-- The reference page, beside the answer: both are documents. -->
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -328,8 +330,28 @@
                          came to be asked. Here rather than on the pill, because the pill
                          is 720 wide and every button on it comes out of the input field.
                          Disabled until there is an answer to come back to. -->
-                    <Button x:Name="AnswerButton"
+                    <!-- The rules, on one page, in a window of its own.
+
+                         It sits here rather than in the settings menu because it is not a
+                         setting: it is a document, like the answer next to it, and the two
+                         buttons open the two documents this application has. In the menu it
+                         would be findable only by somebody already looking for it, which is
+                         the same fault the settings button itself exists to fix. -->
+                    <Button x:Name="VorzimmerButton"
                             Grid.Column="3"
+                            Width="26"
+                            Height="22"
+                            Padding="0"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="11"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Foreground="{ThemeResource ConsoleMutedBrush}"
+                            Content="&#xE7C3;"
+                            ToolTipService.ToolTip="Das Vorzimmer: how this assistant keeps a desk" />
+
+                    <Button x:Name="AnswerButton"
+                            Grid.Column="4"
                             Width="26"
                             Height="22"
                             Padding="0"
@@ -342,7 +364,7 @@
                             ToolTipService.ToolTip="Show the answer" />
 
                     <Button x:Name="CollapseButton"
-                            Grid.Column="4"
+                            Grid.Column="5"
                             Width="26"
                             Height="22"
                             Padding="0"
@@ -354,7 +376,7 @@
                             ToolTipService.ToolTip="Hide the console" />
 
                     <Button x:Name="CloseButton"
-                            Grid.Column="5"
+                            Grid.Column="6"
                             Width="26"
                             Height="22"
                             Padding="0"

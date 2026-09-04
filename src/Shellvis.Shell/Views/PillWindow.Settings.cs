@@ -43,6 +43,11 @@ public sealed partial class PillWindow
 
         Add(menu, "   Sticky notes on the desktop", () => AskSelf("was klebt gerade auf dem Desktop?"));
 
+        // Named here as well as sitting on a button. The button is a glyph, and a glyph
+        // tells nobody what the page is; this line does, and it is where somebody looks
+        // when they want to know what this thing actually does on their behalf.
+        Add(menu, "   Das Vorzimmer: how this assistant keeps a desk", ShowVorzimmer);
+
         menu.Items.Add(new MenuFlyoutSeparator());
         Header(menu, "Where things live");
 

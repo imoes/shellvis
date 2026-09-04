@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Shellvis.Shell.Views.VorzimmerWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Das Vorzimmer">
+
+    <!-- The rules this assistant keeps a desk by, on one page.
+         A window of its own rather than the browser: the page is part of the application,
+         not a link out of it, and a reference you have to leave the application to read is
+         a reference nobody reads. -->
+    <Grid x:Name="RootHost" Background="Transparent">
+        <Border x:Name="Surface"
+                CornerRadius="8"
+                BorderThickness="1"
+                Background="{ThemeResource ConsoleTintBrush}"
+                BorderBrush="{ThemeResource SeparatorBrush}">
+
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <!-- The header doubles as the drag handle: the window has no title bar,
+                     so without it there is nothing to grab. -->
+                <Grid x:Name="Header" Grid.Row="0" Padding="12,8,8,6" Background="Transparent">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="HeaderText"
+                               Grid.Column="0"
+                               Text="Das Vorzimmer"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{ThemeResource ConsoleMutedBrush}" />
+
+                    <Button x:Name="MinimiseButton"
+                            Grid.Column="1"
+                            Style="{StaticResource PillIconButtonSmallStyle}"
+                            Content="&#xE921;"
+                            ToolTipService.ToolTip="Minimise to the taskbar" />
+
+                    <Button x:Name="CloseButton"
+                            Grid.Column="2"
+                            Style="{StaticResource PillIconButtonSmallStyle}"
+                            Content="&#xE711;"
+                            ToolTipService.ToolTip="Close (the button in the console header brings it back)" />
+                </Grid>
+
+                <!-- Inset by a pixel so the surface border stays visible along the sides.
+                     The rounded silhouette is cut at the window level, exactly as the
+                     answer window does it; a clip here as well would fight that one. -->
+                <WebView2 x:Name="View" Grid.Row="1" Margin="1,0,1,1" />
+
+                <!-- Shown only when the WebView2 runtime is absent, which is the one way
+                     this window can fail. Said in words with what to do about it, rather
+                     than an empty panel that looks like a page with no content. -->
+                <StackPanel x:Name="Missing"
+                            Grid.Row="1"
+                            Visibility="Collapsed"
+                            Padding="24"
+                            Spacing="10"
+                            VerticalAlignment="Center">
+
+                    <TextBlock Text="This page needs the WebView2 runtime"
+                               FontSize="15"
+                               FontWeight="SemiBold"
+                               TextWrapping="Wrap" />
+
+                    <TextBlock x:Name="MissingDetail"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{ThemeResource ConsoleMutedBrush}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

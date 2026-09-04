@@ -37,6 +37,11 @@ internal static class Program
                 "clarify" => await ClarifyProbe.RunAsync().ConfigureAwait(false),
                 "markdown" => MarkdownProbe.Run(),
                 "glyphs" => GlyphProbe.Run(),
+
+                // The reference page: that it is in the build, and that it renders without
+                // reaching the network. Both failures are silent, which is why they are
+                // here rather than left to somebody pressing the button.
+                "page" => PageProbe.Run(),
                 "taskbar" => TaskbarProbe.Run(),
                 "notify" => NotifyProbe.Run(),
                 "schedule" => ScheduleProbe.Run(),

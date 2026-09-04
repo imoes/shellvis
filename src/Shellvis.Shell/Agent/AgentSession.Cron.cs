@@ -227,6 +227,92 @@ internal sealed partial class AgentSession
     /// </summary>
     private IChatClient? _cronClient;
 
+
+    /// <summary>
+    /// Ask a question that is NOT part of the user's conversation, and return what came back.
+    ///
+    /// <b>Why this exists at all.</b> The mailbox watcher was built on
+    /// <see cref="RunTurnAsync"/>, which calls <c>Record("user", prompt)</c> -- so every
+    /// three minutes the whole watch prompt went into the conversation as though the user had
+    /// typed it, followed by the model's one-word verdict. The history window then showed a
+    /// page of instructions and the word SILENCE, and worse, all of it became context for
+    /// whatever the user asked next.
+    ///
+    /// This is the same answer <see cref="RunJobAsync"/> already gives for a scheduled job,
+    /// and for the same reason, written down there: a run nobody asked for gets its own
+    /// <see cref="AgentLoop"/> with an empty history. The tool registry IS shared -- a second
+    /// PowerShell runspace would cost a second of startup and a copy of the SDK in memory --
+    /// and the turn gate is shared too, because two loops over one runspace cannot run at
+    /// once.
+    ///
+    /// Approvals are refused, exactly as in a scheduled run. Nobody asked for this look, so
+    /// there is nobody to ask back; a look is expected to read and to report, and a dialog
+    /// nobody is waiting for would hang the timer until its own timeout.
+    /// </summary>
+    /// <param name="prompt">The question, which is not recorded anywhere.</param>
+    /// <param name="onEvent">Called on the UI thread for each event, so tool calls can still
+    /// appear in the console: an unprompted look that read the mailbox invisibly is the thing
+    /// this console exists to prevent.</param>
+    /// <returns>Everything the model said, which the caller judges. Empty if it said nothing.</returns>
+    internal async Task<string> AskAsideAsync(
+        string prompt,
+        Action<AgentEvent> onEvent,
+        CancellationToken cancellationToken)
+    {
+        await _turnGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            _unattended.Value = true;
+
+            var loop = new AgentLoop(
+                _cronClient!,
+                _registry,
+                DenyEverythingGate.Instance,
+                new AgentOptions(
+                    MaxIterations: 8,
+                    SystemPrompt: AsideSystemPrompt));
+
+            var answer = new System.Text.StringBuilder();
+
+            await foreach (AgentEvent evt in loop.RunAsync(prompt, cancellationToken)
+                .ConfigureAwait(false))
+            {
+                if (evt is AgentEvent.AssistantMessage message)
+                    answer.Append(message.Text);
+
+                Post(() => onEvent(evt));
+            }
+
+            return answer.ToString().Trim();
+        }
+        finally
+        {
+            _unattended.Value = false;
+            _turnGate.Release();
+        }
+    }
+
+    /// <summary>
+    /// The operating rules for a look nobody asked for.
+    ///
+    /// Deliberately short. Unlike a scheduled job, the caller's own prompt carries the whole
+    /// task and the whole answer shape, and repeating either here would give the model two
+    /// briefs to reconcile.
+    /// </summary>
+    private static string AsideSystemPrompt =>
+        $"""
+        You are Shellvis on this Windows machine, looking at something on your own account.
+        The user did not ask for this and is not waiting, so there is nobody to approve
+        anything: every action that changes state will be refused. Read what you need with
+        read-only tools and answer exactly as the request asks.
+
+        Today is {DateTime.Now:dddd, d MMMM yyyy}, local time {DateTime.Now:HH:mm}. Never
+        guess a date; work it out from this one.
+
+        Report what the tools returned and nothing more. Nobody is here to notice an invented
+        answer, which is exactly why there must not be one.
+        """;
     private void StopCron()
     {
         _cronStop?.Cancel();

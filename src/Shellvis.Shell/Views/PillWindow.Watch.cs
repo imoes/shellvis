@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 
 using Shellvis.Core.Agent;
@@ -155,57 +154,59 @@ public sealed partial class PillWindow
     /// Put the arrivals to the model and turn its answer into an alert, or into nothing.
     /// </summary>
     /// <remarks>
-    /// <b>The model's prose is held back until the verdict is in, and that is the whole
-    /// point of this method.</b> The first version rendered every event as it arrived and
-    /// only then decided whether to raise an alert -- so a look that found nothing worth
-    /// saying still wrote the word SILENCE into the conversation, three times in two hours,
-    /// and the streaming delta pulled the console open on its way past. Suppressing the
-    /// toast is not enough: nothing about a silent look should be visible at all.
+    /// <b>A look nobody asked for leaves no trace in the conversation, and that took two
+    /// goes to get right.</b>
+    ///
+    /// The first version rendered every event as it arrived and only then decided whether to
+    /// raise an alert -- so a silent look still wrote the word SILENCE into the answer
+    /// window, and the streaming delta pulled the console open on its way past. Holding the
+    /// prose back fixed what was on screen.
+    ///
+    /// It did not fix the record. The turn still went through <c>RunTurnAsync</c>, which
+    /// records the prompt as a user line, so the history held the entire watch briefing every
+    /// three minutes with SILENCE under it -- and all of it was context for whatever the user
+    /// asked next. That is why this now goes through <c>AskAsideAsync</c>: its own history,
+    /// the same tools, nothing recorded.
     ///
     /// Tool events are still rendered as they happen. They are the record of what was
-    /// actually read, they are what makes an unprompted look accountable, and they are not
-    /// the part that turned out to be noise.
+    /// actually read, they are what makes an unprompted look accountable, and they were never
+    /// the noise.
     /// </remarks>
     private async Task AskAboutArrivalsAsync(WatchFindings findings)
     {
-        var answer = new StringBuilder();
-
-        // The prompt itself does NOT go into the transcript as a user line.
-        //
-        // AskSelf writes the question as though the user had asked it, which is right for a
-        // menu item they clicked and wrong here: nobody asked, and a transcript that grows a
-        // question every ten minutes on its own is unreadable. What goes in is the one line
-        // below, plus whatever tools the model calls -- which is the record that matters.
+        // One line in the console, and it is the only thing a look writes down of its own
+        // accord. AskSelf, which the menu items use, writes the question as though the user
+        // had typed it -- right for something they clicked, wrong for this.
         AddRow(GlyphTool, WatchLine(findings), "watch");
 
-        await _session!.RunTurnAsync(MailboxWatch.Prompt(findings), agentEvent =>
-        {
-            switch (agentEvent)
+        // Not RunTurnAsync. That records the prompt as a user line and the answer as the
+        // assistant's, so every three minutes the conversation grew a page of instructions
+        // and the word SILENCE -- visible in the history window, and in the context of
+        // whatever the user asked next. AskAsideAsync runs the same tools over a history of
+        // its own and records nothing.
+        string said = await _session!.AskAsideAsync(
+            MailboxWatch.Prompt(findings),
+            agentEvent =>
             {
-                // Captured, not shown. The final message is the verdict; a delta is the same
-                // verdict arriving in pieces, and rendering either one commits to an answer
-                // before there is anything to say.
-                case AgentEvent.AssistantMessage message:
-                    answer.Append(message.Text);
-                    return;
+                switch (agentEvent)
+                {
+                    // Swallowed. The verdict decides whether there is anything to show, and
+                    // showing it as it streams commits to an answer before that is known.
+                    case AgentEvent.AssistantMessage:
+                    case AgentEvent.AssistantDelta:
+                    case AgentEvent.ReasoningDelta:
+                        return;
 
-                case AgentEvent.AssistantDelta:
-                case AgentEvent.ReasoningDelta:
-                    return;
+                    // The turn's ending would move the status line, and nobody asked.
+                    case AgentEvent.TurnFinished:
+                        return;
 
-                // The turn's ending would set the status line and, on a silent look, leave
-                // "Shellvis is standing by" where the user's own last turn had put
-                // something. Nobody asked, so nothing should move.
-                case AgentEvent.TurnFinished:
-                    return;
-
-                default:
-                    Render(agentEvent);
-                    return;
-            }
-        }).ConfigureAwait(true);
-
-        string said = answer.ToString();
+                    default:
+                        Render(agentEvent);
+                        return;
+                }
+            },
+            CancellationToken.None).ConfigureAwait(true);
 
         if (MailboxWatch.IsSilence(said))
         {

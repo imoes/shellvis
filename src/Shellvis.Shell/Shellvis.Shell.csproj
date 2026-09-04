@@ -26,6 +26,16 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <!-- The reference page, carried inside the executable.
+
+       Embedded rather than copied beside the exe on purpose: the installer puts the
+       application in one of two places depending on who it was installed for, and a
+       resource that has to be found on disk is a resource that is missing in one of
+       them. This one is read out of the assembly and handed to the view. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\vorzimmer.html" />
+  </ItemGroup>
+
   <ItemGroup>
     <Content Include="Assets\SplashScreen.scale-200.png" />
     <Content Include="Assets\LockScreenLogo.scale-200.png" />

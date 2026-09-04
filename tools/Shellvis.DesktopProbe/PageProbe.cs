@@ -212,49 +212,77 @@ internal static class PageProbe
         Check("and an unmeasured baseline counts as nothing to compare against",
             after.NewSince(DeskSnapshot.Nothing).Count == 0);
 
-        // -------------------------------------------------------------- the slider
+        // ------------------------------------------------------- report, not control
         //
-        // The control on the page and the setting in the code have to agree about two
-        // things: the range, and what a number of days is called. Neither agreement is
-        // checked by a compiler -- the page is markup and the wording is duplicated in
-        // JavaScript because the label has to move while the thumb does, before any
-        // message reaches the host.
-        Console.WriteLine("\n-- the slider and the setting agree --");
+        // The remembering period is a SETTING and belongs in the settings. It was a slider
+        // on this page first, and that was the wrong home: this page reports what is on the
+        // desk, and a control among figures that report it makes a reader wonder which of
+        // the numbers they can also drag.
+        //
+        // The checks below are the ones that keep it that way, and one of them is about
+        // wording: while the slider lived here, the phrase for a period existed twice --
+        // once in C# and once in JavaScript, so the label could follow the thumb without a
+        // round trip. It now exists once, and this pins that.
+        Console.WriteLine("\n-- the period is reported here and set elsewhere --");
 
-        Check("the slider covers exactly the period the setting allows",
-            html.Contains($@"min=""{DeskWindow.Least}""", StringComparison.Ordinal)
-                && html.Contains($@"max=""{DeskWindow.Most}""", StringComparison.Ordinal),
-            $"{DeskWindow.Least} to {DeskWindow.Most} days");
+        Check("the page carries no slider",
+            !html.Contains(@"type=""range""", StringComparison.Ordinal),
+            "the control lives in the settings form");
 
-        Check("it is hidden until there is a mailbox behind it",
-            Regex.IsMatch(html, @"id=""remember-row""[^>]*\shidden"),
-            "a control that cannot do anything is worse than no control");
+        Check("it states the period instead",
+            html.Contains(@"id=""remembering""", StringComparison.Ordinal)
+                && html.Contains("Erinnert über", StringComparison.Ordinal));
 
-        foreach (int days in new[] { 2, 14, 31, 62, 92 })
+        Check("and says where it is changed",
+            html.Contains("in den Einstellungen", StringComparison.Ordinal),
+            "a value shown with no way to reach its control is a dead end");
+
+        Check("the wording of a period exists only in the code",
+            !html.Contains("das ganze Vierteljahr", StringComparison.Ordinal)
+                && !html.Contains("die letzten zwei Monate", StringComparison.Ordinal),
+            "the page receives the phrase already formed, so the two cannot disagree");
+
+        Check("the period the settings offer is the period the store keeps",
+            DeskWindow.Most <= DeskStore.DefaultRetention.TotalDays,
+            $"slider to {DeskWindow.Most} days, kept for {DeskStore.DefaultRetention.TotalDays:F0}");
+
+        // ---------------------------------------------------------- the real entries
+        Console.WriteLine("\n-- the trays show real entries, and ship none --");
+
+        foreach (string key in new[] { "people", "automated" })
         {
-            string said = new DeskWindow(days).Describe();
-
-            Check($"{days} days is called '{said}' on the page too",
-                html.Contains(said, StringComparison.Ordinal),
-                "the label moves with the thumb, so the wording exists twice and must match");
+            Check($"there is a list for '{key}'",
+                html.Contains($@"data-list=""{key}""", StringComparison.Ordinal));
         }
 
-        // The one case with a number in the middle of it, compared in halves.
-        //
-        // C# writes "die letzten 7 Tage" as one interpolated string; the page builds it by
-        // concatenation, because the label has to update from the slider's value without a
-        // round trip. Comparing the finished sentence would fail on a difference that does
-        // not exist at runtime, so the wording is pinned and the joining is not.
-        string few = new DeskWindow(7).Describe();
+        Check("both lists are empty in the file",
+            !Regex.IsMatch(html, @"data-list=""[a-z]+""[^>]*>\s*<li(?![^>]*class=""(waiting|empty)"")"),
+            "this page is also published on the web; nobody's inbox belongs in a file");
 
-        Check("a few days is worded the same way on both sides",
-            html.Contains("die letzten \" + days + \" Tage", StringComparison.Ordinal)
-                && few.StartsWith("die letzten ", StringComparison.Ordinal)
-                && few.EndsWith(" Tage", StringComparison.Ordinal),
-            few);
+        Check("a list says it is waiting rather than showing nothing",
+            html.Contains("warten auf die erste Zählung", StringComparison.Ordinal));
 
-        Check("the page says what the slider does NOT change",
-            html.Contains("Gespeichert wird ein Vierteljahr", StringComparison.Ordinal),
+        Check("entries are built as text, not as markup",
+            html.Contains("textContent", StringComparison.Ordinal)
+                && !Regex.IsMatch(html, @"innerHTML\s*="),
+            "a subject line with a bracket in it must be shown, not interpreted");
+
+        Check("the list is labelled for what it is",
+            html.Contains("Die neuesten davon", StringComparison.Ordinal),
+            "the tray heading is a judgement and these are facts; saying which is the point");
+
+        // The distinction moved with the control. Checked in the settings source rather
+        // than in the page, because that is where the sentence now has to be: keeping a
+        // quarter and consulting a quarter are different things, and a slider offered
+        // without saying which one it moves invites somebody to drag it expecting the
+        // other.
+        string settings = Path.Combine(
+            root, "src", "Shellvis.Shell", "Views", "PillWindow.Vorzimmer.cs");
+
+        Check("the settings form says what the period does NOT change",
+            File.Exists(settings)
+                && File.ReadAllText(settings)
+                    .Contains("does not change what is kept", StringComparison.Ordinal),
             "keeping three months and consulting three months are different things");
 
         // ------------------------------------------------------------------- the theme

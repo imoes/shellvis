@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 
 using Shellvis.Core.Config;
@@ -120,7 +121,12 @@ public sealed partial class PillWindow
 
             Remember(reading);
 
-            _vorzimmer.Show(reading.Counts, _deskBaseline, _session.DeskWindow?.Days ?? 30);
+            _vorzimmer.Show(
+                reading.Counts,
+                _deskBaseline,
+                (_session.DeskWindow ?? new DeskWindow()).Describe(),
+                Newest(reading.Objects, fromPeople: true),
+                Newest(reading.Objects, fromPeople: false));
 
             if (saveBaseline)
                 SaveDesk(reading.Counts);
@@ -137,6 +143,58 @@ public sealed partial class PillWindow
         {
             _counting = false;
         }
+    }
+
+    /// <summary>How many real entries a tray shows before it is a list rather than a hint.</summary>
+    /// <remarks>
+    /// Four. The tray is beside a rule about not listing thirty things, and a page that
+    /// then lists thirty things has argued with itself. Four is enough to recognise what is
+    /// waiting; the count above says how much more there is.
+    /// </remarks>
+    private const int EntriesPerTray = 4;
+
+    /// <summary>
+    /// The newest unread mail of one kind, as the page shows it.
+    ///
+    /// <b>Told apart the same way the count was.</b> A sender is a person or a system, and
+    /// the walk already decided which -- but the decision was not written onto the object, so
+    /// it is made again here from the same address with the same function. Re-deriving beats
+    /// storing it: one rule in one place, and a cache row that cannot disagree with the page
+    /// about what it is.
+    ///
+    /// <b>Meeting requests count as automatic.</b> They are addressed to you by a person but
+    /// they are a form, and they belong beside the ticket movements: something to look at, not
+    /// something to write back to.
+    /// </summary>
+    private static IReadOnlyList<VorzimmerWindow.DeskEntry> Newest(
+        IReadOnlyList<DeskObject> things,
+        bool fromPeople)
+    {
+        DateTime today = DateTime.Now.Date;
+
+        return things
+            .Where(t => t.Kind == DeskKind.Mail)
+            .Where(t =>
+            {
+                bool form = t.State == "meeting request";
+                bool machine = form || TicketKeys.LooksAutomated(t.WhoAddress, t.WhoName);
+
+                return fromPeople ? !machine : machine;
+            })
+            .OrderByDescending(t => t.When)
+            .Take(EntriesPerTray)
+            .Select(t => new VorzimmerWindow.DeskEntry(
+                Who: t.WhoName is { Length: > 0 } name ? name : t.WhoAddress,
+
+                // The time alone for today, the date as well for anything older. A column of
+                // "04.09. 09:12" for mail that all arrived this morning spends the width on
+                // the half that is the same in every row.
+                When: t.When.Date == today
+                    ? t.When.ToString("HH:mm", CultureInfo.CurrentCulture)
+                    : t.When.ToString("dd.MM. HH:mm", CultureInfo.CurrentCulture),
+
+                What: t.Subject))
+            .ToList();
     }
 
     /// <summary>
@@ -202,7 +260,46 @@ public sealed partial class PillWindow
     }
 
     /// <summary>
-    /// The slider moved: take it now, and keep it for next time.
+    /// Ask how far back "remembering" should reach.
+    ///
+    /// A slider in the settings form rather than a text box, because there is no wrong value
+    /// to type -- only a position to choose -- and rather than on the reference page, because
+    /// that page reports what is on the desk and a control among the figures makes a reader
+    /// wonder which numbers they can also drag.
+    /// </summary>
+    private async Task ConfigureRememberingAsync()
+    {
+        int now = _session?.DeskWindow?.Days ?? 30;
+
+        SettingsResult answer = await SettingsWindow.ShowAsync(
+            WinRT.Interop.WindowNative.GetWindowHandle(this),
+            "Remembering period",
+            "Shellvis keeps a quarter of a year of what it has walked past: mail, tickets, "
+                + "tasks, and what it worked out about them. This is how much of that it "
+                + "brings to bear when you say 'lately' -- it does not change what is kept.",
+            [
+                new SettingsField(
+                    Key: "days",
+                    Label: "Erinnern über",
+                    Value: now.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    Min: DeskWindow.Least,
+                    Max: DeskWindow.Most,
+                    Describe: days => new DeskWindow(days).Describe()),
+            ],
+            ["Save", "Cancel"]).ConfigureAwait(true);
+
+        if (answer.Button != "Save")
+            return;
+
+        if (answer.Values.TryGetValue("days", out string? said)
+            && int.TryParse(said, System.Globalization.CultureInfo.InvariantCulture, out int days))
+        {
+            RememberOver(days);
+        }
+    }
+
+    /// <summary>
+    /// Take a new remembering period now, and keep it for next time.
     ///
     /// <b>Two writes, and they are not the same write.</b> The live window is what the tools
     /// read on their next call, so it changes immediately -- a setting that needed a restart

@@ -267,7 +267,12 @@ public sealed partial class VorzimmerWindow : Window
     /// opened, and the difference is what earns a badge. Passing null means nothing is known
     /// yet, which is not the same as nothing being new -- see <c>DeskSnapshot.NewSince</c>.
     /// </summary>
-    public void Show(DeskSnapshot now, DeskSnapshot? before, int rememberDays)
+    public void Show(
+        DeskSnapshot now,
+        DeskSnapshot? before,
+        string remembering,
+        IReadOnlyList<DeskEntry> people,
+        IReadOnlyList<DeskEntry> automated)
     {
         string json = JsonSerializer.Serialize(
             new Payload(
@@ -280,7 +285,9 @@ public sealed partial class VorzimmerWindow : Window
                 TakenAt: now.TakenAt.ToString("HH:mm:ss", CultureInfo.CurrentCulture),
                 NextAppointment: now.NextAppointmentLabel,
                 ScannedNote: ScannedNote(now),
-                RememberDays: rememberDays),
+                Remembering: remembering,
+                People: people,
+                Automated: automated),
             PayloadFormat);
 
         if (_ready)
@@ -338,7 +345,18 @@ public sealed partial class VorzimmerWindow : Window
         string TakenAt,
         string NextAppointment,
         string ScannedNote,
-        int RememberDays);
+        string Remembering,
+        IReadOnlyList<DeskEntry> People,
+        IReadOnlyList<DeskEntry> Automated);
+
+    /// <summary>
+    /// One real entry on the page: who it is from, when it arrived, what it says.
+    ///
+    /// Three strings and nothing else. The page shows them and cannot act on them, so it is
+    /// given no id and no handle -- there is nothing for a document to do with an EntryID,
+    /// and putting one in the payload would be handing out a key nobody there needs.
+    /// </summary>
+    public sealed record DeskEntry(string Who, string When, string What);
 
     /// <summary>
     /// camelCase, because the script reads <c>counts</c> and <c>takenAt</c>.

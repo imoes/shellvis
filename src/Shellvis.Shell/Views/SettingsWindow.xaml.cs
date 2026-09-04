@@ -20,13 +20,29 @@ namespace Shellvis.Shell.Views;
 /// <param name="Value">What the configuration actually holds, which may be nothing.</param>
 /// <param name="Secret">Whether it is typed into a password box and never read back.</param>
 /// <param name="Enabled">False for a value that is fixed and only being shown.</param>
+/// <param name="Min">
+/// With <paramref name="Max"/>, makes this field a slider rather than a box.
+///
+/// A range is a different kind of question from a string: there is no wrong value to type,
+/// only a position to choose, and a text box for it invites "30 Tage" and then has to explain
+/// why that is not a number. The value comes back as the integer it is.
+/// </param>
+/// <param name="Max">The other end of the range. Ignored unless Min is set too.</param>
+/// <param name="Describe">
+/// What a position on the slider means, in words, shown beside the header as it moves.
+/// Optional, and worth supplying: "60" tells the reader nothing that "die letzten zwei
+/// Monate" does not tell them better.
+/// </param>
 internal sealed record SettingsField(
     string Key,
     string Label,
     string Placeholder = "",
     string Value = "",
     bool Secret = false,
-    bool Enabled = true);
+    bool Enabled = true,
+    int? Min = null,
+    int? Max = null,
+    Func<int, string>? Describe = null);
 
 /// <summary>What the user did with a settings form.</summary>
 /// <param name="Button">The button they pressed, or null when they closed it.</param>
@@ -103,6 +119,41 @@ internal sealed partial class SettingsWindow : Window
         return window._done.Task;
     }
 
+    /// <summary>
+    /// A range field, as a slider with its meaning in the header.
+    ///
+    /// The header is rewritten as the thumb moves, which is what makes a number of days
+    /// legible: nobody knows what 62 means until it says "die letzten zwei Monate". The
+    /// wording comes from the caller rather than from here, so it lives in one place with the
+    /// setting it describes.
+    /// </summary>
+    private Slider Slide(SettingsField field, int low, int high)
+    {
+        _ = int.TryParse(field.Value, System.Globalization.CultureInfo.InvariantCulture, out int start);
+
+        var slider = new Slider
+        {
+            Minimum = low,
+            Maximum = high,
+            StepFrequency = 1,
+            Value = Math.Clamp(start == 0 ? low : start, low, high),
+            IsEnabled = field.Enabled,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+
+        void Retitle() => slider.Header = field.Describe is { } describe
+            ? $"{field.Label} — {describe((int)Math.Round(slider.Value))}"
+            : field.Label;
+
+        Retitle();
+        slider.ValueChanged += (_, _) => Retitle();
+
+        if (field.Enabled)
+            _boxes[field.Key] = slider;
+
+        return slider;
+    }
+
     private void Build(
         string title,
         string? note,
@@ -119,6 +170,12 @@ internal sealed partial class SettingsWindow : Window
 
         foreach (SettingsField field in fields)
         {
+            if (field is { Min: { } low, Max: { } high })
+            {
+                Fields.Children.Add(Slide(field, low, high));
+                continue;
+            }
+
             Control box = field.Secret
                 ? new PasswordBox
                 {
@@ -188,6 +245,14 @@ internal sealed partial class SettingsWindow : Window
             {
                 PasswordBox password => password.Password,
                 TextBox text => text.Text,
+
+                // As an integer, invariantly. A slider's Value is a double, and a German
+                // culture would render 30 as "30" but 30.5 as "30,5" -- which the caller
+                // then cannot parse. Rounding here means the caller gets what the control
+                // means rather than what it stores.
+                Slider slider => ((int)Math.Round(slider.Value))
+                    .ToString(System.Globalization.CultureInfo.InvariantCulture),
+
                 _ => string.Empty,
             };
         }

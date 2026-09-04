@@ -48,6 +48,14 @@ public sealed partial class PillWindow
         // when they want to know what this thing actually does on their behalf.
         Add(menu, "   Das Vorzimmer: how this assistant keeps a desk", ShowVorzimmer);
 
+        // The remembering period lives here rather than on the page.
+        //
+        // It was a slider on the reference page first, and that was the wrong home: the page
+        // reports what is on the desk, and a control that changes behaviour sitting among
+        // figures that report it makes the reader wonder which of the numbers they can also
+        // drag. Settings are where settings go.
+        Add(menu, "   Remembering period...", () => _ = ConfigureRememberingAsync());
+
         menu.Items.Add(new MenuFlyoutSeparator());
         Header(menu, "Where things live");
 

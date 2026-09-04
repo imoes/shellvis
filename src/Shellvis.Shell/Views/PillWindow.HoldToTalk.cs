@@ -63,6 +63,14 @@ public sealed partial class PillWindow
     /// <summary>Whether the press already became a hold, so the release means "stop".</summary>
     private bool _holdDictating;
 
+    /// <summary>
+    /// Whether the space-bar gesture is actually available.
+    ///
+    /// Read when the console says how to dictate: the hook can fail to install, and a line
+    /// that offers a gesture which does nothing is worse than one that offers neither.
+    /// </summary>
+    private bool HoldToTalkInstalled => _spaceHook is not null;
+
     private void RegisterHoldToTalk()
     {
         // A low-level keyboard hook, not a XAML key handler. Three XAML routes were tried

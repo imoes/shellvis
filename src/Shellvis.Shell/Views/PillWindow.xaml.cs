@@ -611,8 +611,14 @@ public sealed partial class PillWindow : Window
         StartErrandListener();
 
         PromptBox.Focus(FocusState.Programmatic);
-        RegisterHotkey();
+
+        // The space-bar gesture FIRST, and the order is now load-bearing: the line
+        // RegisterHotkey writes tells the user how to dictate, and it names both ways --
+        // so it has to know whether the hook installed. In the other order it reported
+        // "holding the space bar is not available" on a machine where it works perfectly,
+        // because the hook had not been installed yet when the sentence was composed.
         RegisterHoldToTalk();
+        RegisterHotkey();
         RegisterTopmostYield();
         RegisterMailboxWatch();
 
@@ -666,8 +672,37 @@ public sealed partial class PillWindow : Window
         // hotkey.
         bool dictate = _hotkey.TryRegister(HotkeyListener.DictateId, ctrlAlt, vkD);
 
-        if (dictate)
-            AddRow(GlyphTool, "Ctrl+Alt+D starts and stops dictation.", "hotkey");
+        // Both ways of dictating, in one line, and the failure of either said out loud.
+        //
+        // This line was out of date twice over. It named only Ctrl+Alt+D, while the gesture
+        // people actually use -- hold the space bar in the input box, let go to transcribe --
+        // had arrived since and announced itself nowhere. And a Ctrl+Alt+D already taken by
+        // another application printed NOTHING at all, unlike the raise hotkey right above
+        // which reports exactly that: so the one case where somebody needs to be told was
+        // the one case that stayed silent.
+        bool hold = HoldToTalkInstalled;
+
+        AddRow(
+            dictate || hold ? GlyphTool : GlyphWarning,
+            (dictate, hold) switch
+            {
+                (true, true) =>
+                    "Hold the space bar in the input box to dictate and let go to transcribe, "
+                    + "or press Ctrl+Alt+D to start and stop.",
+
+                (true, false) =>
+                    "Ctrl+Alt+D starts and stops dictation. Holding the space bar is not "
+                    + "available on this machine.",
+
+                (false, true) =>
+                    "Hold the space bar in the input box to dictate and let go to transcribe. "
+                    + "Ctrl+Alt+D is taken by another application.",
+
+                (false, false) =>
+                    "Dictation is only reachable from the microphone button: Ctrl+Alt+D is "
+                    + "taken by another application and the space bar could not be claimed.",
+            },
+            dictate || hold ? "voice" : "unavailable");
 
         RegisterTrayIcon();
     }

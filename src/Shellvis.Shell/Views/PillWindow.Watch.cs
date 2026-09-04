@@ -120,6 +120,11 @@ public sealed partial class PillWindow
 
             SaveWatchState();
 
+            // The reference page, if it is open, gets the new numbers from this same look.
+            // Not a timer of its own: the COM apartment is single-threaded and a second
+            // caller would only queue behind this one.
+            RefreshVorzimmer();
+
             if (!MailboxWatch.ShouldAsk(
                 findings, now, _watchState.LastAsked,
                 TimeSpan.FromMinutes(Math.Clamp(_watchSettings.QuietMinutes, 0, 240))))

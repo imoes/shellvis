@@ -1,5 +1,7 @@
 using System.Text.RegularExpressions;
 
+using Shellvis.Core.Office;
+
 namespace Shellvis.DesktopProbe;
 
 /// <summary>
@@ -131,6 +133,83 @@ internal static class PageProbe
         {
             Check(path, File.Exists(Path.Combine(root, path)));
         }
+
+        // ------------------------------------------------------------- the numbers
+        //
+        // The page and the snapshot agree on a set of keys, and neither side compiles
+        // against the other. A renamed key does not break a build: it leaves a box on
+        // screen showing a dash for ever, next to boxes that filled in correctly.
+        Console.WriteLine("\n-- the counts on the page and the counts in the code --");
+
+        var known = DeskSnapshot.Nothing.Counts.Keys.ToHashSet(StringComparer.Ordinal);
+
+        HashSet<string> onPage = Regex.Matches(html, @"data-(?:count|badge)=""(?<key>[a-z]+)""")
+            .Select(m => m.Groups["key"].Value)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (string key in onPage.OrderBy(k => k, StringComparer.Ordinal))
+        {
+            Check($"the page's '{key}' is a count the snapshot produces", known.Contains(key),
+                known.Contains(key) ? string.Empty : "this box can only ever show a dash");
+        }
+
+        foreach (string key in known.OrderBy(k => k, StringComparer.Ordinal))
+        {
+            Check($"the snapshot's '{key}' is shown somewhere", onPage.Contains(key),
+                onPage.Contains(key) ? string.Empty : "counted and then never displayed");
+        }
+
+        Check("no box is authored with a zero in it",
+            !Regex.IsMatch(html, @"data-count=""[a-z]+"">0<"),
+            "a zero claims the mailbox is empty; a dash says it was not measured");
+
+        Check("the page says the numbers are counted and not sorted",
+            html.Contains("Gezählt, nicht sortiert", StringComparison.Ordinal)
+                && html.Contains("keine Sortierung", StringComparison.Ordinal),
+            "the trays are a judgement; these numbers are not, and the page has to say so");
+
+        Check("there is somewhere for the update notice to appear",
+            html.Contains(@"id=""refreshed""", StringComparison.Ordinal));
+
+        // ------------------------------------------------------------------ what is new
+        Console.WriteLine("\n-- a badge means grown, not merely different --");
+
+        var before = new DeskSnapshot(
+            Unread: 80, FromPeople: 49, Automated: 31, MeetingRequests: 0, TicketMail: 31,
+            AppointmentsToday: 2, NextAppointment: null, OverdueTasks: 1, Scanned: 80,
+            TakenAt: new DateTime(2026, 9, 4, 8, 0, 0, DateTimeKind.Unspecified));
+
+        var after = before with
+        {
+            Unread = 89,
+            FromPeople = 53,
+            AppointmentsToday = 0,
+            OverdueTasks = 0,
+            TakenAt = before.TakenAt.AddHours(2),
+        };
+
+        IReadOnlyDictionary<string, int> grown = after.NewSince(before);
+
+        Check("what grew is reported as the increase",
+            grown.TryGetValue("unread", out int unread) && unread == 9,
+            $"unread: +{(grown.TryGetValue("unread", out int u) ? u : 0)}, expected +9");
+
+        Check("and so is the second one",
+            grown.TryGetValue("people", out int people) && people == 4);
+
+        Check("what fell is NOT reported",
+            !grown.ContainsKey("today") && !grown.ContainsKey("overdue"),
+            "a badge that appears when you tidy up is a badge nobody believes twice");
+
+        Check("what did not move is not reported",
+            !grown.ContainsKey("automated") && !grown.ContainsKey("tickets"));
+
+        Check("with nothing to compare against, nothing is new",
+            after.NewSince(null).Count == 0,
+            "a first look badging everything is the mistake the watcher refuses to make");
+
+        Check("and an unmeasured baseline counts as nothing to compare against",
+            after.NewSince(DeskSnapshot.Nothing).Count == 0);
 
         // ------------------------------------------------------------------- the theme
         Console.WriteLine("\n-- both themes are designed, not one --");

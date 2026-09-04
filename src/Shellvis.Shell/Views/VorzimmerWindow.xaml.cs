@@ -1,10 +1,13 @@
+using System.Globalization;
 using System.Reflection;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 
+using Shellvis.Core.Office;
 using Shellvis.Shell.Interop;
 
 using Windows.Graphics;
@@ -185,8 +188,101 @@ public sealed partial class VorzimmerWindow : Window
             }
         };
 
+        // The page says when it is ready, and the first snapshot waits for that. Posting
+        // into a document whose script has not run yet loses the message silently, and what
+        // that looks like is a page of dashes that never fills in.
+        View.CoreWebView2.WebMessageReceived += (_, _) =>
+        {
+            _ready = true;
+
+            if (_pending is not null)
+            {
+                Send(_pending);
+                _pending = null;
+            }
+        };
+
         View.NavigateToString(Page(DarkWanted() ? "dark" : "light"));
     }
+
+    private bool _ready;
+    private string? _pending;
+
+    /// <summary>
+    /// Hand the page what is on the desk.
+    ///
+    /// <paramref name="before"/> is what the desk looked like when this window was last
+    /// opened, and the difference is what earns a badge. Passing null means nothing is known
+    /// yet, which is not the same as nothing being new -- see <c>DeskSnapshot.NewSince</c>.
+    /// </summary>
+    public void Show(DeskSnapshot now, DeskSnapshot? before)
+    {
+        string json = JsonSerializer.Serialize(
+            new Payload(
+                Counts: now.Counts,
+                New: now.NewSince(before),
+                TakenAt: now.TakenAt.ToString("HH:mm", CultureInfo.CurrentCulture),
+                NextAppointment: now.NextAppointmentLabel,
+                ScannedNote: ScannedNote(now)),
+            PayloadFormat);
+
+        if (_ready)
+            Send(json);
+        else
+            _pending = json;
+    }
+
+    /// <summary>
+    /// What the count actually covers, said out loud when it does not cover everything.
+    ///
+    /// The total comes from the folder and is always complete; the split between a person
+    /// and a system is a scan with a cap on it. When the cap bites, the page has to say so
+    /// -- a breakdown that quietly describes the recent two hundred of four hundred unread
+    /// messages is a number that looks like an answer and is not one.
+    /// </summary>
+    private static string ScannedNote(DeskSnapshot desk) =>
+        desk.Scanned < desk.Unread
+            ? string.Create(
+                CultureInfo.CurrentCulture,
+                $"im Posteingang · die Aufteilung zählt die neuesten {desk.Scanned}")
+            : "im Posteingang";
+
+    private void Send(string json)
+    {
+        try
+        {
+            View.CoreWebView2?.PostWebMessageAsString(json);
+        }
+        catch (Exception)
+        {
+            // The view has gone, or the runtime was never there. The page simply keeps the
+            // figures it had; a failure to deliver numbers is not worth taking the window
+            // down for.
+        }
+    }
+
+    /// <summary>
+    /// The shape the page reads. Named properties rather than an anonymous type so the
+    /// contract with the script is written down in one place and can be searched for.
+    /// </summary>
+    private sealed record Payload(
+        IReadOnlyDictionary<string, int> Counts,
+        IReadOnlyDictionary<string, int> New,
+        string TakenAt,
+        string NextAppointment,
+        string ScannedNote);
+
+    /// <summary>
+    /// camelCase, because the script reads <c>counts</c> and <c>takenAt</c>.
+    ///
+    /// Worth a line: with the default policy the JSON goes out as <c>Counts</c>, the script
+    /// finds nothing under the name it asks for, and every figure stays a dash. Nothing
+    /// throws on either side of that.
+    /// </summary>
+    private static readonly JsonSerializerOptions PayloadFormat = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    };
 
     /// <summary>Whether the page should be stamped dark, taken from the application's theme.</summary>
     private bool DarkWanted() =>

@@ -101,7 +101,13 @@ public sealed partial class PillWindow
         }
 
         ShowListening(true);
-        StatusText.Text = "Listening... Ctrl+Alt+D or Escape to stop.";
+
+        // How to STOP depends on how it started, and saying the wrong one is worse than
+        // saying nothing: somebody who held the space bar and reads "Ctrl+Alt+D to stop"
+        // reaches for a key combination while the microphone is open on their hand.
+        StatusText.Text = _holdDictating
+            ? "Listening... let go of the space bar to transcribe."
+            : "Listening... Ctrl+Alt+D or Escape to stop.";
 
         // The second sentence is conditional now, and that is the point: it used to be
         // printed unconditionally because nothing could make it false. A hosted recogniser can.

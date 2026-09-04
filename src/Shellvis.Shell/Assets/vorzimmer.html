@@ -248,6 +248,135 @@
     padding-top: .7rem;
   }
 
+  /* -------------------------------------------------------------- the desk
+     The live numbers. Everything here is counted rather than judged, which is
+     why it sits in its own strip above the trays instead of inside them. */
+  /* Flex, not grid, and for one reason: seven cells in a grid of six columns leave the
+     seventh alone beside a bare strip of the container's own background, which reads as a
+     broken box. Flex-wrap lets the last row stretch to fill itself, so any number of
+     cells at any width comes out as a complete band. */
+  .desk {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+
+  .desk-cell {
+    flex: 1 1 8rem;
+    background: var(--card);
+    padding: .7rem .8rem .75rem;
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+  }
+
+  .desk-cell > .desk-label {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+  }
+
+  .desk-cell > .desk-value {
+    font-family: var(--f-mono);
+    font-size: var(--step-2);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+    color: var(--ink);
+  }
+
+  .desk-cell > .desk-note {
+    font-size: .7rem;
+    color: var(--ink-faint);
+  }
+
+  /* A badge is what arrived, not what is there: "+3", never "12". A total that
+     has not changed is not news, and a badge on it teaches the reader to stop
+     seeing badges. */
+  .badge {
+    font-family: var(--f-mono);
+    font-size: .66rem;
+    font-weight: 500;
+    letter-spacing: .04em;
+    background: var(--tab);
+    color: var(--tab-ink);
+    padding: .08rem .34rem .12rem;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+
+  .badge[hidden] { display: none !important; }
+
+  /* On a tray heading the badge sits inline after the words, so the heading
+     stays the heading. */
+  .tray h3 {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem;
+  }
+
+  .tray p.tray-count {
+    font-family: var(--f-mono);
+    font-size: var(--step-1);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  /* The caveat, and it is not decoration. These numbers are a count of what is
+     in the mailbox; the trays are a sorting somebody has to perform by reading.
+     Saying so here is what keeps the page honest. */
+  .counted-not-sorted {
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule-soft);
+    padding-top: .8rem;
+  }
+
+  /* The update notice: shown when the numbers change while the page is open,
+     dismissible, and replaced rather than stacked. */
+  .refreshed {
+    display: flex;
+    align-items: baseline;
+    gap: .75rem;
+    border: 1px solid var(--tab);
+    border-left: 3px solid var(--tab);
+    background: color-mix(in srgb, var(--tab) 8%, var(--card));
+    padding: .6rem .8rem .65rem;
+  }
+
+  .refreshed[hidden] { display: none !important; }
+
+  .refreshed > strong {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--tab);
+    font-weight: 500;
+  }
+
+  .refreshed > span { font-size: var(--step--1); color: var(--ink-soft); flex: 1 1 auto; }
+
+  .refreshed > button {
+    font: inherit;
+    font-size: var(--step--1);
+    background: none;
+    border: 1px solid var(--rule);
+    color: var(--ink-soft);
+    padding: .1rem .45rem .15rem;
+    cursor: pointer;
+  }
+
+  .refreshed > button:hover { border-color: var(--tab); color: var(--ink); }
+  .refreshed > button:focus-visible { outline: 2px solid var(--tab); outline-offset: 2px; }
+
   /* ------------------------------------------------------------- threshold */
   .threshold {
     display: grid;
@@ -514,6 +643,85 @@
     </div>
   </header>
 
+  <!-- --------------------------------------------------------- the numbers -->
+  <section class="band">
+    <div class="band-head">
+      <p class="eyebrow">Stand</p>
+      <h2>Was gerade auf dem Schreibtisch liegt</h2>
+      <p>
+        Gezählt, nicht sortiert. Ein Badge zeigt, was seit dem letzten Öffnen dazugekommen
+        ist — die Zahl daneben ist der ganze Stapel.
+      </p>
+    </div>
+
+    <div class="refreshed" id="refreshed" hidden>
+      <strong>Aktualisiert</strong>
+      <span id="refreshed-what"></span>
+      <button type="button" id="refreshed-close">Schließen</button>
+    </div>
+
+    <div class="desk">
+      <div class="desk-cell">
+        <span class="desk-label">Ungelesen
+          <span class="badge" data-badge="unread" hidden></span>
+        </span>
+        <span class="desk-value" data-count="unread">&mdash;</span>
+        <span class="desk-note" data-note="unread">im Posteingang</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Von Menschen
+          <span class="badge" data-badge="people" hidden></span>
+        </span>
+        <span class="desk-value" data-count="people">&mdash;</span>
+        <span class="desk-note">jemand könnte warten</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Automatisch
+          <span class="badge" data-badge="automated" hidden></span>
+        </span>
+        <span class="desk-value" data-count="automated">&mdash;</span>
+        <span class="desk-note">Berichte, Rundschreiben, Meldungen</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Ticket-Post
+          <span class="badge" data-badge="tickets" hidden></span>
+        </span>
+        <span class="desk-value" data-count="tickets">&mdash;</span>
+        <span class="desk-note">Auslöser, nicht Quelle</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Terminanfragen
+          <span class="badge" data-badge="requests" hidden></span>
+        </span>
+        <span class="desk-value" data-count="requests">&mdash;</span>
+        <span class="desk-note">auf Kollision prüfen</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Heute noch</span>
+        <span class="desk-value" data-count="today">&mdash;</span>
+        <span class="desk-note" data-note="next">Termine</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Überfällig
+          <span class="badge" data-badge="overdue" hidden></span>
+        </span>
+        <span class="desk-value" data-count="overdue">&mdash;</span>
+        <span class="desk-note">Aufgaben mit Datum in der Vergangenheit</span>
+      </div>
+    </div>
+
+    <p class="counted-not-sorted" id="taken-at">
+      Die Zahlen erscheinen im Shellvis-Fenster. Auf einer geteilten Seite bleiben sie leer —
+      sie kommen aus dem Postfach auf dem Rechner und verlassen ihn nicht.
+    </p>
+  </section>
+
   <!-- ------------------------------------------------------------ triage -->
   <section class="band">
     <div class="band-head">
@@ -529,8 +737,11 @@
 
     <div class="trays">
       <article class="tray">
-        <h3>Braucht heute eine Antwort</h3>
+        <h3>Braucht heute eine Antwort
+          <span class="badge" data-badge="people" hidden></span>
+        </h3>
         <p>Benannt, mit wer und was. Namentlich, weil hier gehandelt werden muss.</p>
+        <p class="tray-count"><span data-count="people">&mdash;</span> von Menschen, ungelesen</p>
         <ul>
           <li>Wer wartet, und worauf</li>
           <li>Welche Frist in der Mail steht</li>
@@ -539,8 +750,12 @@
       </article>
 
       <article class="tray">
-        <h3>Muss man wissen, nicht beantworten</h3>
+        <h3>Muss man wissen, nicht beantworten
+          <span class="badge" data-badge="automated" hidden></span>
+        </h3>
         <p>Gezählt. Benannt wird nur, was einen Plan ändert.</p>
+        <p class="tray-count"><span data-count="automated">&mdash;</span> automatisch, davon
+          <span data-count="tickets">&mdash;</span> Ticket-Post</p>
         <ul>
           <li>Ein verschobener Termin</li>
           <li>Eine Zusage von jemand anderem</li>
@@ -550,12 +765,18 @@
 
       <article class="tray tray-third">
         <h3>Alles andere</h3>
-        <p class="count">17</p>
+        <p class="count" data-count="unread">&mdash;</p>
         <p class="count-note">
           Wird nicht aufgezählt. Nur die Zahl — danach kann jederzeit gefragt werden.
         </p>
       </article>
     </div>
+
+    <p class="counted-not-sorted">
+      Die Zahlen sind ein Stapel, keine Sortierung. Welche davon heute wirklich eine Antwort
+      braucht, entscheidet sich beim Lesen — danach fragen, und Shellvis sortiert. Was hier
+      steht, ist nur, wonach zu fragen sich lohnt.
+    </p>
   </section>
 
   <!-- --------------------------------------------------------- threshold -->
@@ -831,3 +1052,123 @@
   </footer>
 
 </div>
+
+<script>
+  /* The numbers, when there is somewhere for them to come from.
+   *
+   * The window pushes a snapshot through the WebView bridge. On a shared copy of this page
+   * there is no bridge, nothing arrives, and every figure stays a dash -- which is the
+   * honest rendering of "not measured here" and is why the boxes are authored with dashes
+   * in them rather than with zeros. A zero would claim the mailbox is empty.
+   *
+   * Everything below is presentation. No count is computed here and no time is worked out
+   * here: both come formatted from the application, because date arithmetic is the thing
+   * that has been got wrong in this project before and a page is not the place to try it
+   * for a third time.
+   */
+  (function () {
+    "use strict";
+
+    var notice = document.getElementById("refreshed");
+    var noticeWhat = document.getElementById("refreshed-what");
+    var takenAt = document.getElementById("taken-at");
+
+    document.getElementById("refreshed-close").addEventListener("click", function () {
+      notice.hidden = true;
+    });
+
+    /* What each key is called when the notice has to name it. Held here rather than derived
+     * from the labels, because a label is styled text and this is a sentence. */
+    var NAMES = {
+      unread: "ungelesen",
+      people: "von Menschen",
+      automated: "automatisch",
+      tickets: "Ticket-Post",
+      requests: "Terminanfragen",
+      today: "Termine heute",
+      overdue: "überfällig"
+    };
+
+    function put(attribute, key, text) {
+      var nodes = document.querySelectorAll("[" + attribute + '="' + key + '"]');
+
+      for (var i = 0; i < nodes.length; i++) {
+        nodes[i].textContent = text;
+      }
+    }
+
+    function badge(key, grown) {
+      var nodes = document.querySelectorAll('[data-badge="' + key + '"]');
+
+      for (var i = 0; i < nodes.length; i++) {
+        if (grown > 0) {
+          nodes[i].textContent = "+" + grown + " neu";
+          nodes[i].hidden = false;
+        } else {
+          nodes[i].hidden = true;
+        }
+      }
+    }
+
+    function render(desk) {
+      var counts = desk.counts || {};
+      var fresh = desk.new || {};
+      var key;
+
+      for (key in NAMES) {
+        if (Object.prototype.hasOwnProperty.call(NAMES, key)) {
+          put("data-count", key, counts[key] === undefined ? "—" : String(counts[key]));
+          badge(key, fresh[key] || 0);
+        }
+      }
+
+      if (desk.scannedNote) {
+        put("data-note", "unread", desk.scannedNote);
+      }
+
+      if (desk.nextAppointment) {
+        put("data-note", "next", desk.nextAppointment);
+      }
+
+      if (desk.takenAt) {
+        takenAt.textContent = "Gezählt um " + desk.takenAt
+          + ". Die Zahlen kommen aus dem Postfach auf diesem Rechner und verlassen ihn nicht.";
+      }
+
+      /* The notice, and only when something actually grew. An update that changed nothing is
+       * not an update worth a line: this page is refreshed on a timer, and a banner on every
+       * tick is the same mistake as an alert for every mail. */
+      var said = [];
+
+      for (key in NAMES) {
+        if (Object.prototype.hasOwnProperty.call(NAMES, key) && fresh[key] > 0) {
+          said.push("+" + fresh[key] + " " + NAMES[key]);
+        }
+      }
+
+      if (said.length > 0) {
+        noticeWhat.textContent = said.join(", ") + (desk.takenAt ? " · " + desk.takenAt : "");
+        notice.hidden = false;
+      }
+    }
+
+    if (window.chrome && window.chrome.webview) {
+      window.chrome.webview.addEventListener("message", function (event) {
+        try {
+          var data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+
+          if (data && data.counts) {
+            render(data);
+          }
+        } catch (ignored) {
+          /* A malformed message leaves the page as it was. Rendering half a snapshot would
+           * put a stale number next to a fresh one, which is worse than a dash. */
+        }
+      });
+
+      /* Say the page is ready, so the first snapshot is not sent into a document that has
+       * not run its script yet. */
+      window.chrome.webview.postMessage("ready");
+    }
+  })();
+</script>

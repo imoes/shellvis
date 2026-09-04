@@ -126,7 +126,15 @@ public sealed partial class PillWindow
                 _deskBaseline,
                 (_session.DeskWindow ?? new DeskWindow()).Describe(),
                 Newest(reading.Objects, fromPeople: true),
-                Newest(reading.Objects, fromPeople: false));
+                Newest(reading.Objects, fromPeople: false),
+
+                // The watcher's own settings, from the same clamped values the timer uses.
+                // Read here rather than restated on the page, which is where they were and
+                // where they would have gone on saying three after somebody set ten.
+                new VorzimmerWindow.WatchTiming(
+                    Every: Math.Clamp(_watchSettings.EveryMinutes, 1, 60),
+                    Lead: Math.Clamp(_watchSettings.LeadMinutes, 1, 240),
+                    Quiet: Math.Clamp(_watchSettings.QuietMinutes, 0, 240)));
 
             if (saveBaseline)
                 SaveDesk(reading.Counts);
@@ -177,7 +185,7 @@ public sealed partial class PillWindow
             .Where(t =>
             {
                 bool form = t.State == "meeting request";
-                bool machine = form || TicketKeys.LooksAutomated(t.WhoAddress, t.WhoName);
+                bool machine = form || MailSender.LooksLikeSystem(t.WhoAddress, t.WhoName);
 
                 return fromPeople ? !machine : machine;
             })

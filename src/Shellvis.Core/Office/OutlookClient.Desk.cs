@@ -154,7 +154,12 @@ public sealed partial class OutlookClient
                     bool request = Str(() => item.MessageClass)
                         .StartsWith("IPM.Schedule.Meeting.Request", StringComparison.OrdinalIgnoreCase);
 
-                    bool automatic = !request && TicketKeys.LooksAutomated(address, name);
+                    // LooksLikeSystem, not TicketKeys.LooksAutomated. The latter answers
+                    // "is this a ticket notification" and was doing duty here as "is this a
+                    // person" -- so Confluence page notifications counted as mail from a
+                    // human and landed under "braucht heute eine Antwort". Nobody answers a
+                    // Confluence notification.
+                    bool automatic = !request && MailSender.LooksLikeSystem(address, name);
 
                     // A ticket key in the subject AND an automated sender. The key alone is
                     // not enough: a colleague writing "wegen IMIT-1234" is a person with a

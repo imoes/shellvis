@@ -272,7 +272,8 @@ public sealed partial class VorzimmerWindow : Window
         DeskSnapshot? before,
         string remembering,
         IReadOnlyList<DeskEntry> people,
-        IReadOnlyList<DeskEntry> automated)
+        IReadOnlyList<DeskEntry> automated,
+        WatchTiming watch)
     {
         string json = JsonSerializer.Serialize(
             new Payload(
@@ -287,7 +288,8 @@ public sealed partial class VorzimmerWindow : Window
                 ScannedNote: ScannedNote(now),
                 Remembering: remembering,
                 People: people,
-                Automated: automated),
+                Automated: automated,
+                Watch: watch),
             PayloadFormat);
 
         if (_ready)
@@ -347,7 +349,18 @@ public sealed partial class VorzimmerWindow : Window
         string ScannedNote,
         string Remembering,
         IReadOnlyList<DeskEntry> People,
-        IReadOnlyList<DeskEntry> Automated);
+        IReadOnlyList<DeskEntry> Automated,
+        WatchTiming Watch);
+
+    /// <summary>
+    /// The watcher's three intervals, in minutes, so the page can describe them instead of
+    /// asserting them.
+    ///
+    /// They stood in the prose as words -- "alle drei Minuten" -- and would have gone on
+    /// saying three after somebody set the interval to ten. Configuration written into a
+    /// sentence is a sentence that lies the moment the configuration moves.
+    /// </summary>
+    public sealed record WatchTiming(int Every, int Lead, int Quiet);
 
     /// <summary>
     /// One real entry on the page: who it is from, when it arrived, what it says.

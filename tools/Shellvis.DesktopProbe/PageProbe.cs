@@ -285,6 +285,77 @@ internal static class PageProbe
                     .Contains("does not change what is kept", StringComparison.Ordinal),
             "keeping three months and consulting three months are different things");
 
+        // --------------------------------------------------- nothing is asserted twice
+        //
+        // A number that describes a setting must be read, not written. Three of them stood
+        // in the prose as words -- "alle drei Minuten" -- and would have gone on saying
+        // three after somebody set the interval to ten.
+        Console.WriteLine("\n-- the page describes the settings, it does not restate them --");
+
+        foreach (string key in new[] { "every", "lead", "quiet" })
+        {
+            Check($"the watcher's '{key}' interval is filled in, not typed in",
+                html.Contains($@"data-live=""{key}""", StringComparison.Ordinal));
+        }
+
+        foreach (string written in new[] { "Alle drei Minuten", "15 Minuten Vorlauf", "10 Minuten Ruhe" })
+        {
+            Check($"'{written}' is not written into the sentence any more",
+                !html.Contains(written, StringComparison.Ordinal),
+                "it would keep saying that after the setting moved");
+        }
+
+        // The alert's length limit is code rather than configuration, so the page may state
+        // it -- but only the number the code actually enforces. Measured by using it: a very
+        // long line comes back cut to the limit plus an ellipsis.
+        int limit = MailboxWatch.Headline(new string('a', 500)).Length - 3;
+
+        Check($"the stated line limit is the one enforced ({limit})",
+            html.Contains(
+                limit.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                StringComparison.Ordinal));
+
+        Check("and the one invented example says that it is invented",
+            html.Contains("erfunden", StringComparison.Ordinal),
+            "an invented name in the same typeface as the real entries reads as one of them");
+
+        // ------------------------------------------------- every tool it names is real
+        //
+        // The page names the tools each rule is kept with. A tool that has since been
+        // renamed leaves a name on a reference page that resolves to nothing, and nothing
+        // else in this repository would notice: the page is markup, and the name is prose.
+        Console.WriteLine("\n-- every tool the page names exists --");
+
+        string[] named = Regex.Matches(html, @"\b(?<tool>[a-z]+_[a-z_]+)\b")
+            .Select(m => m.Groups["tool"].Value)
+            .Distinct(StringComparer.Ordinal)
+            .Where(t => !t.StartsWith("data_", StringComparison.Ordinal))
+            .ToArray();
+
+        string sources = string.Concat(
+            Directory.EnumerateFiles(Path.Combine(root, "src"), "*.cs", SearchOption.AllDirectories)
+                .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                    && !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+                .Select(File.ReadAllText));
+
+        string manifests = Directory.Exists(Path.Combine(root, "connectors"))
+            ? string.Concat(
+                Directory.EnumerateFiles(Path.Combine(root, "connectors"), "*.yaml", SearchOption.AllDirectories)
+                    .Select(File.ReadAllText))
+            : string.Empty;
+
+        foreach (string tool in named)
+        {
+            // A built-in declares itself in an attribute; a connector tool declares itself
+            // in a manifest. Both count, and nothing else does -- a name that merely appears
+            // in a comment somewhere is not a tool.
+            bool exists = sources.Contains($"\"{tool}\"", StringComparison.Ordinal)
+                || manifests.Contains($"name: {tool}", StringComparison.Ordinal);
+
+            Check($"{tool} is a tool that exists", exists,
+                exists ? string.Empty : "named on the page and registered nowhere");
+        }
+
         // ------------------------------------------------------------------- the theme
         Console.WriteLine("\n-- both themes are designed, not one --");
 

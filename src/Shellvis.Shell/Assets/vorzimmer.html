@@ -587,6 +587,19 @@
   }
 
   .contract .good { color: var(--ink); }
+
+  /* The one place on this page that says "this is not real". Quiet, but present:
+     the alternative is an invented name sitting in the same typeface as the
+     entries from the actual mailbox two sections above. */
+  .contract .made-up {
+    display: block;
+    margin-top: .3rem;
+    font-family: var(--f-mono);
+    font-size: .66rem;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+  }
   .contract .bad { color: var(--ink-faint); text-decoration: line-through; }
 
   /* ------------------------------------------------------------- six rules
@@ -912,11 +925,17 @@
     <div class="band-head">
       <p class="eyebrow">Die Schwelle</p>
       <h2>Wann unterbrochen wird — und wann nicht</h2>
+      <!-- The three numbers are settings, so they are read rather than written.
+           They stood in this sentence as words -- "alle drei Minuten" -- and would
+           have gone on saying three after somebody changed the interval to ten. A
+           page that describes a configuration it does not read is a page that lies
+           the moment the configuration moves. -->
       <p>
-        Alle drei Minuten wird nachgesehen, was in Outlook angekommen ist: Termine mit
-        15&nbsp;Minuten Vorlauf, neue Post, Terminanfragen, Ticket-Benachrichtigungen. Danach
-        mindestens 10&nbsp;Minuten Ruhe, bevor erneut gefragt wird. Der Normalfall ist
-        Schweigen.
+        Alle <span data-live="every">&mdash;</span>&nbsp;Minuten wird nachgesehen, was in
+        Outlook angekommen ist: Termine mit <span data-live="lead">&mdash;</span>&nbsp;Minuten
+        Vorlauf, neue Post, Terminanfragen, Ticket-Benachrichtigungen. Danach mindestens
+        <span data-live="quiet">&mdash;</span>&nbsp;Minuten Ruhe, bevor erneut gefragt wird.
+        Der Normalfall ist Schweigen.
       </p>
     </div>
 
@@ -963,11 +982,16 @@
       <dl class="contract">
         <dt>Form</dt>
         <dd>Genau eine Zeile, höchstens 140 Zeichen, in der Sprache des Lesers.</dd>
-        <dt>Inhalt</dt>
+        <!-- Marked as an example, and that label is not politeness.
+             This page shows real figures and real entries a few sections up, so an
+             invented name in the same typeface reads as something that arrived. It
+             did not: there is no Weber. -->
+        <dt>Beispiel</dt>
         <dd>
           <span class="good">„Weber braucht das FTP-Passwort bis 16:00"</span>
           &nbsp;—&nbsp;
           <span class="bad">„neue Mail von Weber"</span>
+          <span class="made-up">erfunden, zur Veranschaulichung der Form</span>
         </dd>
         <dt>Grund</dt>
         <dd>Die Sache selbst, nicht die Tatsache, dass etwas passiert ist.</dd>
@@ -1328,6 +1352,13 @@
 
       fill("people", desk.people);
       fill("automated", desk.automated);
+
+      /* The watcher's own settings, so the sentence describing them cannot go stale. */
+      if (desk.watch) {
+        put("data-live", "every", String(desk.watch.every));
+        put("data-live", "lead", String(desk.watch.lead));
+        put("data-live", "quiet", String(desk.watch.quiet));
+      }
 
       /* The period, stated rather than offered. It arrives already worded, so this page
        * cannot disagree with the settings dialog about what 62 days is called. */

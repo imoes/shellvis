@@ -314,6 +314,44 @@ internal static class OutlookProbe
             && TicketKeys.LooksAutomated("no-reply@host", "IT Servicedesk")
             && !TicketKeys.LooksAutomated("anna.meier@example.com", "Meier, Anna"));
 
+        // ------------------------------------------------- a system, or somebody waiting
+        //
+        // A separate question from the one above, and conflating them had a visible
+        // consequence: Confluence page notifications were counted as mail from a human and
+        // shown under "braucht heute eine Antwort", where nothing is ever going to be
+        // answered. Confluence is a system and not a ticket system, so exactly one of the
+        // two predicates should say yes about it.
+        failures += Check2(
+            "a Confluence notification is a system, not somebody waiting",
+            MailSender.LooksLikeSystem("IT-Confluence@example.com", "Confluence")
+            && !TicketKeys.LooksAutomated("IT-Confluence@example.com", "Confluence"));
+
+        failures += Check2(
+            "so is anything that says nobody is listening",
+            MailSender.LooksLikeSystem("no-reply@example.com")
+            && MailSender.LooksLikeSystem("noreply@example.com")
+            && MailSender.LooksLikeSystem("donotreply@example.com")
+            && MailSender.LooksLikeSystem("mailer-daemon@example.com"));
+
+        failures += Check2(
+            "and the monitoring, the newsletters and the build robots",
+            MailSender.LooksLikeSystem("checkmk@example.com")
+            && MailSender.LooksLikeSystem("x@example.com", "GitLab")
+            && MailSender.LooksLikeSystem("newsletter@example.com")
+            && MailSender.LooksLikeSystem("sharepoint@example.com"));
+
+        failures += Check2(
+            "but a colleague is not a system, however they write",
+            !MailSender.LooksLikeSystem("anna.meier@example.com", "Meier, Anna")
+            && !MailSender.LooksLikeSystem("t.schmidt@example.com", "Schmidt, Thomas")
+            && !MailSender.LooksLikeSystem(string.Empty, string.Empty));
+
+        failures += Check2(
+            "the display name is searched too, because Exchange hides the address",
+            MailSender.LooksLikeSystem(
+                "/o=ExchangeLabs/ou=Exchange Administrative Group/cn=Recipients/cn=abc",
+                "IT-Confluence"));
+
         // ------------------------------------------------------ splitting a recipient list
         //
         // This exists because getting it wrong broke a feature invisibly. Splitting on commas

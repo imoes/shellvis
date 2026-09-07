@@ -115,6 +115,103 @@ public static class PageText
             || opening.Contains("<!doctype html", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Whether what came back is a sign-in wall rather than the page that was asked for.
+    /// </summary>
+    /// <remarks>
+    /// <b>Why this is worth detecting rather than returning.</b> A page behind a login
+    /// answers 200 and sends a full document, so nothing about the response says the content
+    /// is missing. A Jira Service Desk portal, for instance, returns eighty kilobytes whose
+    /// readable text is the word "Service Management" and a block of configuration JSON
+    /// containing a loginUrl -- and a model handed that will either invent a summary or
+    /// report, correctly but unhelpfully, that it has no information. Named, it becomes a
+    /// fact with a remedy: the browser tools keep their logins between sessions.
+    ///
+    /// Deliberately conservative. A page that merely HAS a sign-in link -- which is most of
+    /// the web -- must not be reported as a wall, so the marker has to be the login and the
+    /// readable text has to be too short to be the page itself.
+    /// </remarks>
+    public static bool LooksLikeSignIn(string html, string text)
+    {
+        // A real page's worth of words is a real page, whatever else is in its markup.
+        //
+        // Four thousand, measured rather than chosen: Atlassian's own portal comes back with
+        // 1,603 characters of "readable" text, nearly all of it configuration JSON. A first
+        // attempt at 900 let it through, which is how this number came to be a measurement.
+        if (text.Length > 4000)
+            return false;
+
+        // Strong markers only. An earlier version counted "signin" and "sign-in" towards a
+        // threshold of two, and those two both match the same navigation link -- so any
+        // short page with a sign-in link in its header would have been reported as a wall.
+        // None of these appears in ordinary navigation.
+        string[] markers =
+        [
+            "loginUrl",
+            "login_url",
+            "\"login\":",
+            "name=\"password\"",
+            "type=\"password\"",
+            "id=\"password\"",
+            "j_username",
+        ];
+
+        foreach (string marker in markers)
+        {
+            if (html.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether the readable text of an HTML page is configuration rather than content.
+    /// </summary>
+    /// <remarks>
+    /// <b>The shape a script-built page leaves behind.</b> A single-page application ships a
+    /// document with no prose in it: the body is an empty mount point and the only text is a
+    /// JSON blob the script will read. Stripped of its markup that comes out as, for
+    /// instance, <c>{"reasonKey":"com.atlassian.pocketknife...","xsrfToken":...}</c> --
+    /// which is not nothing, so nothing about it says the content is missing, and presenting
+    /// it under "what the page says" invites a summary of a configuration file.
+    ///
+    /// Only for pages that arrived as HTML. A url that answers with JSON <i>is</i> its JSON
+    /// and must come back as it is; that is what <c>raw</c> and the content-type check are
+    /// for, and this is never consulted for one.
+    /// </remarks>
+    public static bool LooksLikeScriptShell(string text)
+    {
+        string trimmed = text.TrimStart();
+
+        if (trimmed.Length == 0 || (trimmed[0] != '{' && trimmed[0] != '['))
+            return false;
+
+        // A JSON object's worth of key separators, in text that is mostly that object. Two
+        // is enough to distinguish it from a page whose first character happens to be a
+        // brace -- a code sample, say -- while a real document with an object at the top
+        // has prose after it and fails the size ratio below.
+        int separators = 0;
+
+        for (int at = trimmed.IndexOf("\":", StringComparison.Ordinal);
+             at >= 0 && separators < 3;
+             at = trimmed.IndexOf("\":", at + 2, StringComparison.Ordinal))
+        {
+            separators++;
+        }
+
+        if (separators < 2)
+            return false;
+
+        // And the object has to BE the page rather than sit at the top of one. The closing
+        // brace near the end is what says the rest is not prose.
+        int lastBrace = Math.Max(
+            trimmed.LastIndexOf('}'),
+            trimmed.LastIndexOf(']'));
+
+        return lastBrace >= trimmed.Length - Math.Max(80, trimmed.Length / 10);
+    }
+
     private static string Collapse(string value) =>
         Spaces.Replace(value.ReplaceLineEndings(" "), " ").Trim();
 }

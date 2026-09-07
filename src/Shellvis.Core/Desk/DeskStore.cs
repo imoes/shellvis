@@ -110,6 +110,21 @@ public sealed class DeskStore : IDisposable
             ("verdict", "TEXT NULL"),
             ("verdict_why", "TEXT NULL"),
             ("verdict_at", "TEXT NULL"),
+
+            // Whether the pass that wrote the verdict could see the message's text.
+            //
+            // Not a curiosity: the sorting was given sender and subject only for its first
+            // several versions, so the best reason it could write was the subject in other
+            // words -- "Zwischenmeldung eines Ticket-Alerts von Telekom" for a mail whose
+            // subject says exactly that. Those verdicts are kept for three months, so
+            // without a way to tell them apart the trays would go on showing paraphrased
+            // subject lines until they aged out.
+            //
+            // Defaulting to 0 is what makes the existing rows re-judgeable, and the flag is
+            // set for every verdict written by a body-reading pass -- whether or not that
+            // particular message still had a body to read. Otherwise a mail with no text at
+            // all would be re-judged for ever.
+            ("verdict_body", "INTEGER NOT NULL DEFAULT 0"),
         });
 
         // The three questions this store is actually asked: what is recent, what is about
@@ -323,13 +338,27 @@ public sealed class DeskStore : IDisposable
     /// accumulates because understanding does; a verdict is a current answer to "what should
     /// happen with this", and two of them is not richer, it is ambiguous.
     /// </remarks>
-    public void Judge(string id, DeskVerdict verdict, string why, DateTime when)
+    /// <param name="sawBody">
+    /// Whether the pass that produced this verdict reads message bodies. True for every
+    /// verdict from such a pass, even for a message that had no text left to read -- the
+    /// flag records what the pass could see, not what it happened to find, because a mail
+    /// with an empty body would otherwise be re-judged for ever.
+    /// </param>
+    public void Judge(
+        string id,
+        DeskVerdict verdict,
+        string why,
+        DateTime when,
+        bool sawBody = false)
     {
         using SqliteCommand command = _connection.CreateCommand();
 
         command.CommandText = """
             UPDATE objects
-            SET verdict = $verdict, verdict_why = $why, verdict_at = $at
+            SET verdict = $verdict,
+                verdict_why = $why,
+                verdict_at = $at,
+                verdict_body = $body
             WHERE id = $id;
             """;
 
@@ -337,8 +366,64 @@ public sealed class DeskStore : IDisposable
         command.Parameters.AddWithValue("$verdict", verdict.ToString().ToLowerInvariant());
         command.Parameters.AddWithValue("$why", why.Trim());
         command.Parameters.AddWithValue("$at", Text(when));
+        command.Parameters.AddWithValue("$body", sawBody ? 1 : 0);
 
         command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Mail that carries a verdict written without its text, oldest verdict first.
+    /// </summary>
+    /// <remarks>
+    /// <b>Separate from <see cref="Unjudged"/> on purpose.</b> These rows are judged: they
+    /// appear in their trays and are counted under their verdict, and folding them into the
+    /// unjudged count would make the page report a backlog that is not one.
+    ///
+    /// They are worth revisiting all the same. The verdict itself is probably right --
+    /// sender and subject are enough to tell a notification from a question -- but the
+    /// sentence beside it is a paraphrase of the subject, and that sentence is the only
+    /// thing on the row the assistant contributes.
+    ///
+    /// Oldest verdict first, so a re-sorting pass works forward through the backlog instead
+    /// of circling the same handful.
+    /// </remarks>
+    public IReadOnlyList<DeskObject> JudgedWithoutBody(DateTime since, int limit = 10)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        command.CommandText = Select + """
+             WHERE verdict IS NOT NULL
+               AND verdict_body = 0
+               AND kind = 'mail'
+               AND state <> 'read'
+               AND happened >= $since
+             ORDER BY verdict_at ASC
+             LIMIT $limit;
+            """;
+
+        command.Parameters.AddWithValue("$since", Text(since));
+        command.Parameters.AddWithValue("$limit", limit);
+
+        return ReadAll(command);
+    }
+
+    /// <summary>How many verdicts were made without the message's text.</summary>
+    public int WithoutBodyCount(DateTime since)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT COUNT(*) FROM objects
+            WHERE verdict IS NOT NULL
+              AND verdict_body = 0
+              AND kind = 'mail'
+              AND state <> 'read'
+              AND happened >= $since;
+            """;
+
+        command.Parameters.AddWithValue("$since", Text(since));
+
+        return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
     }
 
     /// <summary>

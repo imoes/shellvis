@@ -60,11 +60,13 @@ public sealed class WebTools(UrlGuard guard)
         SideEffect.ReadOnly,
         Description =
             "Fetch a url over HTTP and return the page as readable text -- the plain-HTTP "
-            + "way, like curl or Invoke-WebRequest, with no browser involved. This is the "
-            + "tool to use for reading a public page, an API, a raw file or a documentation "
-            + "site. Markup, script and styling are stripped; pass raw=true for the body "
-            + "exactly as sent, which is what JSON and source files want. Use the browser "
-            + "tools only when a page needs a login or builds itself with script.",
+            + "way, like curl or Invoke-WebRequest, with no browser involved. CALL THIS "
+            + "whenever the user gives you a url, before saying anything about what is at "
+            + "it: it needs no permission and costs one request. Reading a public page, an "
+            + "API, a raw file, a ticket, a documentation site. Markup, script and styling "
+            + "are stripped; pass raw=true for the body exactly as sent, which is what JSON "
+            + "and source files want. It says so when the page turns out to want a login or "
+            + "to build itself in script, and the browser tools take it from there.",
         Glyph = "globe")]
     public async Task<string> Fetch(
         string url,
@@ -153,6 +155,39 @@ public sealed class WebTools(UrlGuard guard)
 
         if (html && PageText.TitleOf(body) is { } title)
             head.Append("Title: ").Append(title).Append('\n');
+
+        if (html && PageText.LooksLikeSignIn(body, text))
+        {
+            // Named rather than handed over. This response is a full document with a 200 on
+            // it, so nothing about it says the content is missing -- a model given the
+            // eighty kilobytes of configuration JSON behind a Jira portal will either invent
+            // a summary or say it has no information, and neither is the truth. The truth is
+            // that the page wants a login, and that has a remedy.
+            head.Append(
+                "This is a sign-in page, not the content: the site wants a login before it "
+                + "will show it. browser_launch opens a browser under Shellvis' control "
+                + "whose profile keeps its logins between sessions -- sign in there once, "
+                + "then browser_navigate to this url and browser_read_text will see the "
+                + "page. Do not describe the contents from the url alone.");
+
+            return head.ToString();
+        }
+
+        if (html && PageText.LooksLikeScriptShell(text))
+        {
+            // The other way a 200 carries no content: the document is an empty mount point
+            // and the only text in it is the configuration the page's own script will read.
+            // Handed over under "what the page says", that is an invitation to summarise a
+            // configuration file -- so it is named, with the tool that can see the real
+            // page. The blob itself is not returned: it is the script's, not the reader's.
+            head.Append(
+                "The page carried no prose -- only the configuration its own script reads, "
+                + "which means it builds itself in the browser. browser_navigate to this "
+                + "url followed by browser_read_text will see what it renders. Do not "
+                + "describe the contents from the url or from this.");
+
+            return head.ToString();
+        }
 
         if (text.Length == 0)
         {

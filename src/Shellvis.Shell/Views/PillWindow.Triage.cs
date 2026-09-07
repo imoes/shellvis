@@ -60,12 +60,32 @@ public sealed partial class PillWindow
 
             IReadOnlyList<DeskObject> batch = store.Unjudged(since, DeskTriage.PerBatch);
 
+            // Nothing new? Then go back over what was judged before the sorting could read
+            // message bodies.
+            //
+            // Those verdicts are probably right and their reasons are useless: the model
+            // saw sender and subject only, so the sentence beside each row is the subject
+            // in other words. That sentence is the only thing on a row the assistant
+            // contributes, and it is kept for three months -- so without this the trays
+            // would go on showing paraphrased subject lines until they aged out. This is
+            // what "bei Muss man wissen ist immer noch keine Zusammenfassung" was.
+            //
+            // Second, never first: a message nobody has judged at all is more urgent than
+            // one whose reason could be better.
+            bool rejudging = batch.Count == 0;
+
+            if (rejudging)
+                batch = store.JudgedWithoutBody(since, DeskTriage.PerBatch);
+
             if (batch.Count == 0)
                 return;
 
             AddRow(
                 GlyphTool,
-                $"sorting {batch.Count} unread message(s): which of them needs an answer",
+                rejudging
+                    ? $"re-reading {batch.Count} message(s) judged before Shellvis read "
+                        + "message text, for a summary rather than a paraphrased subject"
+                    : $"sorting {batch.Count} unread message(s): which of them needs an answer",
                 "desk");
 
             // The page, if it is open, says so while it runs. Without this the cell read
@@ -121,8 +141,11 @@ public sealed partial class PillWindow
             IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> verdicts =
                 DeskTriage.Read(answer.ToString(), batch);
 
+            // sawBody records that THIS pass reads bodies, not that this message had one.
+            // A notification with an empty body would otherwise be picked up as needing a
+            // re-read on every pass, for ever.
             foreach ((string id, (DeskVerdict verdict, string why)) in verdicts)
-                store.Judge(id, verdict, why, DateTime.Now);
+                store.Judge(id, verdict, why, DateTime.Now, sawBody: true);
 
             // Said plainly, including when it comes to nothing. A pass that read no verdicts
             // out of a full answer is a broken format, not a quiet mailbox, and the two must

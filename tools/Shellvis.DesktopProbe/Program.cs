@@ -112,6 +112,13 @@ internal static class Program
                 "web" => WebProbe.Run(
                     args.Any(a => a.Equals("--live", StringComparison.OrdinalIgnoreCase))),
 
+                // One url, and exactly what web_fetch hands the model for it. The quickest
+                // way to tell a refused url from a login wall from a model that never
+                // called the tool.
+                "fetch" => await WebProbe
+                    .FetchAsync(args.Length > 1 ? args[1] : "https://example.com")
+                    .ConfigureAwait(false),
+
                 // The date arithmetic behind the mail and calendar tools, with no COM in it.
                 //
                 // A harness of its own because 'outlook' cannot run in the CI -- it needs

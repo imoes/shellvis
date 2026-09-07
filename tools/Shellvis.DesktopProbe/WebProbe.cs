@@ -56,6 +56,26 @@ internal static class WebProbe
         return failures == 0 ? 0 : 1;
     }
 
+    /// <summary>
+    /// Fetch one url and print exactly what the tool hands the model.
+    /// </summary>
+    /// <remarks>
+    /// Worth a command of its own. "The assistant says it has no information about that
+    /// page" has three possible causes -- the guard refused the url, the fetch came back
+    /// with a login wall or a script shell, or the model never called the tool -- and the
+    /// first two are answered in one second by looking at the result. Guessing between them
+    /// from the transcript is how an afternoon goes.
+    /// </remarks>
+    public static async Task<int> FetchAsync(string url)
+    {
+        var tools = new WebTools(new UrlGuard());
+
+        Console.WriteLine($"web_fetch {url}\n");
+        Console.WriteLine(await tools.Fetch(url).ConfigureAwait(false));
+
+        return 0;
+    }
+
     private static int Stripping()
     {
         Console.WriteLine("-- html down to the words on the page --");
@@ -160,6 +180,61 @@ internal static class WebProbe
         failures += Check(
             "and a sniff of prose finds no markup",
             !PageText.LooksLikeHtml(null, "Just a sentence."));
+
+        Console.WriteLine("\n-- a login wall, which answers 200 like anything else --");
+
+        // The shape a Jira Service Desk portal returns: a title, and configuration JSON
+        // carrying a loginUrl. Readable text: two words.
+        const string wall = """
+            <html><head><title>Service Management</title></head><body>
+            <script>window.config = {"xsrfToken":"AAAA","login":{"loginUrl":
+            "/servicedesk/customer/portal/8/user/login","canReset":true}}</script>
+            </body></html>
+            """;
+
+        failures += Check(
+            "a portal login page is recognised as one",
+            PageText.LooksLikeSignIn(wall, PageText.Of(wall)));
+
+        // The important half. Most of the web has a sign-in link somewhere, and reporting
+        // every such page as a wall would make the tool useless for reading anything.
+        failures += Check(
+            "a real page with a sign-in link in its navigation is not",
+            !PageText.LooksLikeSignIn(
+                "<html><body><a href='/signin'>Sign in</a><p>" + new string('x', 1200) + "</p></body></html>",
+                new string('x', 1200)));
+
+        // A weak marker on its own must not trip it. "signin" is in the navigation of half
+        // the web, and an earlier version counted it.
+        failures += Check(
+            "a page whose only marker is the word signin is not a wall",
+            !PageText.LooksLikeSignIn(
+                "<html><body><a href='/signin'>Sign in</a><p>Der Artikel.</p></body></html>",
+                "Sign in Der Artikel."));
+
+        // And a page that really is a form must be, even when it is tiny.
+        failures += Check(
+            "a bare login form is a wall",
+            PageText.LooksLikeSignIn(
+                "<html><body><form><input type=\"password\"></form></body></html>",
+                ""));
+
+        Console.WriteLine("\n-- a page whose only text is its own configuration --");
+
+        failures += Check(
+            "a configuration blob is not mistaken for prose",
+            PageText.LooksLikeScriptShell(
+                """{"reasonKey":"com.atlassian.pocketknife.AnError","xsrfToken":"AAAA"}"""));
+
+        failures += Check(
+            "an article that merely opens with a brace is",
+            !PageText.LooksLikeScriptShell(
+                "{ so he said } and then the meeting went on for another hour, "
+                + "which nobody had expected, least of all the chair."));
+
+        failures += Check(
+            "and prose is left alone",
+            !PageText.LooksLikeScriptShell("Example Domain. This domain is for use in examples."));
 
         return failures;
     }
@@ -323,6 +398,23 @@ internal static class WebProbe
             "a 404 is reported as a 404",
             missing.Contains("404", StringComparison.Ordinal));
 
+        // A page that is genuinely behind a login, reached over the real network, because
+        // the detection is about a response shape and a synthetic one proves less. Any
+        // Atlassian service desk portal will do; this is Atlassian's own.
+        string portal = await tools
+            .Fetch("https://jira.atlassian.com/servicedesk/customer/portal/1")
+            .ConfigureAwait(false);
+
+        // What must NOT happen is the configuration blob coming back as "what the page
+        // says". Which of the three explanations applies depends on what the portal
+        // answers today -- a login wall, a script shell, or an error payload -- so the
+        // check is on the outcome that would mislead a reader, not on the wording.
+        failures += Check(
+            "a live portal does not hand over its configuration as page prose",
+            !portal.Contains("What the page says", StringComparison.Ordinal)
+            || !portal.Contains("\":", StringComparison.Ordinal),
+            portal.Length > 240 ? portal[..240] : portal);
+
         failures += await MeasuringAsync().ConfigureAwait(false);
 
         return failures;
@@ -436,9 +528,15 @@ internal static class WebProbe
         return failures;
     }
 
-    private static int Check(string what, bool condition)
+    private static int Check(string what, bool condition, string? detail = null)
     {
         Console.WriteLine($"  {(condition ? "ok  " : "FAIL")} {what}");
+
+        // Only on failure. A detail line beside a passing check is noise that trains people
+        // to skim the output, which is how a FAIL goes unread.
+        if (!condition && detail is { Length: > 0 })
+            Console.WriteLine($"       got: {detail.ReplaceLineEndings(" ")}");
+
         return condition ? 0 : 1;
     }
 }

@@ -53,6 +53,12 @@ public enum DeskKind
 /// <param name="EntryId">The volatile Outlook handle, for opening it. Never identity.</param>
 /// <param name="Facts">Extra metadata as JSON, so a new field does not need a migration.</param>
 /// <param name="Enrichment">What the assistant has worked out about this, added over time.</param>
+/// <param name="Verdict">
+/// What should happen with it: an answer, a read, or nothing. Null until something has
+/// looked. Written by a model and never by an indexing pass, for the same reason the
+/// enrichment is not: one belongs to Outlook, the other to this assistant.
+/// </param>
+/// <param name="VerdictWhy">One line saying why, so a verdict can be disagreed with.</param>
 /// <param name="FirstSeen">When it first entered the cache.</param>
 /// <param name="LastSeen">When it was last confirmed to exist.</param>
 public sealed record DeskObject(
@@ -70,7 +76,9 @@ public sealed record DeskObject(
     string? Facts,
     string? Enrichment,
     DateTime FirstSeen,
-    DateTime LastSeen)
+    DateTime LastSeen,
+    DeskVerdict? Verdict = null,
+    string? VerdictWhy = null)
 {
     /// <summary>The prefix for a kind, which is also the first half of every id.</summary>
     public static string Prefix(DeskKind kind) => kind switch

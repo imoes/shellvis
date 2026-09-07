@@ -102,23 +102,43 @@ internal static class PageProbe
                 && stripped.Contains("Consolas", StringComparison.Ordinal),
             "with the webfonts gone these are what actually renders");
 
-        // ------------------------------------------------------------------ it is whole
-        Console.WriteLine("\n-- the rules are all on it --");
+        // --------------------------------------------------- the rules SHAPE it
+        //
+        // They used to be printed on it: a lede, six cards with their sources, a worked
+        // morning, a list of what code decides. All of it true, none of it the desk -- and
+        // the report, five times over, was that the page was full of placeholder text. The
+        // rules are meant to SHAPE the page; a page that states them has put a description
+        // where the thing should be. So these checks are inverted.
+        Console.WriteLine("\n-- the rules shaped it rather than being listed on it --");
 
-        foreach ((string what, string marker) in new[]
+        foreach ((string what, string gone) in new[]
         {
-            ("the boundary that is never crossed", "Es wird nichts gesendet"),
-            ("sorting before speaking", "Vorsortierung"),
-            ("keeping work off the desk", "Rücken freihalten"),
-            ("the follow-up that forgets nothing", "Wiedervorlage"),
-            ("thinking ahead", "Vorausdenken"),
-            ("writing as they write", "Wort und Schrift"),
-            ("discretion", "Verschwiegenheit"),
-            ("the sentinel that means say nothing", "SILENCE"),
-            ("what code decides rather than judgement", "Was Code entscheidet"),
+            ("no lede explaining the purpose", "Der Auftrag ist nicht"),
+            ("no card per professional rule", "Was der Beruf tatsächlich verlangt"),
+            ("no worked morning", "Ein Morgen, durchgearbeitet"),
+            ("no list of what code decides", "Was Code entscheidet"),
+            ("no bibliography", "Woher die Regeln kommen"),
+            ("no stated boundary, because a missing button says it", "Es wird nichts gesendet"),
+            ("and nothing merely folded away either", "<details"),
         })
         {
-            Check(what, html.Contains(marker, StringComparison.Ordinal), marker);
+            Check(what, !html.Contains(gone, StringComparison.Ordinal), gone);
+        }
+
+        // And what the rules produced instead, which is now the whole page.
+        Console.WriteLine();
+
+        foreach ((string rule, string shape) in new[]
+        {
+            ("sorted before anything is said: three trays", "class=\"trays\""),
+            ("a handful rather than thirty: a list per tray", "data-list="),
+            ("the rest behind a count", "data-count=\"ignore\""),
+            ("an empty tray says so in words", "nichts davon"),
+            ("look ahead: what is left today", "data-count=\"today\""),
+            ("nothing dropped: what is overdue", "data-count=\"overdue\""),
+        })
+        {
+            Check(rule, html.Contains(shape, StringComparison.Ordinal), shape);
         }
 
         // The page is the visible half of files the model reads. If one of those goes, the
@@ -142,7 +162,12 @@ internal static class PageProbe
         // screen showing a dash for ever, next to boxes that filled in correctly.
         Console.WriteLine("\n-- the counts on the page and the counts in the code --");
 
-        var known = DeskSnapshot.Nothing.Counts.Keys.ToHashSet(StringComparer.Ordinal);
+        // Two sources now, and the split is the point of the whole change. The snapshot
+        // counts what a machine can count; the tally counts what the MODEL decided. A page
+        // key has to come from one of them, or its box can only ever show a dash.
+        var known = DeskSnapshot.Nothing.Counts.Keys
+            .Concat(["answer", "information", "ignore", "pending"])
+            .ToHashSet(StringComparer.Ordinal);
 
         HashSet<string> onPage = Regex.Matches(html, @"data-(?:count|badge)=""(?<key>[a-z]+)""")
             .Select(m => m.Groups["key"].Value)
@@ -150,24 +175,33 @@ internal static class PageProbe
 
         foreach (string key in onPage.OrderBy(k => k, StringComparer.Ordinal))
         {
-            Check($"the page's '{key}' is a count the snapshot produces", known.Contains(key),
+            Check($"the page's '{key}' is a count something produces", known.Contains(key),
                 known.Contains(key) ? string.Empty : "this box can only ever show a dash");
         }
 
-        foreach (string key in known.OrderBy(k => k, StringComparer.Ordinal))
+        foreach (string key in new[] { "answer", "information", "ignore", "pending" })
         {
-            Check($"the snapshot's '{key}' is shown somewhere", onPage.Contains(key),
-                onPage.Contains(key) ? string.Empty : "counted and then never displayed");
+            Check($"the verdict '{key}' is shown", onPage.Contains(key),
+                onPage.Contains(key) ? string.Empty : "the model judged it and nothing displays it");
+        }
+
+        // The sender split is GONE, and this is the check that keeps it gone. Sorting mail
+        // by whether the address looked like a machine is what put a broadcast under
+        // "braucht heute eine Antwort" -- reported as mail that needs no answer sitting in
+        // the tray that means it does.
+        foreach (string wrong in new[] { "people", "automated" })
+        {
+            Check($"the page no longer sorts by sender ('{wrong}')", !onPage.Contains(wrong),
+                "who sent it is a fact about the envelope, not an answer to what it needs");
         }
 
         Check("no box is authored with a zero in it",
             !Regex.IsMatch(html, @"data-count=""[a-z]+"">0<"),
             "a zero claims the mailbox is empty; a dash says it was not measured");
 
-        Check("the page says the numbers are counted and not sorted",
-            html.Contains("Gezählt, nicht sortiert", StringComparison.Ordinal)
-                && html.Contains("keine Sortierung", StringComparison.Ordinal),
-            "the trays are a judgement; these numbers are not, and the page has to say so");
+        Check("the page admits what has not been judged yet",
+            html.Contains("Noch unsortiert", StringComparison.Ordinal),
+            "judging costs a model call each, so a busy morning arrives faster than it is read");
 
         Check("there is somewhere for the update notice to appear",
             html.Contains(@"id=""refreshed""", StringComparison.Ordinal));
@@ -229,9 +263,11 @@ internal static class PageProbe
             !html.Contains(@"type=""range""", StringComparison.Ordinal),
             "the control lives in the settings form");
 
-        Check("it states the period instead",
+        Check("it states the period, and what the period governs",
             html.Contains(@"id=""remembering""", StringComparison.Ordinal)
-                && html.Contains("Erinnert über", StringComparison.Ordinal));
+                && html.Contains("Sortiert wird die Post", StringComparison.Ordinal),
+            "the unread count is the whole folder and the verdicts cover the period; "
+                + "side by side without a word they read as a contradiction");
 
         Check("and says where it is changed",
             html.Contains("in den Einstellungen", StringComparison.Ordinal),
@@ -249,7 +285,7 @@ internal static class PageProbe
         // ---------------------------------------------------------- the real entries
         Console.WriteLine("\n-- the trays show real entries, and ship none --");
 
-        foreach (string key in new[] { "people", "automated" })
+        foreach (string key in new[] { "answer", "information" })
         {
             Check($"there is a list for '{key}'",
                 html.Contains($@"data-list=""{key}""", StringComparison.Ordinal));
@@ -260,16 +296,26 @@ internal static class PageProbe
             "this page is also published on the web; nobody's inbox belongs in a file");
 
         Check("a list says it is waiting rather than showing nothing",
-            html.Contains("warten auf die erste Zählung", StringComparison.Ordinal));
+            html.Contains("noch nicht sortiert", StringComparison.Ordinal));
 
         Check("entries are built as text, not as markup",
             html.Contains("textContent", StringComparison.Ordinal)
                 && !Regex.IsMatch(html, @"innerHTML\s*="),
             "a subject line with a bracket in it must be shown, not interpreted");
 
-        Check("the list is labelled for what it is",
-            html.Contains("Die neuesten davon", StringComparison.Ordinal),
-            "the tray heading is a judgement and these are facts; saying which is the point");
+        // The tray heading is now TRUE rather than aspirational: the model decided that
+        // these need an answer, so the heading says so and needs no label underneath
+        // explaining that the list below it is something else.
+        Check("the trays are named by the verdict they hold",
+            html.Contains("Braucht eine Antwort", StringComparison.Ordinal)
+                && html.Contains("Muss man wissen", StringComparison.Ordinal)
+                && html.Contains("Nicht lesenswert", StringComparison.Ordinal));
+
+        Check("the reason the model gave is shown with the entry",
+            html.Contains("why-row", StringComparison.Ordinal)
+                && html.Contains("row.why", StringComparison.Ordinal),
+            "a verdict nobody can see the reasoning for is one nobody can correct");
+
 
         // The distinction moved with the control. Checked in the settings source rather
         // than in the page, because that is where the sentence now has to be: keeping a
@@ -284,40 +330,6 @@ internal static class PageProbe
                 && File.ReadAllText(settings)
                     .Contains("does not change what is kept", StringComparison.Ordinal),
             "keeping three months and consulting three months are different things");
-
-        // --------------------------------------------------- nothing is asserted twice
-        //
-        // A number that describes a setting must be read, not written. Three of them stood
-        // in the prose as words -- "alle drei Minuten" -- and would have gone on saying
-        // three after somebody set the interval to ten.
-        Console.WriteLine("\n-- the page describes the settings, it does not restate them --");
-
-        foreach (string key in new[] { "every", "lead", "quiet" })
-        {
-            Check($"the watcher's '{key}' interval is filled in, not typed in",
-                html.Contains($@"data-live=""{key}""", StringComparison.Ordinal));
-        }
-
-        foreach (string written in new[] { "Alle drei Minuten", "15 Minuten Vorlauf", "10 Minuten Ruhe" })
-        {
-            Check($"'{written}' is not written into the sentence any more",
-                !html.Contains(written, StringComparison.Ordinal),
-                "it would keep saying that after the setting moved");
-        }
-
-        // The alert's length limit is code rather than configuration, so the page may state
-        // it -- but only the number the code actually enforces. Measured by using it: a very
-        // long line comes back cut to the limit plus an ellipsis.
-        int limit = MailboxWatch.Headline(new string('a', 500)).Length - 3;
-
-        Check($"the stated line limit is the one enforced ({limit})",
-            html.Contains(
-                limit.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                StringComparison.Ordinal));
-
-        Check("and the one invented example says that it is invented",
-            html.Contains("erfunden", StringComparison.Ordinal),
-            "an invented name in the same typeface as the real entries reads as one of them");
 
         // ------------------------------------------------- every tool it names is real
         //
@@ -373,7 +385,7 @@ internal static class PageProbe
         Console.WriteLine(failures == 0
             ? "\nVERIFIED: the page is in the build as a fragment, strips every external\n"
               + "reference before it renders, still names a fallback face for each role,\n"
-              + "carries all six rules and the threshold, and designs both themes.\n"
+              + "is shaped by the rules instead of reciting them, and designs both themes.\n"
               + "\nNOT covered here: whether it LOOKS right, which needs eyes."
             : $"\n{failures} check(s) failed.");
 

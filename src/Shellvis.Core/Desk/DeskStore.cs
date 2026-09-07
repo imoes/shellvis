@@ -92,10 +92,25 @@ public sealed class DeskStore : IDisposable
                 entry_id    TEXT NULL,
                 facts       TEXT NULL,
                 enrichment  TEXT NULL,
+                verdict     TEXT NULL,
+                verdict_why TEXT NULL,
+                verdict_at  TEXT NULL,
                 first_seen  TEXT NOT NULL,
                 last_seen   TEXT NOT NULL
             );
             """);
+
+        // The verdict columns arrived after the table did, and there are real rows in it
+        // by now. CREATE TABLE IF NOT EXISTS does nothing to an existing table, so without
+        // this the new columns would be missing on every machine that has already run
+        // Shellvis -- and every query naming them would fail at runtime, which is a crash
+        // rather than a defect somebody has to notice.
+        AddMissingColumns("objects", new[]
+        {
+            ("verdict", "TEXT NULL"),
+            ("verdict_why", "TEXT NULL"),
+            ("verdict_at", "TEXT NULL"),
+        });
 
         // The three questions this store is actually asked: what is recent, what is about
         // this ticket, and what else is in this conversation. Each gets an index; nothing
@@ -155,6 +170,36 @@ public sealed class DeskStore : IDisposable
                 VALUES (new.rowid, new.subject, new.who_name, new.who_address, coalesce(new.enrichment, ''));
             END;
             """);
+    }
+
+    /// <summary>
+    /// Add columns a newer version needs to a table an older version created.
+    ///
+    /// The smallest migration that works: ask the table what it has, add what it lacks.
+    /// SQLite has no ADD COLUMN IF NOT EXISTS, and running a bare ADD COLUMN twice is an
+    /// error -- so the check has to be explicit rather than swallowed by a try.
+    /// </summary>
+    private void AddMissingColumns(string table, IEnumerable<(string Name, string Type)> wanted)
+    {
+        var present = new HashSet<string>(StringComparer.Ordinal);
+
+        using (SqliteCommand ask = _connection.CreateCommand())
+        {
+            ask.CommandText = $"PRAGMA table_info({table});";
+
+            using SqliteDataReader reader = ask.ExecuteReader();
+
+            while (reader.Read())
+                present.Add(reader.GetString(1));
+        }
+
+        foreach ((string name, string type) in wanted)
+        {
+            if (present.Contains(name))
+                continue;
+
+            Execute($"ALTER TABLE {table} ADD COLUMN {name} {type};");
+        }
     }
 
     /// <summary>
@@ -262,6 +307,175 @@ public sealed class DeskStore : IDisposable
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Write what the assistant decided this needs: an answer, a read, or nothing.
+    /// </summary>
+    /// <remarks>
+    /// <b>Judged once and remembered, which is the whole reason this is a column.</b> A
+    /// verdict is a model call, and a model call on this machine takes seconds a mail. Four
+    /// hundred unread messages cannot be judged on every look; they can be judged once each,
+    /// and then the answer is free for as long as the row lives.
+    ///
+    /// Like the enrichment and for the same reason, an indexing pass cannot clear it: the
+    /// subject and the read flag belong to Outlook, this belongs to the assistant.
+    ///
+    /// <b>Overwritten rather than appended</b> -- unlike an enrichment. An enrichment
+    /// accumulates because understanding does; a verdict is a current answer to "what should
+    /// happen with this", and two of them is not richer, it is ambiguous.
+    /// </remarks>
+    public void Judge(string id, DeskVerdict verdict, string why, DateTime when)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        command.CommandText = """
+            UPDATE objects
+            SET verdict = $verdict, verdict_why = $why, verdict_at = $at
+            WHERE id = $id;
+            """;
+
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$verdict", verdict.ToString().ToLowerInvariant());
+        command.Parameters.AddWithValue("$why", why.Trim());
+        command.Parameters.AddWithValue("$at", Text(when));
+
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Mail that has not been judged yet, newest first.
+    /// </summary>
+    /// <remarks>
+    /// Only mail, and only what is still unread: a judged verdict on a message somebody has
+    /// already dealt with is a model call spent on the past. Newest first because that is
+    /// where an unanswered question is most likely to be.
+    /// </remarks>
+    public IReadOnlyList<DeskObject> Unjudged(DateTime since, int limit = 10)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        command.CommandText = Select + """
+             WHERE verdict IS NULL
+               AND kind = 'mail'
+               AND state <> 'read'
+               AND happened >= $since
+             ORDER BY happened DESC
+             LIMIT $limit;
+            """;
+
+        command.Parameters.AddWithValue("$since", Text(since));
+        command.Parameters.AddWithValue("$limit", limit);
+
+        return ReadAll(command);
+    }
+
+    /// <summary>Everything with one verdict, newest first.</summary>
+    public IReadOnlyList<DeskObject> Judged(DeskVerdict verdict, DateTime since, int limit = 25)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        command.CommandText = Select + """
+             WHERE verdict = $verdict
+               AND state <> 'read'
+               AND happened >= $since
+             ORDER BY happened DESC
+             LIMIT $limit;
+            """;
+
+        command.Parameters.AddWithValue("$verdict", verdict.ToString().ToLowerInvariant());
+        command.Parameters.AddWithValue("$since", Text(since));
+        command.Parameters.AddWithValue("$limit", limit);
+
+        return ReadAll(command);
+    }
+
+    /// <summary>
+    /// How many unread things carry each verdict, and how many are still unjudged.
+    /// </summary>
+    /// <remarks>
+    /// One query rather than four. The page shows all of these side by side, and four
+    /// round trips to answer one question is how a page that refreshes on a timer starts
+    /// costing something.
+    /// </remarks>
+    public DeskTally Tally(DateTime since)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        command.CommandText = """
+            SELECT coalesce(verdict, 'pending') AS v, count(*)
+            FROM objects
+            WHERE kind = 'mail' AND state <> 'read' AND happened >= $since
+            GROUP BY v;
+            """;
+
+        command.Parameters.AddWithValue("$since", Text(since));
+
+        int answer = 0, information = 0, ignore = 0, pending = 0;
+
+        using SqliteDataReader reader = command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            int howMany = reader.GetInt32(1);
+
+            switch (reader.GetString(0))
+            {
+                case "answer": answer = howMany; break;
+                case "information": information = howMany; break;
+                case "ignore": ignore = howMany; break;
+                default: pending = howMany; break;
+            }
+        }
+
+        return new DeskTally(answer, information, ignore, pending);
+    }
+
+    /// <summary>
+    /// Everything in this period that the mailbox no longer lists as unread has been read.
+    /// </summary>
+    /// <param name="stillUnread">The ids the walk just saw in the unread set.</param>
+    /// <param name="from">
+    /// The oldest moment the walk actually looked at. Rows older than this were not in the
+    /// scan, so their absence from <paramref name="stillUnread"/> means nothing.
+    /// </param>
+    /// <returns>How many rows were marked read.</returns>
+    /// <remarks>
+    /// <b>Without this the store's idea of "unread" only ever grows.</b> The walk enumerates
+    /// the UNREAD items, so a message that has since been read is never seen again and keeps
+    /// the state it was first written with -- for the three months the row lives. Measured on
+    /// a real mailbox: the folder reported 85 unread while the store counted 399, and every
+    /// number derived from it was wrong by that difference.
+    ///
+    /// <b>Bounded by the scan, which is the part that has to be right.</b> The classification
+    /// looks at the newest two hundred, so "not in the unread set" is only evidence for
+    /// messages inside that range. Applying it further back would mark a genuinely unread
+    /// message from last month as read because the scan never reached it -- the same class of
+    /// mistake in the other direction, and a worse one: it would hide something.
+    /// </remarks>
+    public int MarkRead(IReadOnlySet<string> stillUnread, DateTime from)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        // The ids go in as a JSON array and are read back with json_each rather than being
+        // pasted into the SQL. Two hundred ids concatenated into a statement is a statement
+        // that breaks on the first apostrophe, and a message id may contain one.
+        command.CommandText = """
+            UPDATE objects
+            SET state = 'read'
+            WHERE kind = 'mail'
+              AND state <> 'read'
+              AND happened >= $from
+              AND id NOT IN (SELECT value FROM json_each($ids));
+            """;
+
+        command.Parameters.AddWithValue("$from", Text(from));
+
+        command.Parameters.AddWithValue(
+            "$ids",
+            System.Text.Json.JsonSerializer.Serialize(stillUnread));
+
+        return command.ExecuteNonQuery();
+    }
+
     /// <summary>Note that one thing relates to another.</summary>
     public void Link(string fromId, string toId, string relation)
     {
@@ -355,7 +569,7 @@ public sealed class DeskStore : IDisposable
         command.CommandText = """
             SELECT o.id, o.kind, o.subject, o.who_name, o.who_address, o.happened, o.due,
                    o.state, o.ticket_key, o.thread, o.entry_id, o.facts, o.enrichment,
-                   o.first_seen, o.last_seen
+                   o.first_seen, o.last_seen, o.verdict, o.verdict_why
             FROM objects_fts f
             JOIN objects o ON o.rowid = f.rowid
             WHERE objects_fts MATCH $query
@@ -436,7 +650,8 @@ public sealed class DeskStore : IDisposable
 
     private const string Select = """
         SELECT id, kind, subject, who_name, who_address, happened, due, state,
-               ticket_key, thread, entry_id, facts, enrichment, first_seen, last_seen
+               ticket_key, thread, entry_id, facts, enrichment, first_seen, last_seen,
+               verdict, verdict_why
         FROM objects
         """;
 
@@ -467,7 +682,18 @@ public sealed class DeskStore : IDisposable
         Facts: reader.IsDBNull(11) ? null : reader.GetString(11),
         Enrichment: reader.IsDBNull(12) ? null : reader.GetString(12),
         FirstSeen: When(reader, 13) ?? DateTime.MinValue,
-        LastSeen: When(reader, 14) ?? DateTime.MinValue);
+        LastSeen: When(reader, 14) ?? DateTime.MinValue,
+        Verdict: reader.FieldCount > 15 && !reader.IsDBNull(15) ? Verdict(reader.GetString(15)) : null,
+        VerdictWhy: reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetString(16) : null);
+
+    /// <summary>A verdict as it was written, or null when it is a word nobody knows.</summary>
+    private static DeskVerdict? Verdict(string said) => said switch
+    {
+        "answer" => DeskVerdict.Answer,
+        "information" => DeskVerdict.Information,
+        "ignore" => DeskVerdict.Ignore,
+        _ => null,
+    };
 
     private static DateTime? When(SqliteDataReader reader, int column) =>
         !reader.IsDBNull(column)

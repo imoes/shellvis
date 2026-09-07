@@ -61,7 +61,7 @@ public static class TaskbarLayout
 
         try
         {
-            occupied = Occupied(stripTop, stripBottom, stripLeft, stripRight);
+            occupied = Used(stripTop, stripBottom, stripLeft, stripRight);
         }
         catch (Exception)
         {
@@ -101,19 +101,41 @@ public static class TaskbarLayout
             : gaps.OrderByDescending(g => g.Width).First();
     }
 
-    private static List<Span> Occupied(int stripTop, int stripBottom, int stripLeft, int stripRight)
+    /// <summary>
+    /// What is already using pixels on this strip, as disjoint runs.
+    ///
+    /// Public so the harness can assert the strip was actually READ. That is the check that
+    /// was missing: a taskbar always has at least a Start button, so an empty result means
+    /// the measurement failed rather than that the strip is free -- and treating it as free
+    /// is precisely how the bar came to sit on somebody's icons.
+    /// </summary>
+    public static List<Span> Used(int stripTop, int stripBottom, int stripLeft, int stripRight)
     {
         var spans = new List<Span>();
 
-        HWND taskbar = PInvoke.FindWindow("Shell_TrayWnd", null);
+        // EVERY taskbar, not just the first one.
+        //
+        // This is the defect that produced the second report of covered icons. A second
+        // monitor gets its own taskbar in a window of class Shell_SecondaryTrayWnd, with its
+        // own Start button and its own row of icons, and FindWindow("Shell_TrayWnd") never
+        // sees any of it. So on that screen the strip measured as completely empty, the bar
+        // was placed where it liked, and it landed 28 pixels over the rightmost icon --
+        // measured on this desk: bar at x -613, the icon it covered at -629 to -585.
+        //
+        // The rectangles are clipped to the strip being asked about a few lines below, so
+        // taking the buttons of all of them and letting the clip sort it out is both simpler
+        // and safer than deciding here which taskbar belongs to which display.
+        List<HWND> taskbars = Taskbars();
 
-        if (taskbar.IsNull)
+        if (taskbars.Count == 0)
             return spans;
 
         using var automation = new UIA3Automation();
-        AutomationElement root = automation.FromHandle(taskbar);
 
-        foreach (AutomationElement element in root.FindAllDescendants())
+        // HWND is a wrapper struct; FromHandle takes the nint inside it, so the conversion
+        // is spelled out rather than passed as a method group.
+        foreach (AutomationElement element in taskbars
+            .SelectMany(bar => automation.FromHandle(bar).FindAllDescendants()))
         {
             System.Drawing.Rectangle box;
 
@@ -144,6 +166,43 @@ public static class TaskbarLayout
         }
 
         return Merge(spans);
+    }
+
+    /// <summary>
+    /// Every taskbar window on the desktop: the primary one and one per further monitor.
+    /// </summary>
+    /// <remarks>
+    /// The secondary bars are found by walking <c>FindWindowEx</c> over the class rather
+    /// than by enumerating all top-level windows and reading their class names. Same result,
+    /// and it asks the shell for exactly the thing wanted instead of filtering everything
+    /// the desktop happens to contain.
+    /// </remarks>
+    private static List<HWND> Taskbars()
+    {
+        var found = new List<HWND>();
+
+        HWND primary = PInvoke.FindWindow("Shell_TrayWnd", null);
+
+        if (!primary.IsNull)
+            found.Add(primary);
+
+        HWND after = HWND.Null;
+
+        // Bounded: one iteration per monitor in the worst case, and a guard because a loop
+        // driven by another process's window list should not be able to spin for ever if
+        // that process behaves oddly during a restart.
+        for (int guard = 0; guard < 16; guard++)
+        {
+            HWND next = PInvoke.FindWindowEx(HWND.Null, after, "Shell_SecondaryTrayWnd", null);
+
+            if (next.IsNull)
+                break;
+
+            found.Add(next);
+            after = next;
+        }
+
+        return found;
     }
 
     /// <summary>Overlapping rectangles into disjoint runs, left to right.</summary>

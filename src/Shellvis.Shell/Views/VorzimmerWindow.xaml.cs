@@ -7,6 +7,7 @@ using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 
+using Shellvis.Core.Desk;
 using Shellvis.Core.Office;
 using Shellvis.Shell.Interop;
 
@@ -271,13 +272,25 @@ public sealed partial class VorzimmerWindow : Window
         DeskSnapshot now,
         DeskSnapshot? before,
         string remembering,
-        IReadOnlyList<DeskEntry> people,
-        IReadOnlyList<DeskEntry> automated,
+        DeskTally tally,
+        IReadOnlyList<DeskEntry> answer,
+        IReadOnlyList<DeskEntry> information,
         WatchTiming watch)
     {
+        // The verdicts join the facts in one dictionary, because the page fills every box
+        // by the same key and a second mechanism for four more numbers would be four more
+        // ways for a box to stay a dash.
+        var counts = new Dictionary<string, int>(now.Counts)
+        {
+            ["answer"] = tally.Answer,
+            ["information"] = tally.Information,
+            ["ignore"] = tally.Ignore,
+            ["pending"] = tally.Pending,
+        };
+
         string json = JsonSerializer.Serialize(
             new Payload(
-                Counts: now.Counts,
+                Counts: counts,
                 New: now.NewSince(before),
                 // Seconds, and they are not a detail. With minutes only, pressing "count
                 // it now" twice inside one minute changed nothing on screen -- same time,
@@ -287,8 +300,8 @@ public sealed partial class VorzimmerWindow : Window
                 NextAppointment: now.NextAppointmentLabel,
                 ScannedNote: ScannedNote(now),
                 Remembering: remembering,
-                People: people,
-                Automated: automated,
+                Answer: answer,
+                Information: information,
                 Watch: watch),
             PayloadFormat);
 
@@ -348,8 +361,8 @@ public sealed partial class VorzimmerWindow : Window
         string NextAppointment,
         string ScannedNote,
         string Remembering,
-        IReadOnlyList<DeskEntry> People,
-        IReadOnlyList<DeskEntry> Automated,
+        IReadOnlyList<DeskEntry> Answer,
+        IReadOnlyList<DeskEntry> Information,
         WatchTiming Watch);
 
     /// <summary>
@@ -369,7 +382,7 @@ public sealed partial class VorzimmerWindow : Window
     /// given no id and no handle -- there is nothing for a document to do with an EntryID,
     /// and putting one in the payload would be handing out a key nobody there needs.
     /// </summary>
-    public sealed record DeskEntry(string Who, string When, string What);
+    public sealed record DeskEntry(string Who, string When, string What, string Why);
 
     /// <summary>
     /// camelCase, because the script reads <c>counts</c> and <c>takenAt</c>.

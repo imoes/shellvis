@@ -203,6 +203,166 @@ internal static class DeskProbe
             Check("nothing is pruned that is inside the window",
                 store.Prune(now) == 0, "a second sweep has nothing left to do");
 
+            // ------------------------------------------------------ read since
+            //
+            // The walk enumerates UNREAD items, so anything read since is never visited
+            // again and would keep its first state for three months. On a real mailbox the
+            // folder said 85 unread while the store counted 399, and every number derived
+            // from it inherited the gap.
+            Console.WriteLine("\n-- what was read since the last look --");
+
+            string readId = DeskObject.MakeId(DeskKind.Mail, "gone@example.com");
+            string keepId = DeskObject.MakeId(DeskKind.Mail, "still@example.com");
+            string oldId2 = DeskObject.MakeId(DeskKind.Mail, "beyond@example.com");
+
+            store.See(Mail(readId, "schon gelesen", now));
+            store.See(Mail(keepId, "noch ungelesen", now));
+            store.See(Mail(oldId2, "vor dem Fenster", now.AddDays(-20)));
+
+            int marked = store.MarkRead(
+                new HashSet<string>(new[] { keepId }, StringComparer.Ordinal),
+                now.AddHours(-1));
+
+            Check("what the walk no longer sees is marked read",
+                store.Get(readId)?.State == "read", $"marked {marked}");
+
+            Check("what it still sees is left alone",
+                store.Get(keepId)?.State == "unread");
+
+            Check("AND NOTHING OLDER THAN THE SCAN IS TOUCHED",
+                store.Get(oldId2)?.State == "unread",
+                "beyond the scan, not-seen is no evidence; marking it read would hide waiting mail");
+
+            // --------------------------------------------------------------- triage
+            //
+            // The parsing is the part that fails silently. A model that renumbers the list,
+            // translates the labels or invents a message produces verdicts on the WRONG
+            // mail, and a wrong verdict is remembered for three months while an unjudged
+            // one is simply asked about again.
+            Console.WriteLine("\n-- reading the model's verdicts --");
+
+            var batch = new[]
+            {
+                Mail(DeskObject.MakeId(DeskKind.Mail, "t1@example.com"), "Angebot bis Freitag?", now),
+                Mail(DeskObject.MakeId(DeskKind.Mail, "t2@example.com"), "Newsletter 09/2026", now),
+                Mail(DeskObject.MakeId(DeskKind.Mail, "t3@example.com"), "TV-Programm der Woche", now),
+            };
+
+            string asked = DeskTriage.Ask(batch);
+
+            Check("the question numbers the mail from one",
+                asked.Contains("1. ", StringComparison.Ordinal)
+                    && asked.Contains("3. ", StringComparison.Ordinal),
+                "a model copying a forty-character message id back gets it wrong silently");
+
+            Check("and carries the sender and the subject",
+                asked.Contains("Angebot bis Freitag?", StringComparison.Ordinal)
+                    && asked.Contains("Weber", StringComparison.Ordinal));
+
+            Check("it says most mail is information",
+                asked.Contains("Most mail is INFORMATION", StringComparison.Ordinal),
+                "without it everything comes back as ANSWER, which is a tray nobody can use");
+
+            IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> read = DeskTriage.Read(
+                """
+                1 | ANSWER | Weber wartet auf das Angebot
+                2 | IGNORE | Rundschreiben
+                3 | INFORMATION | nur ein Programmhinweis
+                """,
+                batch);
+
+            Check("each number lands on the right message",
+                read[batch[0].Id].Verdict == DeskVerdict.Answer
+                    && read[batch[1].Id].Verdict == DeskVerdict.Ignore
+                    && read[batch[2].Id].Verdict == DeskVerdict.Information,
+                $"{read.Count} verdict(s)");
+
+            Check("and the reason comes with it",
+                read[batch[0].Id].Why.Contains("Angebot", StringComparison.Ordinal),
+                "a verdict nobody can see the reasoning for is one nobody can correct");
+
+            Check("markdown decoration does not hide a verdict",
+                DeskTriage.Read("- **2** | **IGNORE** | Werbung", batch).ContainsKey(batch[1].Id),
+                "a model told to answer plainly will still emphasise something");
+
+            Check("the German words are accepted too",
+                DeskTriage.Read("1 | ANTWORT | wartet\n2 | IGNORIEREN | nichts", batch)
+                    is { Count: 2 } german
+                    && german[batch[0].Id].Verdict == DeskVerdict.Answer
+                    && german[batch[1].Id].Verdict == DeskVerdict.Ignore,
+                "the mail is German and so is the model's instinct");
+
+            Check("a number outside the list is dropped, not guessed",
+                DeskTriage.Read("9 | ANSWER | erfunden", batch).Count == 0,
+                "attributing it to whichever row is there would be a verdict on the wrong mail");
+
+            Check("a label that is not one of the three is dropped",
+                DeskTriage.Read("1 | VIELLEICHT | unklar", batch).Count == 0);
+
+            Check("prose around the answer is ignored rather than parsed",
+                DeskTriage.Read(
+                    "Hier ist meine Einschätzung:\n\n1 | ANSWER | wartet\n\nDas war alles.",
+                    batch) is { Count: 1 });
+
+            Check("a message judged twice keeps the first verdict",
+                DeskTriage.Read("1 | ANSWER | wartet\n1 | IGNORE | doch nicht", batch)
+                    [batch[0].Id].Verdict == DeskVerdict.Answer,
+                "the later line is not more considered, only later");
+
+            Check("an empty answer yields nothing rather than throwing",
+                DeskTriage.Read(string.Empty, batch).Count == 0
+                    && DeskTriage.Read(null, batch).Count == 0);
+
+            // A subject containing the separator or a newline would otherwise break the
+            // numbered list apart, and then every verdict after it lands on the wrong mail.
+            var nasty = new[]
+            {
+                Mail(DeskObject.MakeId(DeskKind.Mail, "n1@example.com"), "Re: A | B\nzweite Zeile", now),
+                Mail(DeskObject.MakeId(DeskKind.Mail, "n2@example.com"), "harmlos", now),
+            };
+
+            string awkward = DeskTriage.Ask(nasty);
+
+            Check("a subject cannot break the list it is listed in",
+                awkward.Split('\n').Count(l => l.TrimStart().StartsWith("1.", StringComparison.Ordinal)) == 1
+                    && !awkward.Contains("A | B", StringComparison.Ordinal),
+                "a pipe or a newline in a subject would shift every verdict after it");
+
+            Check("and the second message is still the second",
+                DeskTriage.Read("2 | INFORMATION | ok", nasty).ContainsKey(nasty[1].Id));
+
+            // --------------------------------------------------------- the verdicts
+            Console.WriteLine("\n-- verdicts, stored and counted --");
+
+            store.See(batch[0]);
+            store.See(batch[1]);
+            store.Judge(batch[0].Id, DeskVerdict.Answer, "wartet auf Angebot", now);
+
+            Check("a verdict comes back with the thing",
+                store.Get(batch[0].Id)?.Verdict == DeskVerdict.Answer
+                    && store.Get(batch[0].Id)?.VerdictWhy?.Contains("Angebot", StringComparison.Ordinal) == true);
+
+            store.See(batch[0] with { Subject = "Angebot bis Freitag? (erledigt)" });
+
+            Check("AN INDEXING PASS DOES NOT ERASE A VERDICT",
+                store.Get(batch[0].Id)?.Verdict == DeskVerdict.Answer,
+                "the subject belongs to Outlook, the verdict belongs to the assistant");
+
+            Check("the unjudged are the ones still to ask about",
+                store.Unjudged(now.AddDays(-1), 10).Any(o => o.Id == batch[1].Id)
+                    && !store.Unjudged(now.AddDays(-1), 10).Any(o => o.Id == batch[0].Id));
+
+            DeskTally tally = store.Tally(now.AddDays(-1));
+
+            Check("the tally counts the judged and the pending apart",
+                tally.Answer >= 1 && tally.Pending >= 1,
+                $"answer {tally.Answer}, information {tally.Information}, "
+                    + $"ignore {tally.Ignore}, pending {tally.Pending}");
+
+            Check("and a pending message is not quietly counted as information",
+                tally.Information == 0,
+                "a page that folded the unjudged into a verdict would look complete and be wrong");
+
             // ------------------------------------------------------------- ordering
             Console.WriteLine("\n-- dates that sort as dates --");
 

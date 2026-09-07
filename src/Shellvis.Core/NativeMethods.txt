@@ -30,3 +30,4 @@ GetDpiForWindow
 SetProcessDpiAwarenessContext
 DPI_AWARENESS_CONTEXT
 FindWindowW
+FindWindowExW

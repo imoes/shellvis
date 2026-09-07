@@ -16,7 +16,6 @@
     --ink-faint:  #7A837C;
     --tab:        #2F5D50;
     --tab-ink:    #F1F3EE;
-    --stamp:      #A8322A;
     --rule:       #C2C8BF;
     --rule-soft:  #D7DCD4;
 
@@ -43,7 +42,6 @@
       --ink-faint:  #79837A;
       --tab:        #74AE99;
       --tab-ink:    #101413;
-      --stamp:      #DC7168;
       --rule:       #333B37;
       --rule-soft:  #262D29;
       --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 12px rgba(0, 0, 0, .35);
@@ -58,7 +56,6 @@
     --ink-faint:  #79837A;
     --tab:        #74AE99;
     --tab-ink:    #101413;
-    --stamp:      #DC7168;
     --rule:       #333B37;
     --rule-soft:  #262D29;
     --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 12px rgba(0, 0, 0, .35);
@@ -90,10 +87,7 @@
   p { margin: 0; }
 
   a { color: var(--tab); text-decoration-thickness: 1px; text-underline-offset: .18em; }
-  a:focus-visible, .rule:focus-visible {
-    outline: 2px solid var(--tab);
-    outline-offset: 3px;
-  }
+  a:focus-visible { outline: 2px solid var(--tab); outline-offset: 3px; }
 
   code, .mono { font-family: var(--f-mono); font-size: .92em; }
 
@@ -114,13 +108,13 @@
     margin: 0;
   }
 
-  /* --------------------------------------------------------------- masthead */
+  /* --------------------------------------------------------------- masthead
+     One column, because there is one thing in it. It was a two-column grid with
+     the "nothing is sent" stamp on the right; that stamp was a rule stated on a
+     page whose job is to embody rules, so it went with the rest of the prose. The
+     guarantee is not weaker for being unwritten: there is no send tool. */
   .masthead {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: clamp(1.5rem, 4vw, 3rem);
-    align-items: start;
-    padding-bottom: clamp(1.25rem, 3vw, 2rem);
+    padding-bottom: clamp(1rem, 2.5vw, 1.5rem);
     border-bottom: 3px double var(--rule);
   }
 
@@ -131,39 +125,6 @@
     letter-spacing: -.015em;
     margin: .5rem 0 0;
   }
-
-  .lede {
-    max-width: 54ch;
-    margin-top: .9rem;
-    font-size: var(--step-1);
-    color: var(--ink-soft);
-  }
-
-  .lede strong { color: var(--ink); font-weight: 600; }
-
-  /* The single loud thing on the page, and it is the one hard boundary. */
-  .stamp {
-    justify-self: end;
-    max-width: 15.5rem;
-    border: 2px double var(--stamp);
-    color: var(--stamp);
-    padding: .8rem 1rem .85rem;
-    transform: rotate(-1.4deg);
-    display: flex;
-    flex-direction: column;
-    gap: .35rem;
-  }
-
-  .stamp b {
-    font-family: var(--f-mono);
-    font-size: var(--step--1);
-    font-weight: 500;
-    letter-spacing: .13em;
-    text-transform: uppercase;
-    line-height: 1.35;
-  }
-
-  .stamp span { font-size: var(--step--1); line-height: 1.4; }
 
   /* ---------------------------------------------------------------- section */
   .band { display: flex; flex-direction: column; gap: 1.35rem; }
@@ -295,6 +256,14 @@
   .freshness > button:disabled { color: var(--ink-faint); cursor: default; }
   .freshness > button[hidden] { display: none !important; }
 
+  /* --------------------------------------------------------- the answer tray
+     The one tray that costs attention is the one that looks like it. Everything
+     else on this page is the same weight on purpose; this is the exception, and
+     it is the only accent spent on a tray. */
+  .tray-answer { border-top-width: 5px; }
+
+  .desk-cell.answer > .desk-value { color: var(--tab); }
+
   /* ------------------------------------------------------------ live lists
      The real entries. A label above them says what the list IS, because the
      tray heading is a judgement ("braucht heute eine Antwort") and these are
@@ -340,6 +309,17 @@
   .tray ul.live .what {
     font-size: var(--step--1);
     color: var(--ink-soft);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Why the model put it here. Shown rather than kept in the database, because a
+     verdict nobody can see the reasoning for is a verdict nobody can correct. */
+  .tray ul.live .why-row {
+    font-family: var(--f-mono);
+    font-size: .66rem;
+    color: var(--ink-faint);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -492,283 +472,25 @@
   .refreshed > button:hover { border-color: var(--tab); color: var(--ink); }
   .refreshed > button:focus-visible { outline: 2px solid var(--tab); outline-offset: 2px; }
 
-  /* ------------------------------------------------------------- threshold */
-  .threshold {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-    align-items: stretch;
-  }
-
-  .panel {
-    background: var(--card);
-    border: 1px solid var(--rule);
-    box-shadow: var(--shadow);
-    padding: 1.15rem 1.2rem 1.3rem;
-    display: flex;
-    flex-direction: column;
-    gap: .85rem;
-  }
-
-  .panel > h3 { font-size: var(--step-1); font-weight: 600; }
-
-  .panel ol {
-    margin: 0;
-    padding-left: 1.15rem;
-    display: flex;
-    flex-direction: column;
-    gap: .65rem;
-    color: var(--ink-soft);
-  }
-
-  .panel ol strong { color: var(--ink); font-weight: 600; }
-
-  .silence {
-    display: flex;
-    flex-direction: column;
-    gap: .8rem;
-    justify-content: center;
-    text-align: left;
-  }
-
-  .silence .word {
-    font-family: var(--f-mono);
-    font-size: clamp(1.6rem, 5vw, 2.5rem);
-    letter-spacing: .1em;
-    color: var(--tab);
-    line-height: 1;
-  }
-
-  .silence p:not(.eyebrow):not(.word) { color: var(--ink-soft); }
-
-  .silence ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-wrap: wrap;
-    gap: .4rem;
-  }
-
-  .silence li {
-    font-family: var(--f-mono);
-    font-size: var(--step--1);
-    border: 1px solid var(--rule);
-    padding: .18rem .5rem;
-    color: var(--ink-soft);
-  }
-
-  /* The output contract, spanning both panels: one line, 140 characters. */
-  .contract {
-    grid-column: 1 / -1;
-    border: 1px solid var(--rule);
-    border-left: 3px solid var(--tab);
-    background: var(--card);
-    padding: 1rem 1.15rem;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: .35rem 1.4rem;
-    align-items: baseline;
-  }
-
-  .contract dt {
-    font-family: var(--f-mono);
-    font-size: var(--step--1);
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: var(--tab);
-  }
-
-  .contract dd { margin: 0; color: var(--ink-soft); }
-
-  .contract .good, .contract .bad {
-    font-family: var(--f-mono);
-    font-size: var(--step--1);
-  }
-
-  .contract .good { color: var(--ink); }
-
-  /* The one place on this page that says "this is not real". Quiet, but present:
-     the alternative is an invented name sitting in the same typeface as the
-     entries from the actual mailbox two sections above. */
-  .contract .made-up {
-    display: block;
-    margin-top: .3rem;
-    font-family: var(--f-mono);
-    font-size: .66rem;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-  }
-  .contract .bad { color: var(--ink-faint); text-decoration: line-through; }
-
-  /* ------------------------------------------------------------- six rules
-     A tab per card carrying the German term, because the term IS the
-     source: these rules come out of German office-management guidance. */
-  .rules {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
-    gap: 1.6rem 1rem;
-  }
-
-  .rule {
-    position: relative;
-    background: var(--card);
-    border: 1px solid var(--rule);
-    box-shadow: var(--shadow);
-    padding: 1.35rem 1.15rem 1.2rem;
-    display: flex;
-    flex-direction: column;
-    gap: .55rem;
-    transition: border-color .15s ease;
-  }
-
-  .rule:hover { border-color: var(--tab); }
-
-  .rule .tab {
-    position: absolute;
-    top: -.72rem;
-    left: -1px;
-    background: var(--tab);
-    color: var(--tab-ink);
-    font-family: var(--f-mono);
-    font-size: .68rem;
-    font-weight: 500;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    padding: .18rem .55rem .2rem;
-  }
-
-  .rule h3 { font-size: var(--step-1); font-weight: 600; }
-
-  .rule p { color: var(--ink-soft); font-size: var(--step--1); }
-
-  .rule .tools {
-    margin-top: auto;
-    padding-top: .7rem;
-    border-top: 1px solid var(--rule-soft);
-    font-family: var(--f-mono);
-    font-size: .72rem;
-    color: var(--ink-faint);
-    word-break: break-word;
-  }
-
-  /* ---------------------------------------------------------------- morning
-     Numbered, and here the numbers are earned: it is an order of
-     operations, and step 4 depends on what step 2 turned up. */
-  .morning { display: flex; flex-direction: column; gap: 0; }
-
-  .step {
-    display: grid;
-    grid-template-columns: 3.1rem minmax(0, 1fr);
-    gap: 1.15rem;
-    padding: .95rem 0;
-    border-bottom: 1px solid var(--rule-soft);
-    align-items: baseline;
-  }
-
-  .step:first-child { border-top: 1px solid var(--rule); }
-
-  .step .n {
-    font-family: var(--f-mono);
-    font-size: var(--step-1);
-    font-variant-numeric: tabular-nums;
-    color: var(--tab);
-  }
-
-  .step .what { display: flex; flex-direction: column; gap: .2rem; }
-
-  .step .what b { font-weight: 600; }
-
-  .step .what span { color: var(--ink-soft); font-size: var(--step--1); }
-
-  /* --------------------------------------------------------------- machined */
-  .machined {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
-    gap: 1px;
-    background: var(--rule);
-    border: 1px solid var(--rule);
-  }
-
-  .machined div {
-    background: var(--card);
-    padding: 1rem 1.05rem 1.1rem;
-    display: flex;
-    flex-direction: column;
-    gap: .3rem;
-  }
-
-  .machined b {
-    font-family: var(--f-mono);
-    font-size: var(--step--1);
-    font-weight: 500;
-    letter-spacing: .06em;
-    text-transform: uppercase;
-    color: var(--tab);
-  }
-
-  .machined span { color: var(--ink-soft); font-size: var(--step--1); }
-
-  /* ---------------------------------------------------------------- colophon */
-  .colophon {
-    border-top: 3px double var(--rule);
-    padding-top: 1.3rem;
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-    gap: 1.2rem 2rem;
-    color: var(--ink-faint);
-    font-size: var(--step--1);
-  }
-
-  .colophon h3 {
-    font-family: var(--f-mono);
-    font-size: var(--step--1);
-    font-weight: 500;
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--tab);
-    margin-bottom: .35rem;
-  }
-
-  .colophon p + p { margin-top: .4rem; }
-
   /* ------------------------------------------------------------------ narrow */
   @media (max-width: 900px) {
-    .masthead { grid-template-columns: 1fr; }
-    .stamp { justify-self: start; transform: rotate(-1deg); }
     .trays { grid-template-columns: 1fr; }
-    .threshold { grid-template-columns: 1fr; }
-    .contract { grid-template-columns: 1fr; gap: .2rem; }
-    .contract dt { margin-top: .6rem; }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .rule { transition: none; }
   }
 </style>
 
 <div class="sheet">
 
+  <!-- A name and nothing else.
+       Everything that used to be here explained how a desk is kept: a lede, six
+       rules with their sources, a worked morning, a list of what code decides.
+       All of it true, none of it the desk. The rules are meant to SHAPE this page
+       -- three trays because sorting comes before speaking, a handful in each
+       because three things beat thirty, a count for the rest, an empty tray that
+       says so in words, no send button anywhere -- and a page that states them
+       instead has substituted a description for the thing. -->
   <header class="masthead">
-    <div>
-      <p class="eyebrow">Shellvis &middot; Sekretariat</p>
-      <h1>Das Vorzimmer</h1>
-      <p class="lede">
-        Der Auftrag ist nicht, alles zu berichten, was auf dem Schreibtisch liegt.
-        Der Auftrag ist, <strong>den Tag beherrschbar zu machen</strong> — vorsortieren,
-        vorausdenken, und nichts fallen lassen, was zugesagt wurde.
-      </p>
-    </div>
-
-    <div class="stamp">
-      <b>Es wird nichts gesendet</b>
-      <span>
-        Antworten, Weiterleitungen und Termine werden als Entwurf angelegt und geöffnet.
-        Gesendet wird, wenn ein Mensch auf Senden drückt. Das ist keine Regel zum Merken:
-        es gibt kein Sende-Werkzeug, und es wird keines geben.
-      </span>
-    </div>
+    <p class="eyebrow">Shellvis &middot; Sekretariat</p>
+    <h1>Das Vorzimmer</h1>
   </header>
 
   <!-- --------------------------------------------------------- the numbers -->
@@ -785,10 +507,6 @@
         </div>
       </div>
 
-      <p>
-        Gezählt, nicht sortiert. Ein Badge zeigt, was seit dem letzten Öffnen dazugekommen
-        ist — die Zahl daneben ist der ganze Stapel.
-      </p>
     </div>
 
     <div class="refreshed" id="refreshed" hidden>
@@ -797,37 +515,45 @@
       <button type="button" id="refreshed-close">Schließen</button>
     </div>
 
+    <!-- What the model decided, then the facts nobody has to decide.
+         The old strip split the mail by SENDER -- von Menschen / automatisch --
+         and that was the wrong question: a colleague can send something that
+         needs no answer, and a system can send something that does. -->
     <div class="desk">
+      <div class="desk-cell answer">
+        <span class="desk-label">Braucht Antwort
+          <span class="badge" data-badge="answer" hidden></span>
+        </span>
+        <span class="desk-value" data-count="answer">&mdash;</span>
+        <span class="desk-note">jemand wartet</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Nur Information
+          <span class="badge" data-badge="information" hidden></span>
+        </span>
+        <span class="desk-value" data-count="information">&mdash;</span>
+        <span class="desk-note">wissen, nicht antworten</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Nicht lesenswert</span>
+        <span class="desk-value" data-count="ignore">&mdash;</span>
+        <span class="desk-note">Rundschreiben, Dubletten</span>
+      </div>
+
+      <div class="desk-cell">
+        <span class="desk-label">Noch unsortiert</span>
+        <span class="desk-value" data-count="pending">&mdash;</span>
+        <span class="desk-note" data-note="pending">wird der Reihe nach beurteilt</span>
+      </div>
+
       <div class="desk-cell">
         <span class="desk-label">Ungelesen
           <span class="badge" data-badge="unread" hidden></span>
         </span>
         <span class="desk-value" data-count="unread">&mdash;</span>
         <span class="desk-note" data-note="unread">im Posteingang</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">Von Menschen
-          <span class="badge" data-badge="people" hidden></span>
-        </span>
-        <span class="desk-value" data-count="people">&mdash;</span>
-        <span class="desk-note">jemand könnte warten</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">Automatisch
-          <span class="badge" data-badge="automated" hidden></span>
-        </span>
-        <span class="desk-value" data-count="automated">&mdash;</span>
-        <span class="desk-note">Berichte, Rundschreiben, Meldungen</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">Ticket-Post
-          <span class="badge" data-badge="tickets" hidden></span>
-        </span>
-        <span class="desk-value" data-count="tickets">&mdash;</span>
-        <span class="desk-note">Auslöser, nicht Quelle</span>
       </div>
 
       <div class="desk-cell">
@@ -849,360 +575,47 @@
           <span class="badge" data-badge="overdue" hidden></span>
         </span>
         <span class="desk-value" data-count="overdue">&mdash;</span>
-        <span class="desk-note">Aufgaben mit Datum in der Vergangenheit</span>
+        <span class="desk-note">Datum liegt in der Vergangenheit</span>
       </div>
     </div>
-
     <p class="remembering" id="remembering"></p>
 
-    <p class="counted-not-sorted" id="taken-at">
-      Die Zahlen erscheinen im Shellvis-Fenster. Auf einer geteilten Seite bleiben sie leer —
-      sie kommen aus dem Postfach auf dem Rechner und verlassen ihn nicht.
-    </p>
+    <p class="counted-not-sorted" id="taken-at">Ohne Postfach keine Zahlen.</p>
   </section>
 
-  <!-- ------------------------------------------------------------ triage -->
+  <!-- ---------------------------------------------------------- the trays -->
   <section class="band">
     <div class="band-head">
-      <p class="eyebrow">Vorsortierung</p>
-      <h2>Drei Ablagen, nicht dreißig Zeilen</h2>
-      <p>
-        Post wird sortiert, bevor ein Wort darüber fällt. Die drei Ablagen sind absichtlich
-        nicht gleich breit: die erste wird benannt, die zweite gezählt, die dritte bekommt
-        nur eine Zahl. Eine Zusammenfassung, die dreißig Dinge aufzählt, hat die Arbeit
-        nicht gemacht.
-      </p>
+      <p class="eyebrow">Sortiert</p>
+      <h2>Die sortierte Post</h2>
     </div>
 
     <div class="trays">
-      <article class="tray">
-        <h3>Braucht heute eine Antwort
-          <span class="badge" data-badge="people" hidden></span>
+      <article class="tray tray-answer">
+        <h3>Braucht eine Antwort
+          <span class="badge" data-badge="answer" hidden></span>
         </h3>
-        <p>Benannt, mit wer und was. Namentlich, weil hier gehandelt werden muss.</p>
-        <p class="tray-count"><span data-count="people">&mdash;</span> von Menschen, ungelesen</p>
-
-        <!-- Filled from the mailbox. Empty in the markup on purpose: this page is also
-             published on the web, and nobody's inbox belongs in a file. -->
-        <p class="list-label">Die neuesten davon</p>
-        <ul class="live" data-list="people">
-          <li class="waiting">warten auf die erste Zählung</li>
+        <ul class="live" data-list="answer">
+          <li class="waiting">noch nicht sortiert</li>
         </ul>
       </article>
 
       <article class="tray">
-        <h3>Muss man wissen, nicht beantworten
-          <span class="badge" data-badge="automated" hidden></span>
+        <h3>Muss man wissen
+          <span class="badge" data-badge="information" hidden></span>
         </h3>
-        <p>Gezählt. Benannt wird nur, was einen Plan ändert.</p>
-        <p class="tray-count"><span data-count="automated">&mdash;</span> automatisch, davon
-          <span data-count="tickets">&mdash;</span> Ticket-Post</p>
-
-        <p class="list-label">Die neuesten davon</p>
-        <ul class="live" data-list="automated">
-          <li class="waiting">warten auf die erste Zählung</li>
+        <ul class="live" data-list="information">
+          <li class="waiting">noch nicht sortiert</li>
         </ul>
       </article>
 
       <article class="tray tray-third">
-        <h3>Alles andere</h3>
-        <p class="count" data-count="unread">&mdash;</p>
-        <p class="count-note">
-          Wird nicht aufgezählt. Nur die Zahl — danach kann jederzeit gefragt werden.
-        </p>
-      </article>
-    </div>
-
-    <p class="counted-not-sorted">
-      Die Zahlen sind ein Stapel, keine Sortierung. Welche davon heute wirklich eine Antwort
-      braucht, entscheidet sich beim Lesen — danach fragen, und Shellvis sortiert. Was hier
-      steht, ist nur, wonach zu fragen sich lohnt.
-    </p>
-  </section>
-
-  <!-- --------------------------------------------------------- threshold -->
-  <section class="band">
-    <div class="band-head">
-      <p class="eyebrow">Die Schwelle</p>
-      <h2>Wann unterbrochen wird — und wann nicht</h2>
-      <!-- The three numbers are settings, so they are read rather than written.
-           They stood in this sentence as words -- "alle drei Minuten" -- and would
-           have gone on saying three after somebody changed the interval to ten. A
-           page that describes a configuration it does not read is a page that lies
-           the moment the configuration moves. -->
-      <p>
-        Alle <span data-live="every">&mdash;</span>&nbsp;Minuten wird nachgesehen, was in
-        Outlook angekommen ist: Termine mit <span data-live="lead">&mdash;</span>&nbsp;Minuten
-        Vorlauf, neue Post, Terminanfragen, Ticket-Benachrichtigungen. Danach mindestens
-        <span data-live="quiet">&mdash;</span>&nbsp;Minuten Ruhe, bevor erneut gefragt wird.
-        Der Normalfall ist Schweigen.
-      </p>
-    </div>
-
-    <div class="threshold">
-      <article class="panel">
-        <h3>Unterbrochen wird nur dafür</h3>
-        <ol>
-          <li>
-            <strong>Ein Termin, der bald beginnt</strong> und auf den man vielleicht nicht
-            vorbereitet ist — besonders mit Teams-Link oder einem Weg dorthin.
-          </li>
-          <li>
-            <strong>Eine Terminanfrage, die kollidiert.</strong> Vorher
-            <code>calendar_list</code> prüfen, nicht behaupten.
-          </li>
-          <li>
-            <strong>Jemand wartet auf eine Antwort</strong>, oder in der Mail steht eine
-            Frist.
-          </li>
-          <li>
-            <strong>Eine Ticket-Benachrichtigung zu einem eigenen Ticket.</strong> Nicht die
-            Mail zusammenfassen: den Schlüssel nehmen, <code>jira_issue</code> und
-            <code>jira_comments</code> aufrufen, und sagen, was der neueste Kommentar
-            entschieden hat. Die Mail ist der Auslöser, das Ticket ist die Quelle.
-          </li>
-        </ol>
-      </article>
-
-      <article class="panel silence">
-        <p class="eyebrow">Die normale Antwort</p>
-        <p class="word">SILENCE</p>
-        <p>
-          Und sie ist die richtige. Ein Hinweis auf jede Mail bringt einem bei, den nächsten
-          ungelesen wegzuklicken — und damit ist auch der verloren, der zählte.
-        </p>
-        <ul>
-          <li>Rundschreiben</li>
-          <li>Automatische Berichte</li>
-          <li>Routinepost</li>
-          <li>Alles, was man binnen einer Stunde selbst findet</li>
-        </ul>
-      </article>
-
-      <dl class="contract">
-        <dt>Form</dt>
-        <dd>Genau eine Zeile, höchstens 140 Zeichen, in der Sprache des Lesers.</dd>
-        <!-- Marked as an example, and that label is not politeness.
-             This page shows real figures and real entries a few sections up, so an
-             invented name in the same typeface reads as something that arrived. It
-             did not: there is no Weber. -->
-        <dt>Beispiel</dt>
-        <dd>
-          <span class="good">„Weber braucht das FTP-Passwort bis 16:00"</span>
-          &nbsp;—&nbsp;
-          <span class="bad">„neue Mail von Weber"</span>
-          <span class="made-up">erfunden, zur Veranschaulichung der Form</span>
-        </dd>
-        <dt>Grund</dt>
-        <dd>Die Sache selbst, nicht die Tatsache, dass etwas passiert ist.</dd>
-      </dl>
-    </div>
-  </section>
-
-  <!-- ---------------------------------------------------------- six rules -->
-  <section class="band">
-    <div class="band-head">
-      <p class="eyebrow">Sechs Regeln</p>
-      <h2>Was der Beruf tatsächlich verlangt</h2>
-      <p>
-        Aus deutschen Ratgebern zum Office Management — abzüglich dessen, was Software nicht
-        kann. Der Reiter trägt den Fachbegriff, weil der Begriff die Quelle ist.
-      </p>
-    </div>
-
-    <div class="rules">
-      <article class="rule" tabindex="0">
-        <span class="tab">Vorsortierung</span>
-        <h3>Sortieren, bevor man spricht</h3>
-        <p>
-          Drei Ablagen, in dieser Reihenfolge. Und aus dem Tag drei Dinge wählen, nicht
-          dreißig aufzählen: das Wählen ist die Arbeit.
-        </p>
-        <p class="tools">mail_list &middot; mail_thread</p>
-      </article>
-
-      <article class="rule" tabindex="0">
-        <span class="tab">Rücken freihalten</span>
-        <h3>Arbeit vom Schreibtisch nehmen</h3>
-        <p>
-          Nicht eine längere Liste darauf legen. Der Rest verschwindet hinter einer Zahl,
-          nach der gefragt werden kann.
-        </p>
-        <p class="tools">agenda_today &middot; agenda_due</p>
-      </article>
-
-      <article class="rule" tabindex="0">
-        <span class="tab">Wiedervorlage</span>
-        <h3>Nichts fällt auf den Boden</h3>
-        <p>
-          Taucht in einer Mail eine Zusage, ein Datum oder eine Bitte auf, wird sie mit
-          Fälligkeit notiert — in der Outlook-Aufgabenliste, wo ohnehin hingesehen wird.
-          Eine Zusage, die nur im Gespräch steht, ist mit dem Fenster weg.
-        </p>
-        <p class="tools">task_create &middot; task_list</p>
-      </article>
-
-      <article class="rule" tabindex="0">
-        <span class="tab">Vorausdenken</span>
-        <h3>Nach vorn sehen, nicht zurück</h3>
-        <p>
-          Eine Erinnerung nach dem Termin ist wertlos. Vor dem Termin: was es ist, wer darin
-          sitzt, und was seit der Einladung dazu kam. Vor einer Frist: solange noch Zeit
-          zum Handeln ist, nicht am Tag selbst.
-        </p>
-        <p class="tools">calendar_list &middot; mail_history</p>
-      </article>
-
-      <article class="rule" tabindex="0">
-        <span class="tab">Wort und Schrift</span>
-        <h3>Schreiben, wie der Mensch schreibt</h3>
-        <p>
-          Vor einem Entwurf den Verlauf lesen und drei Dinge übernehmen: die Sprache der
-          eingehenden Mail, den Ton der eigenen früheren Antworten, und die Anrede, die
-          dort schon benutzt wird. Wer nach vier Jahren beim Sie ist, bleibt beim Sie.
-          Ein Entwurf im falschen Ton ist schlimmer als keiner — er muss neu geschrieben
-          werden, nicht korrigiert.
-        </p>
-        <p class="tools">mail_thread &middot; mail_history</p>
-      </article>
-
-      <article class="rule" tabindex="0">
-        <span class="tab">Verschwiegenheit</span>
-        <h3>Es bleibt auf dieser Maschine</h3>
-        <p>
-          Was über Menschen bekannt wird, wird niemandem außer dem Nutzer erzählt und
-          verlässt den Rechner nicht. Gesendet wird nie — siehe oben.
-        </p>
-        <p class="tools">kein Sende-Werkzeug</p>
+        <h3>Nicht lesenswert</h3>
+        <p class="count" data-count="ignore">&mdash;</p>
+        <p class="count-note">nicht aufgezählt</p>
       </article>
     </div>
   </section>
-
-  <!-- ------------------------------------------------------------ morning -->
-  <section class="band">
-    <div class="band-head">
-      <p class="eyebrow">Ein Morgen, durchgearbeitet</p>
-      <h2>„Was liegt heute an?"</h2>
-      <p>
-        Hier sind die Nummern verdient: es ist eine Reihenfolge, und Schritt 4 hängt davon
-        ab, was Schritt 2 ergeben hat.
-      </p>
-    </div>
-
-    <div class="morning">
-      <div class="step">
-        <span class="n">1</span>
-        <span class="what">
-          <b>Der Kalender für heute</b>
-          <span>Wochentage und Uhrzeiten kommen aus dem Ergebnis, nicht aus eigener Rechnung.</span>
-        </span>
-      </div>
-      <div class="step">
-        <span class="n">2</span>
-        <span class="what">
-          <b>Ungelesene Post, in die drei Ablagen</b>
-          <span>Erst sortieren, dann sprechen.</span>
-        </span>
-      </div>
-      <div class="step">
-        <span class="n">3</span>
-        <span class="what">
-          <b>Die Aufgabenliste</b>
-          <span>Was überfällig ist, ist im Ergebnis schon als überfällig markiert.</span>
-        </span>
-      </div>
-      <div class="step">
-        <span class="n">4</span>
-        <span class="what">
-          <b>Für die ein oder zwei Mails, die heute eine Antwort brauchen: den Verlauf lesen</b>
-          <span>Vorher wird nicht gesagt, worum es geht.</span>
-        </span>
-      </div>
-      <div class="step">
-        <span class="n">5</span>
-        <span class="what">
-          <b>Antworten: was fest steht, die drei Dinge, was überfällig ist</b>
-          <span>
-            Jede Mail verlinkt, damit sie in Outlook aufgeht. Entwürfe werden angeboten,
-            nicht unaufgefordert geschrieben.
-          </span>
-        </span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ----------------------------------------------------------- machined -->
-  <section class="band">
-    <div class="band-head">
-      <p class="eyebrow">Nicht dem Urteil überlassen</p>
-      <h2>Was Code entscheidet</h2>
-      <p>
-        Die Teile, die nicht ausfallen dürfen, hängen nicht am Gedächtnis eines Modells.
-      </p>
-    </div>
-
-    <div class="machined">
-      <div>
-        <b>Erinnerungen</b>
-        <span>Laufen als geplante Aufträge, nicht aus dem Gedächtnis heraus.</span>
-      </div>
-      <div>
-        <b>Fälligkeiten</b>
-        <span>Stehen in Outlook, nicht in diesem Gespräch.</span>
-      </div>
-      <div>
-        <b>Senden</b>
-        <span>Nicht möglich, weil die Fähigkeit nicht existiert.</span>
-      </div>
-      <div>
-        <b>Wochentage und Überfälligkeit</b>
-        <span>Werden gerechnet, nicht geschätzt — zweimal falsch gewesen, mit dem Datum vor der Nase.</span>
-      </div>
-      <div>
-        <b>Ein leeres Ergebnis</b>
-        <span>
-          Ist eine Antwort. „Diese Woche keine Termine" ist vollkommen in Ordnung; sechs
-          erfundene Termine waren es nicht, und die hat es hier gegeben.
-        </span>
-      </div>
-      <div>
-        <b>Herkunft</b>
-        <span>
-          Jede Behauptung über eine Mail, einen Termin oder eine Aufgabe kommt aus einem
-          Werkzeugergebnis — und wird als Link dorthin zurückgeschrieben.
-        </span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ---------------------------------------------------------- colophon -->
-  <footer class="colophon">
-    <div>
-      <h3>Woher die Regeln kommen</h3>
-      <p>
-        Deutsche Ratgeber zum Office Management: eine Liste von zwanzig Aufgaben und sechzehn
-        Eigenschaften, ein Kompetenzprofil, und Handreichungen zur Assistenz auf
-        Vorstandsebene. Worin sie übereinstimmen, ist nicht Ablage oder Tippgeschwindigkeit.
-      </p>
-    </div>
-    <div>
-      <h3>Was nicht übernommen wurde</h3>
-      <p>
-        „Gepflegtes Äußeres" und „souveränes Auftreten" stehen auf jeder dieser Listen.
-        Beides ist hier nicht zu haben.
-      </p>
-    </div>
-    <div>
-      <h3>Wo es steht</h3>
-      <p>
-        <span class="mono">skills/assistant/secretary</span> und
-        <span class="mono">skills/assistant/daily-briefing</span> für das Urteil,
-        <span class="mono">MailboxWatch</span> für die Schwelle.
-      </p>
-      <p>Das Urteil ist der Teil, der bleibt: was zählt, was warten kann, und wie es gesagt wird.</p>
-    </div>
-  </footer>
-
 </div>
 
 <script>
@@ -1251,10 +664,11 @@
     /* What each key is called when the notice has to name it. Held here rather than derived
      * from the labels, because a label is styled text and this is a sentence. */
     var NAMES = {
+      answer: "brauchen eine Antwort",
+      information: "zur Information",
+      ignore: "nicht lesenswert",
+      pending: "noch unsortiert",
       unread: "ungelesen",
-      people: "von Menschen",
-      automated: "automatisch",
-      tickets: "Ticket-Post",
       requests: "Terminanfragen",
       today: "Termine heute",
       overdue: "überfällig"
@@ -1288,7 +702,7 @@
       if (!rows || rows.length === 0) {
         var nothing = document.createElement("li");
         nothing.className = "empty";
-        nothing.textContent = "nichts davon ungelesen";
+        nothing.textContent = "nichts davon";
         list.appendChild(nothing);
         return;
       }
@@ -1317,6 +731,17 @@
 
         item.appendChild(who);
         item.appendChild(what);
+
+        /* Why the model put it in this tray. Only when it said something: an empty
+         * reason line is a row that looks like it is still loading. */
+        if (row.why) {
+          var why = document.createElement("span");
+          why.className = "why-row";
+          why.textContent = row.why;
+          why.title = row.why;
+          item.appendChild(why);
+        }
+
         list.appendChild(item);
       }
     }
@@ -1350,8 +775,8 @@
         put("data-note", "unread", desk.scannedNote);
       }
 
-      fill("people", desk.people);
-      fill("automated", desk.automated);
+      fill("answer", desk.answer);
+      fill("information", desk.information);
 
       /* The watcher's own settings, so the sentence describing them cannot go stale. */
       if (desk.watch) {
@@ -1363,8 +788,11 @@
       /* The period, stated rather than offered. It arrives already worded, so this page
        * cannot disagree with the settings dialog about what 62 days is called. */
       if (desk.remembering) {
-        remembering.textContent = "Erinnert über " + desk.remembering
-          + " — änderbar in den Einstellungen.";
+        /* Says what the period GOVERNS, not just what it is. Without that, "86 ungelesen"
+         * beside "1 sortiert" reads as a contradiction: the unread count is the whole
+         * folder, the verdicts cover the period. */
+        remembering.textContent = "Sortiert wird die Post " + desk.remembering
+          + " — Zeitraum änderbar in den Einstellungen.";
       }
 
       if (desk.nextAppointment) {
@@ -1372,8 +800,10 @@
       }
 
       if (desk.takenAt) {
-        takenAt.textContent = "Gezählt um " + desk.takenAt
-          + ". Die Zahlen kommen aus dem Postfach auf diesem Rechner und verlassen ihn nicht.";
+        /* The line at the foot exists for the shared copy, where it explains the dashes.
+         * With real numbers on the page it is a second copy of the time already beside the
+         * heading plus a sentence nobody needs twice. */
+        takenAt.hidden = true;
 
         /* The same time next to the heading, which is where it is actually read. Without it
          * a page that refreshed and found nothing changed looks exactly like a page that

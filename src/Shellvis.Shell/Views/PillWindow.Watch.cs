@@ -125,6 +125,12 @@ public sealed partial class PillWindow
             // caller would only queue behind this one.
             RefreshVorzimmer();
 
+            // And one batch of unread mail gets sorted by the model. On the watcher's timer
+            // rather than a timer of its own, and after the look rather than before it: the
+            // look is what puts the new mail into the store, so sorting first would sort
+            // yesterday's.
+            _ = JudgeSomeMailAsync();
+
             if (!MailboxWatch.ShouldAsk(
                 findings, now, _watchState.LastAsked,
                 TimeSpan.FromMinutes(Math.Clamp(_watchSettings.QuietMinutes, 0, 240))))

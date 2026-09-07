@@ -8,21 +8,24 @@ using Shellvis.Core.Office;
 namespace Shellvis.Shell.Views;
 
 /// <summary>
-/// The reference page, the button that opens it, and the numbers on it.
+/// The desk, on a page, behind a button next to the answer.
 ///
-/// <b>Why the application carries its own rules.</b> How this assistant sorts mail, when it
-/// decides something is worth interrupting for, and what it will never do -- those are not
-/// implementation details, they are the terms of the arrangement. They were written down in
-/// three skill files and a prompt, which is the right place for the model to read them and
-/// the wrong place for a person to. So they are also one page, in a window, behind a button
-/// next to the answer.
+/// <b>The page IS the desk. It does not describe one.</b> It began as a reference sheet -- a
+/// lede, six professional rules with their sources, a worked morning, a list of what code
+/// decides -- and every word of that was true and none of it was the desk. It was reported as
+/// placeholder text five times before I understood the report. The rules are meant to SHAPE
+/// the page: three trays because sorting comes before speaking, a handful in each because
+/// three things beat thirty, a count for the rest, an empty tray that says so in words, and
+/// no send button anywhere. A page that states them instead has put a description where the
+/// thing should be.
 ///
-/// <b>And the numbers on it are counted, never sorted.</b> The page shows how much is unread,
-/// how much came from a person rather than a system, what starts today and what is late. It
-/// does not show which mail needs an answer today, because nothing here can know that: the
-/// three trays are a sorting somebody performs by reading, and a computed number under that
-/// heading would be a guess wearing a triage's clothes. The page says so in as many words,
-/// twice.
+/// <b>The sorting is the model's, and this is a reversal.</b> An earlier version of this
+/// comment argued that which mail needs an answer cannot be computed, and put counts here
+/// with a disclaimer -- and then sorted by whether the sender's address looked like a
+/// machine, which is a guess wearing a triage's clothes exactly as described. The premise was
+/// right and the conclusion was wrong: the answer is to ask the model, not to stop asking.
+/// Each message is judged once, the verdict is kept, and the trays are a lookup. See
+/// <c>PillWindow.Triage</c> and <c>DeskTriage</c>.
 ///
 /// <b>A badge means "since you last opened this".</b> The comparison point is written to disk
 /// when the window opens, so closing it and coming back an hour later shows what the hour
@@ -71,19 +74,20 @@ public sealed partial class PillWindow
     }
 
     /// <summary>
-    /// Refresh the numbers if the page is open, called from the watcher's own tick.
+    /// Count the desk again, called from the watcher's own tick.
     ///
     /// Piggybacking on the watcher rather than running a timer of its own: it already looks
-    /// at Outlook every three minutes, the COM apartment is single-threaded, and a second
+    /// at Outlook every few minutes, the COM apartment is single-threaded, and a second
     /// timer would mean two callers queueing behind each other for the same mailbox.
+    ///
+    /// <b>It no longer requires the page to be open, and that is deliberate.</b> The count
+    /// is what fills the store the tools read and what raises the notification when the desk
+    /// changes -- and a notification that only works while you are already looking at the
+    /// page is a notification for the one case that does not need one. The cost is one
+    /// restricted folder query and a bounded scan per tick, alongside the look the watcher
+    /// was doing anyway.
     /// </summary>
-    private void RefreshVorzimmer()
-    {
-        if (_vorzimmer is null)
-            return;
-
-        _ = CountTheDeskAsync(saveBaseline: false);
-    }
+    private void RefreshVorzimmer() => _ = CountTheDeskAsync(saveBaseline: false);
 
     /// <summary>
     /// Count the desk and hand it to the page.
@@ -96,9 +100,6 @@ public sealed partial class PillWindow
     /// </param>
     private async Task CountTheDeskAsync(bool saveBaseline)
     {
-        if (_vorzimmer is null)
-            return;
-
         // Already counting: say nothing and do nothing. The count in flight ends in a
         // render, which is what puts the button back -- so the press is not lost, it is
         // answered by the other one.
@@ -107,7 +108,7 @@ public sealed partial class PillWindow
 
         if (_session?.Outlook is null)
         {
-            _vorzimmer.Trouble("Outlook ist nicht erreichbar");
+            _vorzimmer?.Trouble("Outlook ist nicht erreichbar");
             return;
         }
 
@@ -121,12 +122,29 @@ public sealed partial class PillWindow
 
             Remember(reading);
 
-            _vorzimmer.Show(
+            // The trays come out of the store rather than out of the walk, and that is the
+            // change that matters: the walk knows who sent a thing, the store knows what the
+            // model decided it needs. Sorting by sender is what put a broadcast under
+            // "braucht heute eine Antwort".
+            DateTime since = (_session.DeskWindow ?? new DeskWindow()).Since(DateTime.Now);
+
+            DeskTally tally = _session.Desk is { } counted
+                ? counted.Tally(since)
+                : DeskTally.Nothing;
+
+            DeskStore? store = _session.Desk;
+
+            // The notification, before the page: it has to work whether or not anybody is
+            // looking at the page, and the page is the case that needs it least.
+            AnnounceChange(reading.Counts, tally);
+
+            _vorzimmer?.Show(
                 reading.Counts,
                 _deskBaseline,
                 (_session.DeskWindow ?? new DeskWindow()).Describe(),
-                Newest(reading.Objects, fromPeople: true),
-                Newest(reading.Objects, fromPeople: false),
+                tally,
+                Judged(store, since, DeskVerdict.Answer),
+                Judged(store, since, DeskVerdict.Information),
 
                 // The watcher's own settings, from the same clamped values the timer uses.
                 // Read here rather than restated on the page, which is where they were and
@@ -153,6 +171,72 @@ public sealed partial class PillWindow
         }
     }
 
+    /// <summary>The desk as the previous count found it, for telling what changed.</summary>
+    /// <remarks>
+    /// A second comparison point, separate from the badge baseline. The badges answer "what
+    /// has come in since I opened this", so their baseline has to stay put while the window
+    /// is open; a notification answers "what changed just now", so its baseline is the count
+    /// before this one. One field could not be both, and using one would have made either
+    /// the badges reset every few minutes or the notification repeat itself for ever.
+    /// </remarks>
+    private DeskSnapshot? _deskLast;
+
+    private DeskTally? _tallyLast;
+
+    /// <summary>
+    /// Say something when the desk has changed, once per look.
+    ///
+    /// <b>Once per look, not once per message.</b> A morning's synchronisation brought in
+    /// three hundred and eighty messages on this mailbox; a notification each would be three
+    /// hundred and eighty, and then the one that mattered arrives among them unread. So the
+    /// change is aggregated into one line, and the count that costs attention leads it.
+    ///
+    /// <b>Growth only.</b> A number that fell -- mail read, a task finished -- is not news,
+    /// and being congratulated for tidying up is how somebody learns to dismiss these. The
+    /// same rule the badges follow.
+    ///
+    /// <b>Nothing on the first count of a session.</b> There is no previous state to have
+    /// changed from, and announcing the whole inbox at startup is the behaviour that makes an
+    /// alert worthless -- the refusal the watcher already makes on its first run.
+    ///
+    /// The line goes through <see cref="NoteQuietly"/> like every other announcement, so the
+    /// transcript always records it and the desktop alert waits until Windows says an
+    /// interruption is allowed.
+    /// </summary>
+    private void AnnounceChange(DeskSnapshot now, DeskTally tally)
+    {
+        DeskSnapshot? before = _deskLast;
+        DeskTally? wasTally = _tallyLast;
+
+        _deskLast = now;
+        _tallyLast = tally;
+
+        if (before is null || wasTally is null)
+            return;
+
+        var said = new List<string>();
+
+        // The one that costs attention, first and in its own words.
+        if (tally.Answer > wasTally.Answer)
+            said.Add($"{tally.Answer - wasTally.Answer} braucht eine Antwort");
+
+        if (now.Unread > before.Unread)
+            said.Add($"{now.Unread - before.Unread} neu ungelesen");
+
+        if (now.MeetingRequests > before.MeetingRequests)
+            said.Add($"{now.MeetingRequests - before.MeetingRequests} Terminanfrage(n)");
+
+        if (now.OverdueTasks > before.OverdueTasks)
+            said.Add($"{now.OverdueTasks - before.OverdueTasks} überfällig");
+
+        if (said.Count == 0)
+            return;
+
+        string headline = "Vorzimmer: " + string.Join(", ", said);
+
+        NoteQuietly(headline, "desk", isProblem: false, headline: headline);
+    }
+
     /// <summary>How many real entries a tray shows before it is a list rather than a hint.</summary>
     /// <remarks>
     /// Four. The tray is beside a rule about not listing thirty things, and a page that
@@ -162,35 +246,24 @@ public sealed partial class PillWindow
     private const int EntriesPerTray = 4;
 
     /// <summary>
-    /// The newest unread mail of one kind, as the page shows it.
+    /// One tray, as the page shows it: what the model put under this verdict.
     ///
-    /// <b>Told apart the same way the count was.</b> A sender is a person or a system, and
-    /// the walk already decided which -- but the decision was not written onto the object, so
-    /// it is made again here from the same address with the same function. Re-deriving beats
-    /// storing it: one rule in one place, and a cache row that cannot disagree with the page
-    /// about what it is.
-    ///
-    /// <b>Meeting requests count as automatic.</b> They are addressed to you by a person but
-    /// they are a form, and they belong beside the ticket movements: something to look at, not
-    /// something to write back to.
+    /// <b>Read from the store, not derived from the sender.</b> The previous version asked
+    /// whether the address looked like a machine, which is a fact about the envelope and not
+    /// an answer to "does this need something from me". The verdict is a judgement about the
+    /// contents, made once per message by the model and kept -- so this is a lookup.
     /// </summary>
-    private static IReadOnlyList<VorzimmerWindow.DeskEntry> Newest(
-        IReadOnlyList<DeskObject> things,
-        bool fromPeople)
+    private static IReadOnlyList<VorzimmerWindow.DeskEntry> Judged(
+        DeskStore? store,
+        DateTime since,
+        DeskVerdict verdict)
     {
+        if (store is null)
+            return [];
+
         DateTime today = DateTime.Now.Date;
 
-        return things
-            .Where(t => t.Kind == DeskKind.Mail)
-            .Where(t =>
-            {
-                bool form = t.State == "meeting request";
-                bool machine = form || MailSender.LooksLikeSystem(t.WhoAddress, t.WhoName);
-
-                return fromPeople ? !machine : machine;
-            })
-            .OrderByDescending(t => t.When)
-            .Take(EntriesPerTray)
+        return store.Judged(verdict, since, EntriesPerTray)
             .Select(t => new VorzimmerWindow.DeskEntry(
                 Who: t.WhoName is { Length: > 0 } name ? name : t.WhoAddress,
 
@@ -201,7 +274,8 @@ public sealed partial class PillWindow
                     ? t.When.ToString("HH:mm", CultureInfo.CurrentCulture)
                     : t.When.ToString("dd.MM. HH:mm", CultureInfo.CurrentCulture),
 
-                What: t.Subject))
+                What: t.Subject,
+                Why: t.VerdictWhy ?? string.Empty))
             .ToList();
     }
 
@@ -256,6 +330,27 @@ public sealed partial class PillWindow
                 store.Link(thing.Id, ticketId, "about");
             }
 
+            // What the walk did NOT see is what has been read since.
+            //
+            // The walk enumerates unread items, so a message that has been dealt with is
+            // never visited again and would keep the state it was first written with for
+            // three months. Measured before this existed: the folder reported 85 unread and
+            // the store counted 399, and every number on the page inherited the difference.
+            //
+            // Bounded by what the scan actually covered. Beyond the oldest message it looked
+            // at, "not seen" is no evidence at all, and marking those read would hide mail
+            // that is genuinely waiting.
+            var stillUnread = reading.Objects
+                .Where(o => o.Kind == DeskKind.Mail)
+                .Select(o => o.Id)
+                .ToHashSet(StringComparer.Ordinal);
+
+            if (reading.Objects.Where(o => o.Kind == DeskKind.Mail).Select(o => o.When)
+                    is { } moments && stillUnread.Count > 0)
+            {
+                store.MarkRead(stillUnread, moments.Min());
+            }
+
             store.Prune(reading.Counts.TakenAt);
         }
         catch (Exception ex)
@@ -288,7 +383,7 @@ public sealed partial class PillWindow
             [
                 new SettingsField(
                     Key: "days",
-                    Label: "Erinnern über",
+                    Label: "Zeitraum",
                     Value: now.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Min: DeskWindow.Least,
                     Max: DeskWindow.Most,
@@ -332,7 +427,7 @@ public sealed partial class PillWindow
 
             ConfigStore.Save(loaded.Config);
 
-            AddRow(GlyphTool, $"remembering over {window.Describe()}", "desk");
+            AddRow(GlyphTool, $"looking back over {window.Describe()}", "desk");
         }
         catch (Exception ex)
         {

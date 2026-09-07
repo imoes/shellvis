@@ -4,6 +4,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 
+using Shellvis.Core.Agent;
+
 using Shellvis.Shell.Controls;
 using Shellvis.Shell.Interop;
 
@@ -149,6 +151,23 @@ public sealed partial class AnswerWindow : Window
             foreground: Brush("ConsoleTextBrush"),
             muted: Brush("ConsoleMutedBrush"),
             onLink: OnLink);
+    }
+
+    /// <summary>
+    /// Show what the last call to the model cost, or nothing when it was not measured.
+    /// </summary>
+    /// <remarks>
+    /// The last call, not the turn's total. A turn that uses tools is several calls, and
+    /// their input counts are not a sum: each one re-sends the whole conversation, so adding
+    /// them up measures repetition rather than size. What a header is for is how full the
+    /// window is <i>now</i>, and that is the most recent figure.
+    /// </remarks>
+    public void ShowCost(TurnCost? spent)
+    {
+        string line = spent?.Line() ?? string.Empty;
+
+        CostText.Text = line;
+        CostText.Visibility = line.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>

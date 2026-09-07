@@ -396,6 +396,16 @@ public sealed class DeskStore : IDisposable
     /// round trips to answer one question is how a page that refreshes on a timer starts
     /// costing something.
     /// </remarks>
+    /// <remarks>
+    /// <b>The caller passes the retention horizon, not the remembering window.</b> That
+    /// distinction cost a real defect: the trays and the sorting were bounded by the window
+    /// the slider sets -- two weeks -- so a backlog of fifty-five unread messages aged
+    /// fifteen to thirty days was skipped for ever. The page then showed 85 unread beside
+    /// four zeroes, both correctly calculated and together useless.
+    ///
+    /// Unread is unread, whatever its age. The window governs what "lately" means when
+    /// somebody ASKS a question -- desk_search, desk_recent -- and nothing else.
+    /// </remarks>
     public DeskTally Tally(DateTime since)
     {
         using SqliteCommand command = _connection.CreateCommand();

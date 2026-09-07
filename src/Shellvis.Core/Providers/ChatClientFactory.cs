@@ -1,5 +1,6 @@
 using System.ClientModel;
 using System.ClientModel.Primitives;
+using System.Text.Json.Nodes;
 using Microsoft.Extensions.AI;
 using OpenAI;
 
@@ -25,18 +26,25 @@ public static class ChatClientFactory
     /// Key override. Normally left null so the key is read from the profile's
     /// environment variable, keeping secrets out of call sites and logs.
     /// </param>
+    /// <param name="thinking">
+    /// Whether a reasoning model may think before it answers. False asks the server to run
+    /// the chat template with thinking off -- see <see cref="NoThinkingPolicy"/> for what
+    /// that is worth and why it is a body rewrite. Only the OpenAI-compatible transport
+    /// honours it; the others ignore it rather than pretending.
+    /// </param>
     public static IChatClient Create(
         ProviderProfile profile,
         string? model = null,
         string? apiKey = null,
-        int requestTimeoutSeconds = 300)
+        int requestTimeoutSeconds = 300,
+        bool thinking = true)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
         return profile.Transport switch
         {
             ChatTransport.OpenAiChatCompletions =>
-                CreateOpenAiCompatible(profile, model, apiKey, requestTimeoutSeconds),
+                CreateOpenAiCompatible(profile, model, apiKey, requestTimeoutSeconds, thinking),
 
             ChatTransport.OpenAiResponses =>
                 CreateResponses(profile, model, apiKey, requestTimeoutSeconds),
@@ -63,7 +71,11 @@ public static class ChatClientFactory
     }
 
     private static IChatClient CreateOpenAiCompatible(
-        ProviderProfile profile, string? model, string? apiKey, int requestTimeoutSeconds)
+        ProviderProfile profile,
+        string? model,
+        string? apiKey,
+        int requestTimeoutSeconds,
+        bool thinking = true)
     {
         string key = apiKey ?? ResolveKey(profile);
 
@@ -85,6 +97,11 @@ public static class ChatClientFactory
                 new StaticHeaderPolicy(name, value),
                 PipelinePosition.PerCall);
         }
+
+        // PerCall, like the headers: a retry has to carry the switch too, and a policy that
+        // only ran once would leave a retried request thinking.
+        if (!thinking)
+            options.AddPolicy(NoThinkingPolicy.Instance, PipelinePosition.PerCall);
 
         var client = new OpenAIClient(new ApiKeyCredential(key), options);
         return client.GetChatClient(model ?? profile.DefaultModel).AsIChatClient();
@@ -171,6 +188,75 @@ public static class ChatClientFactory
     }
 
     /// <summary>Adds one fixed header to every request on the pipeline.</summary>
+    /// <summary>
+    /// Turns off a reasoning model's thinking, for a call that does not want it.
+    /// </summary>
+    /// <remarks>
+    /// <b>Why the body is rewritten rather than an option being set.</b> The switch is
+    /// <c>chat_template_kwargs</c>, which llama.cpp hands to the model's chat template. It
+    /// is not part of the OpenAI schema, so neither the SDK's options object nor
+    /// Microsoft.Extensions.AI has anywhere to put it -- and a field with nowhere to go is
+    /// silently dropped, which for a performance switch means it appears to work.
+    ///
+    /// <b>What it is worth.</b> Measured against this estate's endpoint with a one-line
+    /// answer to produce: 297 generated tokens with thinking, 8 without. At the endpoint's
+    /// ten tokens a second that is the difference between a sorting pass taking eight
+    /// minutes and taking seconds -- and eight minutes per ten messages is a backlog that is
+    /// never worked down. (Qwen's documented <c>/no_think</c> prompt switch was tried first
+    /// and made it think MORE: 793 tokens. It is not supported by this template.)
+    ///
+    /// A server that does not know the field ignores it, so this is safe to send anywhere.
+    /// </remarks>
+    private sealed class NoThinkingPolicy : PipelinePolicy
+    {
+        public static NoThinkingPolicy Instance { get; } = new();
+
+        public override void Process(
+            PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int index)
+        {
+            Rewrite(message);
+            ProcessNext(message, pipeline, index);
+        }
+
+        public override ValueTask ProcessAsync(
+            PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int index)
+        {
+            Rewrite(message);
+            return ProcessNextAsync(message, pipeline, index);
+        }
+
+        private static void Rewrite(PipelineMessage message)
+        {
+            if (message.Request?.Content is not { } content)
+                return;
+
+            try
+            {
+                using var buffer = new MemoryStream();
+                content.WriteTo(buffer);
+
+                JsonNode? body = JsonNode.Parse(buffer.ToArray());
+
+                if (body is not JsonObject json)
+                    return;
+
+                json["chat_template_kwargs"] = new JsonObject
+                {
+                    ["enable_thinking"] = false,
+                };
+
+                message.Request.Content = BinaryContent.Create(
+                    BinaryData.FromString(json.ToJsonString()));
+            }
+            catch (Exception)
+            {
+                // A body that is not JSON, or one that cannot be buffered. Left exactly as
+                // it was: the call still works, it just thinks. Failing the request to save
+                // some tokens would be the wrong trade by a wide margin.
+            }
+        }
+    }
+
     private sealed class StaticHeaderPolicy(string name, string value) : PipelinePolicy
     {
         public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int index)

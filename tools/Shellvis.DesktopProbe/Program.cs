@@ -42,6 +42,17 @@ internal static class Program
                 // none of them needs a mailbox to provoke.
                 "desk" => DeskProbe.Run(),
 
+                // One real sorting pass, no tools, nothing written. Live by necessity: what
+                // it separates is a prompt the parser cannot read from a call that never got
+                // far enough to produce one, and only the real endpoint answers that.
+                // --bodies reads each message's text through Outlook, as the app does.
+                "triage" => await TriageProbe
+                    .RunAsync(args.Any(a => a.Equals("--bodies", StringComparison.OrdinalIgnoreCase)))
+                    .ConfigureAwait(false),
+
+                // What the real store holds, for when the page and the expectation disagree.
+                "deskdb" => DeskPeek.Run(args.Length > 1 && int.TryParse(args[1], out int n) ? n : 5),
+
                 // The reference page: that it is in the build, and that it renders without
                 // reaching the network. Both failures are silent, which is why they are
                 // here rather than left to somebody pressing the button.
@@ -94,6 +105,12 @@ internal static class Program
                 // rule here is a rule about NOT interrupting, and those cannot be judged by
                 // using the feature for ten minutes.
                 "watch" => WatchProbe.Run(),
+
+                // Reading a url over plain HTTP, and the token line in the answer window.
+                // Pure: both fail by producing something that looks right, which is not a
+                // thing anybody catches by using the feature.
+                "web" => WebProbe.Run(
+                    args.Any(a => a.Equals("--live", StringComparison.OrdinalIgnoreCase))),
 
                 // The date arithmetic behind the mail and calendar tools, with no COM in it.
                 //

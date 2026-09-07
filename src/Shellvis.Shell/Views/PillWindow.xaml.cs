@@ -59,6 +59,7 @@ public sealed partial class PillWindow : Window
     private const string GlyphPerson = "\uE77B"; // U+E77B
     private const string GlyphWarning = "\uE7BA"; // U+E7BA
     private const string GlyphSpeaker = "\uE767"; // U+E767, announcements
+    private const string GlyphStopwatch = "\uE916"; // U+E916, what a call cost
 
     private readonly WindowShaper _shaper;
     private HotkeyListener? _hotkey;
@@ -522,6 +523,10 @@ public sealed partial class PillWindow : Window
                 AddRow(GlyphSpeaker, e.Text, "learned", isAnnouncement: true);
                 break;
 
+            case AgentEvent.Cost e:
+                RecordCost(e.Spent);
+                break;
+
             case AgentEvent.Failure e:
                 AddRow(GlyphWarning, e.Message, "failed", isWarning: true);
                 break;
@@ -840,7 +845,8 @@ public sealed partial class PillWindow : Window
 
         var gate = new PillApprovalGate(
             DispatcherQueue,
-            () => (Content as FrameworkElement)?.XamlRoot);
+            () => (Content as FrameworkElement)?.XamlRoot,
+            AttendToDialogAsync);
 
         // Off the UI thread on purpose: this opens a PowerShell runspace and a UI
         // Automation connection, which together cost seconds.

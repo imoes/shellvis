@@ -126,6 +126,7 @@ internal static class AgentProbe
         using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(3));
         bool answered = false;
         int deltas = 0;
+        int measured = 0;
 
         await foreach (AgentEvent evt in loop.RunAsync(question, cts.Token).ConfigureAwait(false))
         {
@@ -163,6 +164,16 @@ internal static class AgentProbe
                     Console.WriteLine($"  !! {e.Tool} refused: {e.Reason}");
                     break;
 
+                case AgentEvent.Cost e:
+                    // The line the answer window's header shows, printed here so that
+                    // "the statistics are not there" can be answered without guessing at
+                    // which half is missing: if this appears, the loop measured and the
+                    // question is about the window; if it does not, the provider sent no
+                    // usage and no amount of UI will invent it.
+                    Console.WriteLine($"  cost: {e.Spent.Line()}");
+                    measured++;
+                    break;
+
                 case AgentEvent.Failure e:
                     Console.WriteLine($"  failure: {e.Message}");
                     break;
@@ -176,7 +187,7 @@ internal static class AgentProbe
 
         // The delta count is the evidence that streaming actually happened. A turn that
         // answers correctly with zero deltas has quietly fallen back to non-streaming.
-        Console.WriteLine($"\nstreamed {deltas} delta(s)");
+        Console.WriteLine($"\nstreamed {deltas} delta(s); {measured} call(s) reported a cost");
 
         Console.WriteLine(answered
             ? "\nVERIFIED: the model asked for a tool, the loop ran it, and the answer came back."

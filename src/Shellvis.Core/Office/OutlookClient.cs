@@ -325,6 +325,85 @@ public sealed partial class OutlookClient(ComApartment apartment)
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// The opening of one message's body, for deciding what it is about.
+    /// </summary>
+    /// <remarks>
+    /// <b>Why this is separate from <see cref="ReadMailAsync"/>.</b> That returns the whole
+    /// message with its headers, which is right for "read me this mail" and wrong for
+    /// sorting ten of them into a prompt: the headers are already in the prompt, and a
+    /// notification's body can be forty kilobytes of quoted HTML.
+    ///
+    /// <b>And why it is fetched here rather than stored during the walk.</b> The indexing
+    /// pass sees up to two hundred messages and reads eight cheap properties from each; Body
+    /// is not cheap, because Outlook may have to load the message to answer. Only the ten
+    /// about to be judged need their text, so the cost is paid for those ten -- and never
+    /// for the hundred and ninety nobody will ask about.
+    ///
+    /// An id that no longer resolves yields an empty string. A message moved or deleted
+    /// between the walk and the sorting is ordinary, not an error.
+    /// </remarks>
+    public Task<string> PreviewBodyAsync(
+        string entryId,
+        int maxChars = 900,
+        CancellationToken cancellationToken = default)
+    {
+        return apartment.InvokeAsync(() =>
+        {
+            dynamic? outlook = null;
+            dynamic? session = null;
+            dynamic? item = null;
+
+            try
+            {
+                outlook = Com.GetOrStart("Outlook.Application", out bool startedOutlook);
+
+                if (startedOutlook)
+                    WasStarted = true;
+
+                session = outlook.Session;
+                item = session.GetItemFromID(entryId);
+
+                string body = Str(() => item.Body);
+
+                if (body.Length == 0)
+                    return string.Empty;
+
+                // Blank lines and runs of spaces come from HTML converted to text and carry
+                // nothing. Removed here rather than left to the model, which pays for them
+                // by the token.
+                var tidy = new StringBuilder(Math.Min(body.Length, maxChars + 64));
+
+                foreach (string line in body.ReplaceLineEndings("\n").Split('\n'))
+                {
+                    string trimmed = line.Trim();
+
+                    if (trimmed.Length == 0)
+                        continue;
+
+                    tidy.Append(trimmed).Append('\n');
+
+                    if (tidy.Length >= maxChars)
+                        break;
+                }
+
+                string preview = tidy.ToString().TrimEnd();
+
+                return preview.Length > maxChars ? preview[..maxChars] : preview;
+            }
+            catch (Exception)
+            {
+                // A vanished id, a message in a store that is offline, a corrupted item.
+                // None of them is worth failing a sorting pass over.
+                return string.Empty;
+            }
+            finally
+            {
+                Com.ReleaseAll(outlook, session, item);
+            }
+        }, cancellationToken);
+    }
+
     /// <summary>Full text of one message, addressed by its Outlook entry id.</summary>
     public Task<string> ReadMailAsync(string entryId, CancellationToken cancellationToken = default)
     {

@@ -16,7 +16,23 @@ namespace Shellvis.Shell.Agent;
 /// Timeout resolves to Deny, never to Allow. An unattended machine must not accumulate
 /// approvals just because nobody was watching.
 /// </summary>
-internal sealed partial class PillApprovalGate(DispatcherQueue dispatcher, Func<XamlRoot?> xamlRoot)
+/// <remarks>
+/// <b>The pill has to be opened before anything is asked of it.</b> A ContentDialog is laid
+/// out inside its XamlRoot, and the pill's root is the height of the bar -- thirty-six pixels
+/// with the console closed. The dialog is then created, shown, and clipped to nothing: the
+/// agent waits five minutes for a decision about a window nobody can see, every later request
+/// queues behind it on the semaphore, and from the desk the application has simply stopped
+/// answering. That was reported as a display fault and it was one. So <paramref
+/// name="attention"/> is not decoration -- it is what makes the dialog reachable.
+/// </remarks>
+/// <param name="attention">
+/// Called on the UI thread with true before a dialog goes up and false once it is gone. It
+/// must make room for the dialog and say on the bar that something is waiting.
+/// </param>
+internal sealed partial class PillApprovalGate(
+    DispatcherQueue dispatcher,
+    Func<XamlRoot?> xamlRoot,
+    Func<bool, Task>? attention = null)
     : IApprovalGate, Shellvis.Core.Hooks.IHookConsent
 {
     /// <summary>
@@ -138,7 +154,31 @@ internal sealed partial class PillApprovalGate(DispatcherQueue dispatcher, Func<
             DefaultButton = ContentDialogButton.Close,
         };
 
-        return await dialog.ShowAsync() == ContentDialogResult.Primary;
+        return await ShowOnThePillAsync(dialog).ConfigureAwait(true) == ContentDialogResult.Primary;
+    }
+
+    /// <summary>
+    /// Put one dialog on the pill, having first given it somewhere to appear.
+    /// </summary>
+    /// <remarks>
+    /// The restore runs in a finally, including when ShowAsync throws. A bar left saying
+    /// "Shellvis needs your say-so" after the dialog is gone is worse than never saying it:
+    /// the one message whose whole job is to be believed would then be the one that lies.
+    /// </remarks>
+    private async Task<ContentDialogResult> ShowOnThePillAsync(ContentDialog dialog)
+    {
+        if (attention is not null)
+            await attention(true).ConfigureAwait(true);
+
+        try
+        {
+            return await dialog.ShowAsync();
+        }
+        finally
+        {
+            if (attention is not null)
+                await attention(false).ConfigureAwait(true);
+        }
     }
 
     private async Task<ApprovalDecision> AskAsync(
@@ -198,7 +238,7 @@ internal sealed partial class PillApprovalGate(DispatcherQueue dispatcher, Func<
         if (request.Tool.SideEffect == Core.Tools.SideEffect.AlwaysAsk)
             dialog.SecondaryButtonText = string.Empty;
 
-        ContentDialogResult result = await dialog.ShowAsync();
+        ContentDialogResult result = await ShowOnThePillAsync(dialog).ConfigureAwait(true);
 
         return result switch
         {

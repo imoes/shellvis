@@ -265,7 +265,7 @@ internal static class PageProbe
 
         Check("it states the period, and what the period governs",
             html.Contains(@"id=""remembering""", StringComparison.Ordinal)
-                && html.Contains("Sortiert wird die Post", StringComparison.Ordinal),
+                && html.Contains("Sortiert wird alles Ungelesene", StringComparison.Ordinal),
             "the unread count is the whole folder and the verdicts cover the period; "
                 + "side by side without a word they read as a contradiction");
 
@@ -273,10 +273,22 @@ internal static class PageProbe
             html.Contains("in den Einstellungen", StringComparison.Ordinal),
             "a value shown with no way to reach its control is a dead end");
 
+        // Taken from DeskWindow rather than written out, so the check follows a change to
+        // the wording instead of quietly passing against a phrase that no longer exists.
         Check("the wording of a period exists only in the code",
-            !html.Contains("das ganze Vierteljahr", StringComparison.Ordinal)
-                && !html.Contains("die letzten zwei Monate", StringComparison.Ordinal),
+            !html.Contains(new DeskWindow(DeskWindow.Most).Describe(), StringComparison.Ordinal)
+                && !html.Contains(new DeskWindow(14).Describe(), StringComparison.Ordinal),
             "the page receives the phrase already formed, so the two cannot disagree");
+
+        // The phrases go into sentences the page builds -- "Auf dem Tisch liegen ..." -- and
+        // one in the wrong case makes that sentence ungrammatical. It said "liegt den
+        // letzten Monat" until this was fixed.
+        Check("every period reads as a plural, whatever the sentence around it",
+            Enumerable
+                .Range(DeskWindow.Least, DeskWindow.Most - DeskWindow.Least + 1)
+                .All(days => new DeskWindow(days).Describe()
+                    .StartsWith("die letzten ", StringComparison.Ordinal)),
+            "so 'auf dem Tisch liegen X' and \"neulich heißt X\" both work");
 
         Check("the period the settings offer is the period the store keeps",
             DeskWindow.Most <= DeskStore.DefaultRetention.TotalDays,
@@ -311,10 +323,38 @@ internal static class PageProbe
                 && html.Contains("Muss man wissen", StringComparison.Ordinal)
                 && html.Contains("Nicht lesenswert", StringComparison.Ordinal));
 
-        Check("the reason the model gave is shown with the entry",
-            html.Contains("why-row", StringComparison.Ordinal)
+        // The summary is what Shellvis adds; the subject belongs to Outlook. It was the
+        // last line of the row at two thirds of caption size in the faintest grey -- 13
+        // pixels tall -- and it was reported as missing. The order in the markup is the
+        // reading order, so it is checked as such.
+        Check("the model's summary is on the row",
+            html.Contains("summary.className", StringComparison.Ordinal)
                 && html.Contains("row.why", StringComparison.Ordinal),
             "a verdict nobody can see the reasoning for is one nobody can correct");
+
+        Check("and it comes before the subject, not after it",
+            html.IndexOf("summary.className", StringComparison.Ordinal)
+                < html.IndexOf("what.className", StringComparison.Ordinal),
+            "the sentence Shellvis wrote is the line to read; the subject is provenance");
+
+        Check("the summary is set in reading size, not as a whisper",
+            Regex.IsMatch(html, @"\.summary \{[^}]*font-size: var\(--step-0\)"),
+            "0.66rem in the faintest grey is how it came to be reported as absent");
+
+        // -------------------------------------------------------- every mail opens
+        Console.WriteLine();
+
+        Check("a row is a button, so it can be pressed and reached by keyboard",
+            html.Contains('"' + "button.row" + '"', StringComparison.Ordinal)
+                && html.Contains("createElement(\"button\")", StringComparison.Ordinal));
+
+        Check("pressing one asks the host to open it",
+            html.Contains("\"open:\" + id", StringComparison.Ordinal));
+
+        Check("and it carries the DESK id, not an Outlook handle",
+            html.Contains("data-id", StringComparison.Ordinal)
+                && !html.Contains("entryId", StringComparison.OrdinalIgnoreCase),
+            "a web view has no business holding a live handle into a mailbox");
 
 
         // The distinction moved with the control. Checked in the settings source rather

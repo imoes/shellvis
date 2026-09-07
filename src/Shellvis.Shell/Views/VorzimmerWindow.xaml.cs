@@ -220,6 +220,16 @@ public sealed partial class VorzimmerWindow : Window
                 return;
             }
 
+            // "open:mail:<message-id>" -- a row was pressed. The DESK id travels, never the
+            // Outlook handle: the page has no business holding a handle to somebody's
+            // mailbox, and the owner can resolve the id against the store it already has.
+            if (message.StartsWith("open:", StringComparison.Ordinal)
+                && message.Length > "open:".Length)
+            {
+                OpenRequested?.Invoke(message["open:".Length..]);
+                return;
+            }
+
             // "remember:30" -- the slider settled on a new window. Parsed strictly and
             // ignored when it is not a number: a page can only send what this page's script
             // sends, but a message handler that trusts its input is a habit worth not having.
@@ -261,6 +271,9 @@ public sealed partial class VorzimmerWindow : Window
     /// <summary>Raised when the slider settles on a new remembering window, in days.</summary>
     public event Action<int>? RememberDaysChanged;
 
+    /// <summary>Raised when a row was pressed, with the desk id of the thing to open.</summary>
+    public event Action<string>? OpenRequested;
+
     /// <summary>
     /// Hand the page what is on the desk.
     ///
@@ -275,6 +288,7 @@ public sealed partial class VorzimmerWindow : Window
         DeskTally tally,
         IReadOnlyList<DeskEntry> answer,
         IReadOnlyList<DeskEntry> information,
+        Backlog behind,
         WatchTiming watch)
     {
         // The verdicts join the facts in one dictionary, because the page fills every box
@@ -302,6 +316,7 @@ public sealed partial class VorzimmerWindow : Window
                 Remembering: remembering,
                 Answer: answer,
                 Information: information,
+                Behind: behind,
                 Watch: watch),
             PayloadFormat);
 
@@ -325,6 +340,22 @@ public sealed partial class VorzimmerWindow : Window
                 CultureInfo.CurrentCulture,
                 $"im Posteingang · die Aufteilung zählt die neuesten {desk.Scanned}")
             : "im Posteingang";
+
+    /// <summary>
+    /// Tell the page a sorting pass is running, or has finished.
+    ///
+    /// <b>Its own tiny message, not a fresh count.</b> The page only learns anything when a
+    /// count is handed to it, and a count is a COM walk -- so making "a pass is running"
+    /// visible by recounting would pay for a mailbox query to change one caption. This posts
+    /// three fields and nothing else.
+    ///
+    /// It exists because the report was "warum passiert da nichts?" while a pass was in fact
+    /// running: the cell said "wird der Reihe nach beurteilt" whatever was happening, so a
+    /// batch in flight and an idle minute looked identical.
+    /// </summary>
+    public void Sorting(bool running, int howMany) =>
+        Send(JsonSerializer.Serialize(
+            new { sorting = running, sortingCount = howMany }, PayloadFormat));
 
     /// <summary>
     /// Tell the page the count could not be taken, and why.
@@ -363,7 +394,27 @@ public sealed partial class VorzimmerWindow : Window
         string Remembering,
         IReadOnlyList<DeskEntry> Answer,
         IReadOnlyList<DeskEntry> Information,
+        Backlog Behind,
         WatchTiming Watch);
+
+    /// <summary>
+    /// What lies behind each tray: the count that is older than the trays reach.
+    /// </summary>
+    /// <remarks>
+    /// <b>Why the trays are bounded at all.</b> They were not, and the page filled with mail
+    /// four weeks old -- server alerts that had resolved themselves, meetings already held.
+    /// A desk holds what is current; the archive is the store's job.
+    ///
+    /// <b>And why the remainder is still counted.</b> Because a tray that quietly shortens is
+    /// the same defect in the other direction. This project has already shipped a page
+    /// reading "85 unread" beside four zeroes, every figure correct and the whole useless. A
+    /// bound that is announced -- "nothing recent; eleven older ones are still there" -- is
+    /// a statement; one that is silent is a page pretending the backlog went away.
+    /// </remarks>
+    /// <param name="Answer">Older than the window, needing an answer.</param>
+    /// <param name="Information">Older than the window, worth knowing.</param>
+    /// <param name="Days">How far back the trays reach, so the page can say it.</param>
+    public sealed record Backlog(int Answer, int Information, int Days);
 
     /// <summary>
     /// The watcher's three intervals, in minutes, so the page can describe them instead of
@@ -382,7 +433,7 @@ public sealed partial class VorzimmerWindow : Window
     /// given no id and no handle -- there is nothing for a document to do with an EntryID,
     /// and putting one in the payload would be handing out a key nobody there needs.
     /// </summary>
-    public sealed record DeskEntry(string Who, string When, string What, string Why);
+    public sealed record DeskEntry(string Id, string Who, string When, string What, string Why);
 
     /// <summary>
     /// camelCase, because the script reads <c>counts</c> and <c>takenAt</c>.

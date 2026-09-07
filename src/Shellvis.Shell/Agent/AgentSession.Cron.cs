@@ -227,6 +227,25 @@ internal sealed partial class AgentSession
     /// </summary>
     private IChatClient? _cronClient;
 
+    /// <summary>
+    /// The same model, asked not to think first.
+    /// </summary>
+    /// <remarks>
+    /// <b>For a call whose answer is a table of labels, thinking is pure cost.</b> Measured
+    /// on this estate's endpoint: 297 generated tokens of reasoning to produce one line of
+    /// output, 8 tokens without it, at ten tokens a second. A sorting pass over ten messages
+    /// took 503 seconds with thinking on -- which is a backlog that is never worked down and
+    /// a page that looks broken.
+    ///
+    /// Only the tool-free asides use it. A run that has to go and look at things, or decide
+    /// whether something is worth interrupting somebody for, is exactly where the reasoning
+    /// earns its keep; classifying text already in the prompt is not.
+    ///
+    /// Null when the provider's transport does not support the switch, in which case the
+    /// caller falls back to the ordinary client and simply waits.
+    /// </remarks>
+    private IChatClient? _quickClient;
+
 
     /// <summary>
     /// Ask a question that is NOT part of the user's conversation, and return what came back.
@@ -254,10 +273,27 @@ internal sealed partial class AgentSession
     /// appear in the console: an unprompted look that read the mailbox invisibly is the thing
     /// this console exists to prevent.</param>
     /// <returns>Everything the model said, which the caller judges. Empty if it said nothing.</returns>
+    /// <param name="withTools">
+    /// Whether the model is offered the tool catalogue at all.
+    /// </param>
+    /// <remarks>
+    /// <b>Passing false is not an optimisation, it is the difference between working and
+    /// not.</b> The catalogue is a hundred and fourteen tool schemas, and it goes into the
+    /// prompt of every call. Measured against this estate's endpoint, prompt processing runs
+    /// at 88 tokens a second -- 17,650 tokens took 201 seconds -- so a task whose own prompt
+    /// is a thousand tokens waited more than three minutes before the model could begin, and
+    /// the stream was abandoned as stalled before a single character arrived. The sorting
+    /// pass reported "none of the 10 could be sorted; the model answered: (no output)" for
+    /// exactly that reason, and it was not the model's fault or the parser's.
+    ///
+    /// So a caller whose task is pure judgement over text it has already supplied asks
+    /// without them. A caller that genuinely has to go and look keeps them.
+    /// </remarks>
     internal async Task<string> AskAsideAsync(
         string prompt,
         Action<AgentEvent> onEvent,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool withTools = true)
     {
         await _turnGate.WaitAsync(cancellationToken).ConfigureAwait(false);
 
@@ -266,25 +302,40 @@ internal sealed partial class AgentSession
             _unattended.Value = true;
 
             var loop = new AgentLoop(
-                _cronClient!,
-                _registry,
+                withTools ? _cronClient! : _quickClient ?? _cronClient!,
+                withTools ? _registry : EmptyRegistry,
                 DenyEverythingGate.Instance,
                 new AgentOptions(
-                    MaxIterations: 8,
+                    MaxIterations: withTools ? 8 : 1,
                     SystemPrompt: AsideSystemPrompt));
 
             var answer = new System.Text.StringBuilder();
+            var streamed = new System.Text.StringBuilder();
 
             await foreach (AgentEvent evt in loop.RunAsync(prompt, cancellationToken)
                 .ConfigureAwait(false))
             {
-                if (evt is AgentEvent.AssistantMessage message)
-                    answer.Append(message.Text);
+                switch (evt)
+                {
+                    case AgentEvent.AssistantMessage message:
+                        answer.Append(message.Text);
+                        break;
+
+                    // Kept as a fallback, and only that. A turn abandoned mid-stream never
+                    // produces a final message, and the caller then sees "(no output)" for
+                    // an answer that had in fact begun -- which is a different problem from
+                    // a model that said nothing, and reads identically.
+                    case AgentEvent.AssistantDelta delta:
+                        streamed.Append(delta.Text);
+                        break;
+                }
 
                 Post(() => onEvent(evt));
             }
 
-            return answer.ToString().Trim();
+            string said = answer.ToString().Trim();
+
+            return said.Length > 0 ? said : streamed.ToString().Trim();
         }
         finally
         {
@@ -292,6 +343,15 @@ internal sealed partial class AgentSession
             _turnGate.Release();
         }
     }
+
+    /// <summary>
+    /// No tools, for a caller that only needs the model to read and decide.
+    /// </summary>
+    /// <remarks>
+    /// One instance rather than a new one per call: a registry is immutable once empty, and
+    /// building one per sorting pass would allocate for nothing.
+    /// </remarks>
+    private static readonly Shellvis.Core.Tools.ToolRegistry EmptyRegistry = new();
 
     /// <summary>
     /// The operating rules for a look nobody asked for.

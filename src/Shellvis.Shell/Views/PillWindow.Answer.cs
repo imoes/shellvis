@@ -1,3 +1,5 @@
+using Shellvis.Core.Agent;
+
 namespace Shellvis.Shell.Views;
 
 /// <summary>
@@ -16,6 +18,12 @@ public sealed partial class PillWindow
 
     /// <summary>What has been said, which is what the message window shows.</summary>
     private readonly Conversation _conversation = new();
+
+    /// <summary>
+    /// What the last call to the model cost. Kept here, not in the window, because the
+    /// window is created lazily and a figure that arrived before it existed would be lost.
+    /// </summary>
+    private TurnCost? _spent;
 
     /// <summary>
     /// The answer window, created on first use.
@@ -54,6 +62,33 @@ public sealed partial class PillWindow
     {
         _conversation.Add(Said.Assistant, markdown);
         Redraw(streaming: false, reveal: true);
+    }
+
+    /// <summary>
+    /// What the call just cost, to both places that should say so.
+    /// </summary>
+    /// <remarks>
+    /// <b>The header and the log answer different questions.</b> The header says where the
+    /// conversation stands right now -- one line, overwritten, no history. The console is a
+    /// record, so each call gets its own line: a turn that used four tools cost four calls,
+    /// and seeing the input climb 6k, 9k, 14k, 21k across them is how a reader learns that
+    /// tool results are what fills a window, which a single overwritten figure never shows.
+    ///
+    /// The window's size is read here rather than carried along by the loop. It is learned
+    /// from the endpoint a second or two into the session, so a value captured when the loop
+    /// was built would be a share of a number nobody knew yet.
+    /// </remarks>
+    private void RecordCost(TurnCost spent)
+    {
+        _spent = spent with { ContextTokens = _session?.ContextTokens };
+
+        string line = _spent.Line();
+
+        if (line.Length == 0)
+            return;
+
+        _answerWindow?.ShowCost(_spent);
+        AddRow(GlyphStopwatch, line, "tokens");
     }
 
     /// <summary>
@@ -121,6 +156,10 @@ public sealed partial class PillWindow
         window.ShowAnswer(
             _conversation.ToMarkdown(),
             streaming ? "Conversation (writing...)" : "Conversation");
+
+        // Re-applied on every draw so the figure survives the window being created after the
+        // call it describes, and being reopened later from the console header.
+        window.ShowCost(_spent);
 
         if (reveal)
             window.Reveal();

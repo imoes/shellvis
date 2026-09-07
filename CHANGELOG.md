@@ -4,6 +4,19 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.12.0
+
+- **Das Vorzimmer sortiert die Post, statt sie nur zu zählen.** Jede ungelesene Nachricht
+  wird gelesen und beurteilt — braucht eine Antwort, muss man wissen, oder nicht lesenswert
+  — mit einem Satz dazu, warum. Ein Klick auf eine Zeile öffnet sie in Outlook. Auf dem
+  Tisch liegt, was in den Erinnerungszeitraum fällt; Älteres wird gezählt und nicht
+  aufgeführt, weil ein Alarm von vor vier Wochen sich selbst erledigt hat. Das Urteil wird
+  drei Monate behalten, also wird jede Nachricht einmal beurteilt und nicht bei jedem Blick.
+- **Eine Webseite lesen geht ohne Browser.** `web_fetch` holt eine Adresse per HTTP, so wie
+  curl es tut: keine gespeicherten Anmeldungen, kein Skript, keine Sitzung, in der etwas
+  getan werden könnte — und deshalb ohne Rückfrage. Der Browser bleibt für das, was einen
+  braucht: eine Seite hinter einer Anmeldung, oder eine, die sich erst im Skript aufbaut.
+
 ## 0.9.9
 
 - **Das Vorzimmer shows the state of the desk.** Unread mail, how much of it came from a

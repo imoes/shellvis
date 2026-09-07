@@ -176,6 +176,10 @@ public sealed class AgentLoop(
             ChatResponse? response;
             string? error;
 
+            // Wall clock around the provider call, for the throughput figure. Started here
+            // rather than inside either branch so the two paths are measured the same way.
+            long startedAt = Environment.TickCount64;
+
             if (_options.Stream)
             {
                 // Unbounded is safe here: the producer is a network stream and the consumer
@@ -200,6 +204,27 @@ public sealed class AgentLoop(
             {
                 (response, error) = await CallModelAsync(chatOptions, cancellationToken)
                     .ConfigureAwait(false);
+            }
+
+            // What it cost, before anything else is said about the answer.
+            //
+            // Reported even when the call failed, if the provider managed to say how much it
+            // read: a turn that ran out of context is exactly the case where the input count
+            // is the useful thing to see, and dropping it on failure would hide it in the one
+            // situation it explains.
+            if (response?.Usage is { } usage)
+            {
+                var spent = new TurnCost(
+                    Input: (int)(usage.InputTokenCount ?? 0),
+                    Output: (int)(usage.OutputTokenCount ?? 0),
+                    // No window size here, on purpose. The loop MEASURES; whoever displays
+                    // the figure owns the denominator. The size of the context window is not
+                    // the loop's business, and two places holding it is how they come to
+                    // disagree.
+                    Elapsed: TimeSpan.FromMilliseconds(Environment.TickCount64 - startedAt));
+
+                if (spent.Measured)
+                    yield return new AgentEvent.Cost(spent);
             }
 
             if (hooks is not null && hooks.Has(HookEvent.PostLlmCall))

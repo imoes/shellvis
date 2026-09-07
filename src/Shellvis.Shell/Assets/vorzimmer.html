@@ -143,12 +143,13 @@
   .band-head p:not(.eyebrow) { max-width: 68ch; color: var(--ink-soft); }
 
   /* ----------------------------------------------------------------- trays
-     Three, and they are deliberately not equal: the rule says name the
-     first, count the second, and give the third a number only. The grid
-     widths say the same thing before a word is read. */
+     Three, and not equal: the two that hold mail get the room, the one that
+     only carries a number gets a sliver. It used to be 1.35 / 1 / .62, from
+     when the second tray was a count rather than a list of rows -- it holds
+     full entries now, and a summary needs somewhere to be read. */
   .trays {
     display: grid;
-    grid-template-columns: 1.35fr 1fr .62fr;
+    grid-template-columns: 1fr 1fr .5fr;
     gap: 1rem;
   }
 
@@ -161,6 +162,16 @@
     display: flex;
     flex-direction: column;
     gap: .7rem;
+
+    /* Load-bearing, and the cause of a real defect.
+       A grid item's automatic minimum size is its MIN-CONTENT width, and a
+       nowrap line of mono text has an enormous one -- so a single long subject
+       ("... LAN//61030//L000271884 - DE, Langen (Hessen)") pushed this track
+       wider than the window, took the whole page into horizontal scrolling and
+       squeezed the first tray until its heading broke one word per line. The
+       ellipsis was set and could not apply: there was always room, because the
+       track grew instead. Zero here is what lets it clip. */
+    min-width: 0;
   }
 
   .tray h3 { font-size: var(--step-1); font-weight: 600; }
@@ -285,7 +296,40 @@
     gap: .55rem;
   }
 
-  .tray ul.live > li { flex-direction: column; gap: .1rem; align-items: stretch; }
+  .tray ul.live > li { display: block; }
+
+  /* A row is a button, and it has to look like one you can press without shouting
+     about it: no fill until the pointer is over it, a hairline that appears then,
+     and the accent only on keyboard focus. */
+  .tray ul.live button.row {
+    display: flex;
+    flex-direction: column;
+    gap: .12rem;
+    width: 100%;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    padding: .3rem .35rem;
+    margin: 0 -.35rem;
+    cursor: pointer;
+
+    /* Same reason as on .tray: this is a flex item, and without it a nowrap
+       child sets the floor for how narrow the row may be. */
+    min-width: 0;
+  }
+
+  .tray ul.live button.row:hover {
+    border-color: var(--rule);
+    background: color-mix(in srgb, var(--tab) 5%, transparent);
+  }
+
+  .tray ul.live button.row:focus-visible {
+    outline: 2px solid var(--tab);
+    outline-offset: 1px;
+  }
 
   /* No marker on a live row: the bullet belonged to a list of rules, and on real
      entries it competes with the sender's name for the eye. */
@@ -297,6 +341,16 @@
     display: flex;
     justify-content: space-between;
     gap: .5rem;
+    min-width: 0;
+  }
+
+  /* The sender's name yields before the time does: the clock is four characters
+     and always readable, a display name can be a whole department. */
+  .tray ul.live .who > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .tray ul.live .who > time {
@@ -306,23 +360,45 @@
     white-space: nowrap;
   }
 
+  /* The subject line: provenance, one line of it, clipped.
+     min-width:0 is what makes the clip possible rather than nominal -- see the
+     note on .tray. Without it this span was the widest thing on the page. */
   .tray ul.live .what {
-    font-size: var(--step--1);
-    color: var(--ink-soft);
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    color: var(--ink-faint);
+    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  /* Why the model put it here. Shown rather than kept in the database, because a
-     verdict nobody can see the reasoning for is a verdict nobody can correct. */
-  .tray ul.live .why-row {
-    font-family: var(--f-mono);
-    font-size: .66rem;
-    color: var(--ink-faint);
+  /* What Shellvis worked out, in reading size.
+
+     This was the last line of the row, at two thirds of the caption size, in the
+     faintest grey on the page -- and it was reported as missing. Fair: the subject
+     belongs to Outlook and can be read there, while this sentence is the only thing
+     on the row that Shellvis contributes. It gets the weight, and the subject drops
+     to being provenance. */
+  .tray ul.live .summary {
+    font-size: var(--step-0);
+    color: var(--ink);
+    line-height: 1.35;
+
+    /* It wraps, and it is allowed the room to. A summary of a mail is a sentence,
+       not a label: clipped to one line it says "Zwischenmeldung eines Ticket-Al…"
+       and answers nothing. Three lines is enough for any sentence worth keeping
+       and short enough that four rows still fit in a tray without scrolling.
+
+       anywhere, because a ticket reference with no spaces in it is otherwise one
+       unbreakable word as wide as it is long. */
+    min-width: 0;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .tray ul.live > li.waiting,
@@ -644,6 +720,15 @@
      * do not race each other back. */
     var restore = 0;
 
+    /* Whether a sorting pass is running right now. Held here because a full render must
+     * not overwrite "wird gerade beurteilt" with the idle caption while the pass is still
+     * going -- and a render arrives in the middle of one, since finishing a batch triggers
+     * a fresh count. */
+    var sortingNow = false;
+
+    var pendingNote = document.querySelector('[data-note="pending"]');
+    var pendingIdle = pendingNote ? pendingNote.textContent : "";
+
     /* Whether a person asked for this count. The watcher refreshes on its own every few
      * minutes, and flashing a confirmation at somebody who pressed nothing is the same
      * kind of noise as an alert for every mail. */
@@ -690,7 +775,7 @@
      * an angle bracket in it, would be interpreted rather than shown -- and a page that
      * renders arbitrary mail as markup is a page that renders whatever a stranger sent.
      */
-    function fill(key, rows) {
+    function fill(key, rows, older, days) {
       var list = document.querySelector('[data-list="' + key + '"]');
 
       if (!list) { return; }
@@ -699,10 +784,26 @@
         list.removeChild(list.firstChild);
       }
 
+      var behind = older > 0
+        ? older + (older === 1 ? " älteres liegt noch da" : " ältere liegen noch da")
+        : "";
+
       if (!rows || rows.length === 0) {
         var nothing = document.createElement("li");
         nothing.className = "empty";
-        nothing.textContent = "nichts davon";
+
+        /* An empty tray with a backlog behind it must not read as "nothing to do".
+         *
+         * The lists reach back as far as the remembering period and no further, because
+         * the alternative was a desk holding month-old server alerts that had long since
+         * resolved themselves. But a bound that shows nothing and says nothing is the same
+         * lie told the other way round -- so when there is something outside the window,
+         * the tray says how much. */
+        nothing.textContent = behind
+          ? "nichts aus " + (days ? "den letzten " + days + " Tagen" : "dem Zeitraum")
+              + " — " + behind
+          : "nichts davon";
+
         list.appendChild(nothing);
         return;
       }
@@ -711,6 +812,16 @@
         var row = rows[i];
 
         var item = document.createElement("li");
+
+        /* A button, not a div with a click handler. It is one: pressing it opens the mail
+         * in Outlook. Made properly it is reachable from the keyboard, announced as a
+         * control by a screen reader and focusable -- all of which a div would have to
+         * reimplement badly. */
+        var open = document.createElement("button");
+        open.type = "button";
+        open.className = "row";
+        open.setAttribute("data-id", row.id || "");
+        open.title = "In Outlook öffnen";
 
         var who = document.createElement("span");
         who.className = "who";
@@ -723,26 +834,38 @@
 
         who.appendChild(name);
         who.appendChild(when);
+        open.appendChild(who);
+
+        /* The summary FIRST and in reading size.
+         *
+         * It was the last line, at two thirds of the caption size, in the faintest grey on
+         * the page -- 13 pixels tall -- and the report was that there was no summary at all.
+         * Fair: the subject belongs to Outlook and can be read in Outlook, while this
+         * sentence is the only thing on the row that Shellvis contributes. It gets the
+         * weight. */
+        if (row.why) {
+          var summary = document.createElement("span");
+          summary.className = "summary";
+          summary.textContent = row.why;
+          summary.title = row.why;
+          open.appendChild(summary);
+        }
 
         var what = document.createElement("span");
         what.className = "what";
         what.textContent = row.what || "(kein Betreff)";
         what.title = row.what || "";
+        open.appendChild(what);
 
-        item.appendChild(who);
-        item.appendChild(what);
-
-        /* Why the model put it in this tray. Only when it said something: an empty
-         * reason line is a row that looks like it is still loading. */
-        if (row.why) {
-          var why = document.createElement("span");
-          why.className = "why-row";
-          why.textContent = row.why;
-          why.title = row.why;
-          item.appendChild(why);
-        }
-
+        item.appendChild(open);
         list.appendChild(item);
+      }
+
+      if (behind) {
+        var rest = document.createElement("li");
+        rest.className = "empty";
+        rest.textContent = "und " + behind;
+        list.appendChild(rest);
       }
     }
 
@@ -775,8 +898,16 @@
         put("data-note", "unread", desk.scannedNote);
       }
 
-      fill("answer", desk.answer);
-      fill("information", desk.information);
+      /* Not while a pass is running: finishing a batch triggers a count, and that render
+       * would put the idle caption back over "beurteilt gerade ...". */
+      if (pendingNote && !sortingNow) {
+        pendingNote.textContent = pendingIdle;
+      }
+
+      var behind = desk.behind || {};
+
+      fill("answer", desk.answer, behind.answer || 0, behind.days || 0);
+      fill("information", desk.information, behind.information || 0, behind.days || 0);
 
       /* The watcher's own settings, so the sentence describing them cannot go stale. */
       if (desk.watch) {
@@ -791,8 +922,14 @@
         /* Says what the period GOVERNS, not just what it is. Without that, "86 ungelesen"
          * beside "1 sortiert" reads as a contradiction: the unread count is the whole
          * folder, the verdicts cover the period. */
-        remembering.textContent = "Sortiert wird die Post " + desk.remembering
-          + " — Zeitraum änderbar in den Einstellungen.";
+        /* What the period governs, now that it governs two things.
+         *
+         * Sorting still covers everything unread whatever its age -- bounding THAT by the
+         * period once left a backlog of unread mail permanently unjudged. What the period
+         * does bound is the lists below and what "neulich" means in a question, so both
+         * are named rather than left to be inferred from a slider. */
+        remembering.textContent = "Sortiert wird alles Ungelesene. Auf dem Tisch liegen "
+          + desk.remembering + " — Älteres wird nur gezählt. Änderbar in den Einstellungen.";
       }
 
       if (desk.nextAppointment) {
@@ -860,6 +997,20 @@
        * than no button. */
       refresh.hidden = false;
 
+      /* One handler for every row, on the container. Rows are rebuilt on every count, so
+       * a listener per row would be attached and abandoned a few times a minute. */
+      document.addEventListener("click", function (event) {
+        var row = event.target.closest ? event.target.closest("button.row") : null;
+
+        if (!row) { return; }
+
+        var id = row.getAttribute("data-id");
+
+        if (id) {
+          window.chrome.webview.postMessage("open:" + id);
+        }
+      });
+
       refresh.addEventListener("click", function () {
         asked = true;
         refresh.disabled = true;
@@ -878,6 +1029,20 @@
       window.chrome.webview.addEventListener("message", function (event) {
         try {
           var data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+
+          if (data && data.sorting !== undefined) {
+            sortingNow = !!data.sorting;
+
+            if (pendingNote) {
+              pendingNote.textContent = sortingNow
+                ? (data.sortingCount > 1
+                    ? "beurteilt gerade " + data.sortingCount + " Nachrichten ..."
+                    : "beurteilt gerade eine Nachricht ...")
+                : pendingIdle;
+            }
+
+            return;
+          }
 
           if (data && data.counts) {
             render(data);

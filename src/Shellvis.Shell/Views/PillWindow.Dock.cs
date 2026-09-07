@@ -317,4 +317,47 @@ public sealed partial class PillWindow
         if (_docked && !_consoleOpen)
             ToggleConsole();
     }
+
+    /// <summary>
+    /// A dialog is about to appear, or has just gone. Make room and say so.
+    /// </summary>
+    /// <remarks>
+    /// <b>Unconditionally, not just while docked.</b> A ContentDialog is measured against
+    /// its XamlRoot, and this window's root is the bar itself -- thirty-six pixels with the
+    /// console shut. The dialog is then shown into a space it cannot fit, so nothing is
+    /// visible, the approval cannot be given, and the agent sits on it until the five-minute
+    /// timeout denies for the user. What that looks like is an assistant that stopped
+    /// working, which is exactly how it was reported.
+    ///
+    /// The wait is for the open animation. The dialog is laid out once, when it is shown, so
+    /// showing it into a host that is still 12 pixels tall clips it just as surely as showing
+    /// it into a closed one.
+    /// </remarks>
+    private async Task AttendToDialogAsync(bool waiting)
+    {
+        if (!waiting)
+        {
+            if (_statusBeforeDialog is { } restored)
+                StatusText.Text = restored;
+
+            _statusBeforeDialog = null;
+            return;
+        }
+
+        // Recorded rather than recomputed: only this knows what the bar said before, and
+        // the turn it belonged to may well have been mid-sentence.
+        _statusBeforeDialog = StatusText.Text;
+        StatusText.Text = ShellvisVoice.AwaitingApproval;
+
+        if (_consoleOpen)
+            return;
+
+        ToggleConsole();
+
+        await Task.Delay(PillMetrics.ToggleDuration + TimeSpan.FromMilliseconds(60))
+            .ConfigureAwait(true);
+    }
+
+    /// <summary>What the bar said before a dialog took the line over.</summary>
+    private string? _statusBeforeDialog;
 }

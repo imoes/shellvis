@@ -89,6 +89,16 @@ internal sealed partial class AgentSession : IDisposable
     /// </summary>
     private ConnectorLoader? _connectors;
 
+    /// <summary>
+    /// The model's context window in tokens, or null when nobody knows.
+    ///
+    /// Set from the configuration if it is there, and otherwise learned from the endpoint
+    /// shortly after startup -- so it can be null for the first seconds of a session and
+    /// filled in afterwards. Read at render time rather than captured, which is what makes
+    /// that work.
+    /// </summary>
+    public int? ContextTokens { get; private set; }
+
     /// <summary>The mailbox client the tools use, shared with the window's watcher.</summary>
     public Shellvis.Core.Office.OutlookClient? Outlook { get; private init; }
 
@@ -239,13 +249,21 @@ internal sealed partial class AgentSession : IDisposable
         // something the model can fix itself with browser_launch.
         var browser = new BrowserHost();
 
-        registry.RegisterFrom(new BrowserTools(
-            browser,
-            new UrlGuard
-            {
-                Blocklist = settings.Browser.Blocklist,
-                AllowPrivate = settings.Browser.AllowPrivateUrls,
-            }));
+        var urls = new UrlGuard
+        {
+            Blocklist = settings.Browser.Blocklist,
+            AllowPrivate = settings.Browser.AllowPrivateUrls,
+        };
+
+        registry.RegisterFrom(new BrowserTools(browser, urls));
+
+        // Plain HTTP beside the browser, sharing its guard.
+        //
+        // Registered after the browser tools so that in the catalogue the cheap way to read
+        // a page sits next to the expensive one. Reading a url was only possible through
+        // browser_evaluate before this, which is AlwaysAsk and prompts every time -- a
+        // question about a web page cost a Chromium process and a dialog.
+        registry.RegisterFrom(new WebTools(urls));
 
         // Connectors are loaded before the skills, and that order is not incidental: a
         // skill declares requires_tools, and the prompt section drops any skill whose
@@ -384,6 +402,28 @@ internal sealed partial class AgentSession : IDisposable
         // Held separately from the loop so a scheduled run is not affected by an
         // interactive model switch mid-flight.
         session._cronClient = client;
+        session._quickClient = TryQuickClient(
+            profile, model, settings.Agent.RequestTimeoutSeconds);
+
+        // The window size: what is configured, or what the endpoint says.
+        //
+        // Asked in the background because it is a number for a header and nothing waits on
+        // it. Until it answers the answer window shows tokens without a share, which is the
+        // honest rendering of not knowing yet -- and better than dividing by a guess.
+        session.ContextTokens = settings.Agent.ContextTokens;
+
+        if (session.ContextTokens is null)
+        {
+            _ = Task.Run(async () =>
+            {
+                int? learned = await ContextWindow
+                    .LearnAsync(baseUrl ?? profile.BaseUrl)
+                    .ConfigureAwait(false);
+
+                if (learned is > 0)
+                    session.ContextTokens = learned;
+            });
+        }
 
         // Persistence is best-effort: a locked or unwritable database must not stop
         // the agent from working, it just means this conversation is not recorded. The
@@ -415,6 +455,29 @@ internal sealed partial class AgentSession : IDisposable
     /// silently drop back to the library's own hundred-second default.
     /// </summary>
     private int _requestTimeoutSeconds = 300;
+
+    /// <summary>
+    /// A second client to the same model, with the reasoning switched off, or null when
+    /// this provider has no way to switch it off.
+    /// </summary>
+    /// <remarks>
+    /// Null rather than an exception, and a caller that gets null simply uses the ordinary
+    /// client. A provider that cannot turn thinking off is slower at sorting; it is not
+    /// broken, and refusing to build a session over it would be.
+    /// </remarks>
+    private static IChatClient? TryQuickClient(
+        ProviderProfile profile, string? model, int requestTimeoutSeconds)
+    {
+        try
+        {
+            return ChatClientFactory.Create(
+                profile, model, apiKey: null, requestTimeoutSeconds, thinking: false);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
 
     /// <summary>The skills index, shared with the tools and the reflection.</summary>
     private SkillIndex? _skills;
@@ -606,6 +669,11 @@ internal sealed partial class AgentSession : IDisposable
 
             _loop.Client = replacement;
             _cronClient = replacement;
+
+            // Follows the switch. Left behind, the sorting pass would go on talking to the
+            // model somebody has just moved away from -- which is the same staleness the
+            // remembering window was built to avoid, one layer down.
+            _quickClient = TryQuickClient(profile, wanted, _requestTimeoutSeconds);
             Provider = profile;
             ModelName = wanted;
             ProviderLabel = $"{profile.DisplayName} / {wanted}";

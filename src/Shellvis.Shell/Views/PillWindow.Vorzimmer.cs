@@ -58,8 +58,9 @@ public sealed partial class PillWindow
 
             // The button on the page. Subscribed once, when the window is made, so a second
             // open does not stack a second handler and count the desk twice.
-            _vorzimmer.RefreshRequested += () => _ = CountTheDeskAsync(saveBaseline: false);
+            _vorzimmer.RefreshRequested += () => _ = CountTheDeskAsync(saveBaseline: false, thenSort: true);
             _vorzimmer.RememberDaysChanged += RememberOver;
+            _vorzimmer.OpenRequested += OpenFromDesk;
         }
 
         _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
@@ -70,7 +71,7 @@ public sealed partial class PillWindow
         if (first)
             _deskBaseline = LoadDesk();
 
-        _ = CountTheDeskAsync(saveBaseline: true);
+        _ = CountTheDeskAsync(saveBaseline: true, thenSort: true);
     }
 
     /// <summary>
@@ -98,7 +99,20 @@ public sealed partial class PillWindow
     /// on every tick would clear the badges three minutes after they appeared, which is
     /// exactly long enough for somebody to miss them.
     /// </param>
-    private async Task CountTheDeskAsync(bool saveBaseline)
+    /// <param name="thenSort">
+    /// Whether to start a sorting pass straight afterwards.
+    ///
+    /// True when the count came from the page -- it was opened, or the button was pressed.
+    /// Somebody looking at "noch unsortiert: 1" and pressing the only button on the page
+    /// means "deal with it", and answering that with a recount and a three-minute wait is
+    /// how it came to look as though nothing happens.
+    ///
+    /// False from the watcher's tick, which starts its own single pass. The distinction is
+    /// deliberate: while the page is in front of somebody the backlog is worked down as fast
+    /// as the model manages, and in the background it sips one batch every few minutes rather
+    /// than holding the model for ten minutes on end.
+    /// </param>
+    private async Task CountTheDeskAsync(bool saveBaseline, bool thenSort = false)
     {
         // Already counting: say nothing and do nothing. The count in flight ends in a
         // render, which is what puts the button back -- so the press is not lost, it is
@@ -126,13 +140,34 @@ public sealed partial class PillWindow
             // change that matters: the walk knows who sent a thing, the store knows what the
             // model decided it needs. Sorting by sender is what put a broadcast under
             // "braucht heute eine Antwort".
-            DateTime since = (_session.DeskWindow ?? new DeskWindow()).Since(DateTime.Now);
+            // Two horizons, and running them together was the defect.
+            //
+            // COUNTING and SORTING reach as far back as the store keeps. Unread is unread
+            // whatever its age, and bounding the sort by a shorter window left a backlog of
+            // fifty-five messages permanently unjudged beside four zeroes.
+            //
+            // The TRAYS are a desk, and a desk is not an archive. A server alert from four
+            // weeks ago has resolved itself twice over; a meeting that has been and gone
+            // wants nothing. Listing them under "muss man wissen" is how a page fills up
+            // with things that no longer ask for anything, which is what it did. So the
+            // lists are bounded by the remembering window -- the one control the page
+            // already carries -- and what falls outside it is counted, not listed.
+            DateTime now = DateTime.Now;
+            DateTime keeping = now - (_session.Desk?.Retention ?? DeskStore.DefaultRetention);
 
-            DeskTally tally = _session.Desk is { } counted
-                ? counted.Tally(since)
-                : DeskTally.Nothing;
+            DeskWindow window = _session.DeskWindow ?? new DeskWindow();
+            DateTime fresh = window.Since(now);
 
             DeskStore? store = _session.Desk;
+
+            DeskTally tally = store is { } counted ? counted.Tally(keeping) : DeskTally.Nothing;
+
+            // The same query over the shorter horizon. Subtracting gives what is older than
+            // the window per verdict, which is the number the page needs to say "and this
+            // much is still lying there" -- derived from the totals rather than from what
+            // the four-row list happened to show, because a tray can also be short simply
+            // because there are more than four recent ones.
+            DeskTally recent = store is { } lately ? lately.Tally(fresh) : DeskTally.Nothing;
 
             // The notification, before the page: it has to work whether or not anybody is
             // looking at the page, and the page is the case that needs it least.
@@ -141,10 +176,16 @@ public sealed partial class PillWindow
             _vorzimmer?.Show(
                 reading.Counts,
                 _deskBaseline,
-                (_session.DeskWindow ?? new DeskWindow()).Describe(),
+                window.Describe(),
                 tally,
-                Judged(store, since, DeskVerdict.Answer),
-                Judged(store, since, DeskVerdict.Information),
+                Judged(store, fresh, DeskVerdict.Answer),
+                Judged(store, fresh, DeskVerdict.Information),
+
+                // How much is out of sight behind each tray, and how far the trays reach.
+                new VorzimmerWindow.Backlog(
+                    Answer: Math.Max(0, tally.Answer - recent.Answer),
+                    Information: Math.Max(0, tally.Information - recent.Information),
+                    Days: window.Days),
 
                 // The watcher's own settings, from the same clamped values the timer uses.
                 // Read here rather than restated on the page, which is where they were and
@@ -156,6 +197,9 @@ public sealed partial class PillWindow
 
             if (saveBaseline)
                 SaveDesk(reading.Counts);
+
+            if (thenSort)
+                _ = JudgeSomeMailAsync();
         }
         catch (Exception ex)
         {
@@ -168,6 +212,56 @@ public sealed partial class PillWindow
         finally
         {
             _counting = false;
+        }
+    }
+
+    /// <summary>
+    /// A row was pressed: open that mail in Outlook.
+    ///
+    /// <b>The desk id arrives, never an Outlook handle.</b> The page is a web view; handing
+    /// it an EntryID would be handing a live handle into somebody's mailbox to a document. It
+    /// gets the cache's own id and this resolves it, which also means a stale row fails here,
+    /// where there is something sensible to say about it, rather than there.
+    ///
+    /// <b>And EntryID is the field documented as going stale.</b> It changes when the item is
+    /// filed, so a row that has been sitting on screen while the mail was moved will fail to
+    /// open -- said plainly and followed by a fresh count, because the next thing the reader
+    /// will do is look at the row again.
+    /// </summary>
+    private void OpenFromDesk(string id)
+    {
+        if (_session?.Desk is not { } store || _session.Outlook is null)
+            return;
+
+        DeskObject? thing = store.Get(id);
+
+        if (thing?.EntryId is not { Length: > 0 } entryId)
+        {
+            AddRow(GlyphWarning, $"nothing to open for '{id}'", "desk", isWarning: true);
+            return;
+        }
+
+        _ = OpenItAsync(entryId, thing.Subject);
+    }
+
+    private async Task OpenItAsync(string entryId, string subject)
+    {
+        try
+        {
+            await _session!.Outlook!.OpenMailAsync(entryId).ConfigureAwait(true);
+
+            AddRow(GlyphTool, $"opened in Outlook: {Oneline(subject)}", "desk");
+        }
+        catch (Exception ex)
+        {
+            AddRow(
+                GlyphWarning,
+                $"could not open it: {ex.Message}. The handle may be stale -- Outlook changes "
+                    + "it when a message is filed. Counting again.",
+                "desk",
+                isWarning: true);
+
+            _ = CountTheDeskAsync(saveBaseline: false);
         }
     }
 
@@ -265,6 +359,7 @@ public sealed partial class PillWindow
 
         return store.Judged(verdict, since, EntriesPerTray)
             .Select(t => new VorzimmerWindow.DeskEntry(
+                Id: t.Id,
                 Who: t.WhoName is { Length: > 0 } name ? name : t.WhoAddress,
 
                 // The time alone for today, the date as well for anything older. A column of
@@ -348,7 +443,22 @@ public sealed partial class PillWindow
             if (reading.Objects.Where(o => o.Kind == DeskKind.Mail).Select(o => o.When)
                     is { } moments && stillUnread.Count > 0)
             {
-                store.MarkRead(stillUnread, moments.Min());
+                DateTime from = moments.Min();
+                int marked = store.MarkRead(stillUnread, from);
+
+                // Said out loud when it actually changes something, because this is the one
+                // write in the pass that can be wrong in a way nothing else would show: it
+                // decides that mail has been READ. Silent, it turned every recent row to
+                // read while the folder still reported eighty-five unread, and the page
+                // showed four zeroes with no hint of where they came from.
+                if (marked > 0)
+                {
+                    AddRow(
+                        GlyphTool,
+                        $"{stillUnread.Count} still unread back to {from:dd.MM. HH:mm}; "
+                            + $"marked {marked} row(s) read",
+                        "desk");
+                }
             }
 
             store.Prune(reading.Counts.TakenAt);

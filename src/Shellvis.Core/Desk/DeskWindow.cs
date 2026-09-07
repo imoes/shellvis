@@ -39,14 +39,22 @@ public sealed class DeskWindow(int days = 30)
     public DateTime Since(DateTime now) => now.AddDays(-_days);
 
     /// <summary>The window in words, for a label and for a tool result.</summary>
+    /// <remarks>
+    /// <b>Every phrase is nominative plural, and that is a constraint rather than a
+    /// preference.</b> These go into sentences written elsewhere -- "auf dem Tisch liegen
+    /// ...", "neulich heißt ...", "looking back over ..." -- and a list that mixes cases
+    /// makes some of those ungrammatical whatever the surrounding sentence does. "den
+    /// letzten Monat" and "das ganze Vierteljahr" were accusative and singular, and produced
+    /// "Auf dem Tisch liegt den letzten Monat".
+    /// </remarks>
     public string Describe() => _days switch
     {
         <= 2 => "die letzten zwei Tage",
         <= 7 => $"die letzten {_days} Tage",
         <= 14 => "die letzten zwei Wochen",
-        <= 31 => "den letzten Monat",
+        <= 31 => "die letzten vier Wochen",
         <= 62 => "die letzten zwei Monate",
-        _ => "das ganze Vierteljahr",
+        _ => "die letzten drei Monate",
     };
 
     private static int Clamp(int days) => Math.Clamp(days, Least, Most);

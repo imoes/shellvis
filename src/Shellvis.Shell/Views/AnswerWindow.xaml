@@ -26,10 +26,24 @@
                      so without it there is nothing to grab. -->
                 <Grid x:Name="Header" Grid.Row="0" Padding="12,8,8,6" Background="Transparent">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <!-- What the last call cost. Takes the slack so the buttons stay
+                             put: a header whose controls shift when a number gets a digit
+                             wider is a header you cannot aim at. -->
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+
+                    <TextBlock x:Name="CostText"
+                               Grid.Column="1"
+                               Margin="10,0,10,0"
+                               FontFamily="Cascadia Mono"
+                               FontSize="10.5"
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Right"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{ThemeResource ConsoleMutedBrush}" />
 
                     <TextBlock x:Name="HeaderText"
                                Grid.Column="0"
@@ -42,13 +56,13 @@
                     <!-- Minimise before close, in the Windows order, and the destructive
                          one furthest from where the pointer usually is. -->
                     <Button x:Name="MinimiseButton"
-                            Grid.Column="1"
+                            Grid.Column="2"
                             Style="{StaticResource PillIconButtonSmallStyle}"
                             Content="&#xE921;"
                             ToolTipService.ToolTip="Minimise to the taskbar" />
 
                     <Button x:Name="CloseButton"
-                            Grid.Column="2"
+                            Grid.Column="3"
                             Style="{StaticResource PillIconButtonSmallStyle}"
                             Content="&#xE711;"
                             ToolTipService.ToolTip="Close (the answer button on the pill brings it back)" />

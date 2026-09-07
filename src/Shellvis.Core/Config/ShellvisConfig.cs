@@ -50,6 +50,17 @@ public sealed class AgentSection
     public string? ExtraInstructions { get; set; }
 
     /// <summary>
+    /// The model's context window in tokens, when it has to be stated by hand.
+    ///
+    /// Only used to turn the input token count into a share of the window on the answer
+    /// window's header. Left unset by default: llama.cpp is asked for the real figure at
+    /// startup, and a share divided by a guess is a number that looks authoritative and is
+    /// wrong. Set this for a provider that does not say -- and set the number the SERVER was
+    /// started with, not what the model card claims.
+    /// </summary>
+    public int? ContextTokens { get; set; }
+
+    /// <summary>
     /// Whether to stream the answer. On by default; turn it off if a provider's
     /// streaming is broken.
     /// </summary>

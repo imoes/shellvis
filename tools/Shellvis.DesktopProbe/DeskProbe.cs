@@ -313,6 +313,42 @@ internal static class DeskProbe
                 DeskTriage.Read(string.Empty, batch).Count == 0
                     && DeskTriage.Read(null, batch).Count == 0);
 
+            // ------------------------------------------- shapes that were dropped whole
+            //
+            // Both of these appeared in use as "none of the 10 could be sorted": the model
+            // had judged every message correctly and laid the answer out differently, and
+            // ten messages were then re-asked on the next pass and answered the same way.
+            Check("a markdown table is read, not discarded",
+                DeskTriage.Read(
+                    "| Nr | Urteil | Grund |\n|---|---|---|\n| 1 | ANSWER | wartet |\n"
+                        + "| 2 | IGNORE | Werbung |",
+                    batch) is { Count: 2 },
+                "its leading pipe makes the first field empty, so the number was not in parts[0]");
+
+            Check("and its header row is not mistaken for a verdict",
+                DeskTriage.Read("| Nr | Urteil | Grund |\n|---|---|---|", batch).Count == 0);
+
+            Check("a line with no separator at all is read",
+                DeskTriage.Read("1. INFORMATION - Jira-Benachrichtigung", batch)
+                    [batch[0].Id].Verdict == DeskVerdict.Information);
+
+            Check("its reason survives without the label in it",
+                !DeskTriage.Read("1. INFORMATION - Jira-Benachrichtigung", batch)
+                    [batch[0].Id].Why.Contains("INFORMATION", StringComparison.Ordinal));
+
+            // The trap in reading a whole line: the reason's wording must not outvote the
+            // verdict. This one says IGNORE and mentions Information.
+            Check("a reason that names another label does not change the verdict",
+                DeskTriage.Read("2 IGNORE Rundschreiben zur Information", batch)
+                    [batch[1].Id].Verdict == DeskVerdict.Ignore);
+
+            // A ticket number in the reason used to be swept into the message number, so
+            // the more detail a line carried the more likely it was thrown away.
+            Check("digits in the reason are not read as the message number",
+                DeskTriage.Read("1 | INFORMATION | Ticket 000000016285934 gesetzt", batch)
+                    is { Count: 1 },
+                "every digit in the field was collected before this, giving 1000000016285934");
+
             // A subject containing the separator or a newline would otherwise break the
             // numbered list apart, and then every verdict after it lands on the wrong mail.
             var nasty = new[]

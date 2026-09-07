@@ -46,9 +46,17 @@ public sealed partial class PillWindow
 
         _judging = true;
 
+        // Whether to go straight on to the next batch. Set only when the page is open and
+        // this batch was full, which is as close to "there is more" as can be had without a
+        // second query.
+        bool keepGoing = false;
+
         try
         {
-            DateTime since = (_session.DeskWindow ?? new DeskWindow()).Since(DateTime.Now);
+            // Everything held, not the remembering window: a message fifteen days old that
+            // nobody has read still needs sorting, and bounding this by the window is what
+            // left fifty-five of them unjudged for ever.
+            DateTime since = DateTime.Now - store.Retention;
 
             IReadOnlyList<DeskObject> batch = store.Unjudged(since, DeskTriage.PerBatch);
 
@@ -60,10 +68,38 @@ public sealed partial class PillWindow
                 $"sorting {batch.Count} unread message(s): which of them needs an answer",
                 "desk");
 
+            // The page, if it is open, says so while it runs. Without this the cell read
+            // "wird der Reihe nach beurteilt" whether a pass was in flight or not, and the
+            // report was the obvious one: warum passiert da nichts?
+            _vorzimmer?.Sorting(true, batch.Count);
+
+            // The text of these ten, and only these ten.
+            //
+            // Without it the model sees sender and subject and nothing else, so the best
+            // reason it can write is the subject in other words -- which is what "die
+            // Tickets werden nicht zusammengefasst" was about. Fetched here rather than
+            // stored during the walk because Body is the one expensive property on an
+            // Outlook item: ten reads per pass, instead of two hundred for messages nobody
+            // will ask about.
+            var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (DeskObject one in batch)
+            {
+                if (one.EntryId is not { Length: > 0 } handle)
+                    continue;
+
+                string preview = await _session.Outlook
+                    .PreviewBodyAsync(handle)
+                    .ConfigureAwait(true);
+
+                if (preview.Length > 0)
+                    bodies[one.Id] = preview;
+            }
+
             var answer = new System.Text.StringBuilder();
 
             await _session.AskAsideAsync(
-                DeskTriage.Ask(batch),
+                DeskTriage.Ask(batch, bodies),
                 agentEvent =>
                 {
                     // Nothing is rendered. This is not a conversation and its answer is a
@@ -73,7 +109,14 @@ public sealed partial class PillWindow
                     if (agentEvent is AgentEvent.AssistantMessage message)
                         answer.Append(message.Text);
                 },
-                CancellationToken.None).ConfigureAwait(true);
+                CancellationToken.None,
+
+                // WITHOUT the tool catalogue, and that is what makes this work at all.
+                // Sorting is a judgement about text that is already in the prompt -- there
+                // is nothing here to go and look up. Offered the catalogue, the same call
+                // carried a hundred and fourteen tool schemas and spent minutes on prompt
+                // processing before the model could start, then was abandoned as stalled.
+                withTools: false).ConfigureAwait(true);
 
             IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> verdicts =
                 DeskTriage.Read(answer.ToString(), batch);
@@ -87,7 +130,12 @@ public sealed partial class PillWindow
             AddRow(
                 verdicts.Count == 0 ? GlyphWarning : GlyphTool,
                 verdicts.Count == 0
-                    ? $"none of the {batch.Count} could be sorted; the answer did not carry verdicts"
+                    // With the shape the model actually used, because without it the line
+                    // says only that something went wrong. The parser tolerates pipes,
+                    // markdown tables and no separator at all; anything it still cannot
+                    // read is a shape worth seeing rather than guessing at.
+                    ? $"none of the {batch.Count} could be sorted; the model answered: "
+                        + FirstLine(answer.ToString())
                     : Summarise(verdicts),
                 "desk",
                 isWarning: verdicts.Count == 0);
@@ -96,6 +144,16 @@ public sealed partial class PillWindow
             // than left to the next tick: a tray that fills three minutes after the sorting
             // finished looks like nothing happened.
             RefreshVorzimmer();
+
+            // Straight on to the next batch WHILE SOMEBODY IS WATCHING.
+            //
+            // A backlog of fifty-five takes six passes, and six passes at one every few
+            // minutes is half an hour of a page that says "noch unsortiert" and appears
+            // idle. With the page open the queue is worked down as fast as the model
+            // manages; with it closed the watcher's tick sips one batch at a time, so
+            // nothing holds the model for half an hour unasked. Their own turn still wins:
+            // the check at the top of this method runs again for every batch.
+            keepGoing = _vorzimmer is not null && batch.Count >= DeskTriage.PerBatch;
         }
         catch (Exception ex)
         {
@@ -104,7 +162,12 @@ public sealed partial class PillWindow
         finally
         {
             _judging = false;
+            _vorzimmer?.Sorting(false, 0);
         }
+
+        // After the flag is cleared, or the next call would meet its own guard and stop.
+        if (keepGoing)
+            _ = JudgeSomeMailAsync();
     }
 
     /// <summary>What the batch came to, in one line.</summary>

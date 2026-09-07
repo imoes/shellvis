@@ -79,6 +79,15 @@ public abstract record AgentEvent
         int Iterations,
         string? FinalText) : AgentEvent;
 
+    /// <summary>
+    /// What the last call to the model cost: tokens in, tokens out, how fast.
+    ///
+    /// Raised per ITERATION rather than per turn, because that is what moves: one turn can
+    /// make six calls, each with a longer prompt than the last as tool results accumulate,
+    /// and the number worth showing is the current one.
+    /// </summary>
+    public sealed record Cost(TurnCost Spent) : AgentEvent;
+
     /// <summary>Something went wrong, described for a human rather than a stack trace.</summary>
     public sealed record Failure(string Message) : AgentEvent;
 }

@@ -143,15 +143,29 @@
   .band-head p:not(.eyebrow) { max-width: 68ch; color: var(--ink-soft); }
 
   /* ----------------------------------------------------------------- trays
-     Three, and not equal: the two that hold mail get the room, the one that
-     only carries a number gets a sliver. It used to be 1.35 / 1 / .62, from
-     when the second tray was a count rather than a list of rows -- it holds
-     full entries now, and a summary needs somewhere to be read. */
+     The two trays that hold mail are stacked, not side by side.
+
+     Side by side they were columns of about 340 pixels, and a summary of a
+     mail is a sentence: it wrapped to three lines and then clipped, so the
+     one thing on a row that Shellvis contributes was the thing with the
+     least room. Stacked, each gets the full width of the window and a
+     sentence fits on one or two lines. It also puts them in the order they
+     are read in -- what needs answering first, what is worth knowing under
+     it -- rather than asking the eye to choose between two equal columns.
+
+     The third tray is a number and nothing else, so it sits beside the stack
+     in a narrow column and spans both rows. Stacking it too would spend a
+     third of the page's height on one figure. */
   .trays {
     display: grid;
-    grid-template-columns: 1fr 1fr .5fr;
+    grid-template-columns: 1fr minmax(150px, 0.3fr);
+    grid-template-rows: auto auto;
     gap: 1rem;
   }
+
+  .tray-answer { grid-column: 1; grid-row: 1; }
+  .tray-information { grid-column: 1; grid-row: 2; }
+  .tray-third { grid-column: 2; grid-row: 1 / span 2; }
 
   .tray {
     background: var(--card);
@@ -563,7 +577,17 @@
 
   /* ------------------------------------------------------------------ narrow */
   @media (max-width: 900px) {
+    /* One column, and the explicit placements above have to be undone with it --
+       a grid-column: 2 in a single-column grid puts the tray in an implicit
+       second column and the page scrolls sideways again. */
     .trays { grid-template-columns: 1fr; }
+
+    .tray-answer,
+    .tray-information,
+    .tray-third {
+      grid-column: 1;
+      grid-row: auto;
+    }
   }
 </style>
 
@@ -689,7 +713,7 @@
         </ul>
       </article>
 
-      <article class="tray">
+      <article class="tray tray-information">
         <h3>Muss man wissen
           <span class="badge" data-badge="information" hidden></span>
         </h3>

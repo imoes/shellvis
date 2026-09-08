@@ -36,6 +36,29 @@ public static class DeskTriage
     public const int PerBatch = 10;
 
     /// <summary>
+    /// Which generation of the sorting rules a verdict was made under.
+    /// </summary>
+    /// <remarks>
+    /// <b>Raise this whenever a change to <see cref="Ask"/> would change a verdict.</b> A
+    /// verdict is kept for three months, so a rule added today governs only the mail that
+    /// arrives after it unless something goes back over what is already judged. That has now
+    /// been needed twice, and both times the stored verdicts were visibly wrong while the
+    /// new rule was visibly right:
+    ///
+    /// <list type="number">
+    /// <item>1 -- the message body reached the prompt. Before that the model saw sender and
+    /// subject only, so every reason was the subject in other words.</item>
+    /// <item>2 -- nothing sent by a machine is an ANSWER. Before that, fifteen monitoring
+    /// alerts sat under "braucht eine Antwort" because their text said "muss repariert
+    /// werden" -- which is the monitoring system's phrasing, not a person waiting.</item>
+    /// </list>
+    ///
+    /// Not a timestamp comparison, deliberately. "Judged before this build" needs a build
+    /// date that nothing records, and a clock that nobody set wrong.
+    /// </remarks>
+    public const int RulesVersion = 2;
+
+    /// <summary>
     /// The question, with one numbered line per message.
     /// </summary>
     /// <remarks>
@@ -65,7 +88,7 @@ public static class DeskTriage
             Sort this unread mail. For each one decide what it needs from the person whose
             desk this is.
 
-            ANSWER      somebody is waiting for a reply from them, or a deadline in it
+            ANSWER      a PERSON is waiting for a reply from them, or a deadline in it
                         requires them to act. Only this one costs their attention.
             INFORMATION worth knowing, but nothing goes back. Announcements, notifications,
                         reports, a colleague copying them in, a page that changed, a ticket
@@ -75,8 +98,20 @@ public static class DeskTriage
 
             Most mail is INFORMATION. ANSWER is the exception, and marking too much of it as
             ANSWER is the failure to avoid: a tray of forty things that all need answering is
-            a tray nobody can use. A newsletter is never an ANSWER. A notification from a
-            system is INFORMATION unless it names a deadline for this person.
+            a tray nobody can use. A newsletter is never an ANSWER.
+
+            NOTHING SENT BY A MACHINE IS AN ANSWER. Not a monitoring alert, however
+            critical, and not a ticket notification, however urgently it is worded. A
+            monitoring system reports; it is not waiting for a mail back, and it cannot read
+            one. Text like "muss repariert werden", "CRITICAL", "action required" or "please
+            respond" in an automated message is that system's own phrasing, not a person
+            asking -- classify it INFORMATION, and say in the reason what broke and whether
+            it recovered.
+
+            A ticket notification is INFORMATION even when it says somebody was assigned or
+            asked for something, because the place to answer a ticket is the ticket. It only
+            becomes an ANSWER when a named person wrote to this person directly and is
+            waiting for a mail.
 
             Answer with one line per message, nothing else, in this exact form:
 

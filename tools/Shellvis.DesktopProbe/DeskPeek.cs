@@ -34,13 +34,15 @@ internal static class DeskPeek
             Console.WriteLine(
                 $"last {days,3} day(s): {t.Answer,3} answer  {t.Information,3} information  "
                 + $"{t.Ignore,3} ignore  {t.Pending,3} unjudged   = {t.Total,3} unread rows"
-                + $"   [{store.WithoutBodyCount(DateTime.Now.AddDays(-days)),3} judged "
-                + "without the text]");
+                + $"   [{store.StaleVerdictCount(DateTime.Now.AddDays(-days), DeskTriage.RulesVersion),3} judged "
+                + "under older rules]");
         }
 
         // The last column is the queue for re-reading, and it is not the same as unjudged:
-        // those rows have a verdict and sit in their trays, but their reason was written
-        // from the subject alone. A sorting pass with nothing new to do works through them.
+        // those rows have a verdict and sit in their trays, but it was made under an older
+        // generation of the sorting rules. A pass with nothing new to do works through them,
+        // which is how a rule change reaches mail that is already on the desk.
+        Console.WriteLine($"\nsorting rules are at version {DeskTriage.RulesVersion}");
 
         Console.WriteLine();
         Console.WriteLine("-- the newest mail rows, whatever their state --");

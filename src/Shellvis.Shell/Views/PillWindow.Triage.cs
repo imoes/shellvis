@@ -60,22 +60,24 @@ public sealed partial class PillWindow
 
             IReadOnlyList<DeskObject> batch = store.Unjudged(since, DeskTriage.PerBatch);
 
-            // Nothing new? Then go back over what was judged before the sorting could read
-            // message bodies.
+            // Nothing new? Then go back over what was judged under older rules.
             //
-            // Those verdicts are probably right and their reasons are useless: the model
-            // saw sender and subject only, so the sentence beside each row is the subject
-            // in other words. That sentence is the only thing on a row the assistant
-            // contributes, and it is kept for three months -- so without this the trays
-            // would go on showing paraphrased subject lines until they aged out. This is
-            // what "bei Muss man wissen ist immer noch keine Zusammenfassung" was.
+            // A verdict is kept for three months, so a rule added today would otherwise
+            // govern only the mail that arrives after it -- and the mail already on the desk
+            // would go on being wrong in the way the rule was written to fix. Both changes
+            // so far were visible on the page: reasons that paraphrased the subject because
+            // the model never saw the body, and fifteen monitoring alerts under "braucht
+            // eine Antwort" because their text said "muss repariert werden".
             //
             // Second, never first: a message nobody has judged at all is more urgent than
-            // one whose reason could be better.
+            // one whose verdict could be better.
             bool rejudging = batch.Count == 0;
 
             if (rejudging)
-                batch = store.JudgedWithoutBody(since, DeskTriage.PerBatch);
+            {
+                batch = store.JudgedUnderOldRules(
+                    since, DeskTriage.RulesVersion, DeskTriage.PerBatch);
+            }
 
             if (batch.Count == 0)
                 return;
@@ -83,8 +85,8 @@ public sealed partial class PillWindow
             AddRow(
                 GlyphTool,
                 rejudging
-                    ? $"re-reading {batch.Count} message(s) judged before Shellvis read "
-                        + "message text, for a summary rather than a paraphrased subject"
+                    ? $"re-reading {batch.Count} message(s) judged under older sorting "
+                        + "rules, so the desk follows the rules as they are now"
                     : $"sorting {batch.Count} unread message(s): which of them needs an answer",
                 "desk");
 
@@ -141,11 +143,16 @@ public sealed partial class PillWindow
             IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> verdicts =
                 DeskTriage.Read(answer.ToString(), batch);
 
-            // sawBody records that THIS pass reads bodies, not that this message had one.
-            // A notification with an empty body would otherwise be picked up as needing a
+            // Both flags record what the PASS could do, not what this message happened to
+            // have. A notification with an empty body would otherwise come up as needing a
             // re-read on every pass, for ever.
             foreach ((string id, (DeskVerdict verdict, string why)) in verdicts)
-                store.Judge(id, verdict, why, DateTime.Now, sawBody: true);
+            {
+                store.Judge(
+                    id, verdict, why, DateTime.Now,
+                    sawBody: true,
+                    rules: DeskTriage.RulesVersion);
+            }
 
             // Said plainly, including when it comes to nothing. A pass that read no verdicts
             // out of a full answer is a broken format, not a quiet mailbox, and the two must

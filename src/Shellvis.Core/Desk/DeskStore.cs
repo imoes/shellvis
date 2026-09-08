@@ -125,6 +125,16 @@ public sealed class DeskStore : IDisposable
             // particular message still had a body to read. Otherwise a mail with no text at
             // all would be re-judged for ever.
             ("verdict_body", "INTEGER NOT NULL DEFAULT 0"),
+
+            // Which generation of the sorting rules produced the verdict, and the single
+            // test for whether it is still current. Zero for everything judged before this
+            // column existed, so a first run after an upgrade re-reads the lot.
+            //
+            // verdict_body above is kept because it is a different fact -- whether the text
+            // was actually there to read -- and it is worth seeing in the store. It is no
+            // longer what decides a re-read: a rule can change without the body changing,
+            // and it has.
+            ("verdict_rules", "INTEGER NOT NULL DEFAULT 0"),
         });
 
         // The three questions this store is actually asked: what is recent, what is about
@@ -344,12 +354,18 @@ public sealed class DeskStore : IDisposable
     /// flag records what the pass could see, not what it happened to find, because a mail
     /// with an empty body would otherwise be re-judged for ever.
     /// </param>
+    /// <param name="rules">
+    /// The generation of the sorting rules this verdict was made under. Compared against the
+    /// current one to decide what needs re-reading, so a rule change reaches the mail that
+    /// is already judged instead of only the mail that arrives next.
+    /// </param>
     public void Judge(
         string id,
         DeskVerdict verdict,
         string why,
         DateTime when,
-        bool sawBody = false)
+        bool sawBody = false,
+        int rules = 0)
     {
         using SqliteCommand command = _connection.CreateCommand();
 
@@ -358,7 +374,8 @@ public sealed class DeskStore : IDisposable
             SET verdict = $verdict,
                 verdict_why = $why,
                 verdict_at = $at,
-                verdict_body = $body
+                verdict_body = $body,
+                verdict_rules = $rules
             WHERE id = $id;
             """;
 
@@ -367,6 +384,7 @@ public sealed class DeskStore : IDisposable
         command.Parameters.AddWithValue("$why", why.Trim());
         command.Parameters.AddWithValue("$at", Text(when));
         command.Parameters.AddWithValue("$body", sawBody ? 1 : 0);
+        command.Parameters.AddWithValue("$rules", rules);
 
         command.ExecuteNonQuery();
     }
@@ -387,13 +405,13 @@ public sealed class DeskStore : IDisposable
     /// Oldest verdict first, so a re-sorting pass works forward through the backlog instead
     /// of circling the same handful.
     /// </remarks>
-    public IReadOnlyList<DeskObject> JudgedWithoutBody(DateTime since, int limit = 10)
+    public IReadOnlyList<DeskObject> JudgedUnderOldRules(DateTime since, int rules, int limit = 10)
     {
         using SqliteCommand command = _connection.CreateCommand();
 
         command.CommandText = Select + """
              WHERE verdict IS NOT NULL
-               AND verdict_body = 0
+               AND verdict_rules < $rules
                AND kind = 'mail'
                AND state <> 'read'
                AND happened >= $since
@@ -402,26 +420,28 @@ public sealed class DeskStore : IDisposable
             """;
 
         command.Parameters.AddWithValue("$since", Text(since));
+        command.Parameters.AddWithValue("$rules", rules);
         command.Parameters.AddWithValue("$limit", limit);
 
         return ReadAll(command);
     }
 
-    /// <summary>How many verdicts were made without the message's text.</summary>
-    public int WithoutBodyCount(DateTime since)
+    /// <summary>How many verdicts were made under rules older than the current ones.</summary>
+    public int StaleVerdictCount(DateTime since, int rules)
     {
         using SqliteCommand command = _connection.CreateCommand();
 
         command.CommandText = """
             SELECT COUNT(*) FROM objects
             WHERE verdict IS NOT NULL
-              AND verdict_body = 0
+              AND verdict_rules < $rules
               AND kind = 'mail'
               AND state <> 'read'
               AND happened >= $since;
             """;
 
         command.Parameters.AddWithValue("$since", Text(since));
+        command.Parameters.AddWithValue("$rules", rules);
 
         return Convert.ToInt32(command.ExecuteScalar() ?? 0, CultureInfo.InvariantCulture);
     }

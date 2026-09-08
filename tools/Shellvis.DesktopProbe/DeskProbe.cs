@@ -313,6 +313,37 @@ internal static class DeskProbe
                 DeskTriage.Read(string.Empty, batch).Count == 0
                     && DeskTriage.Read(null, batch).Count == 0);
 
+            // ----------------------------------------------- the rules, in the question
+            //
+            // The prompt is where this feature's judgement actually lives, and a rule can be
+            // lost in an edit without anything failing to compile. Fifteen monitoring alerts
+            // sat under "braucht eine Antwort" because their own text said "muss repariert
+            // werden" -- which is the monitoring system's phrasing, not a person waiting.
+            string question = DeskTriage.Ask(batch);
+
+            Check("the question says a machine never needs an answer",
+                question.Contains("NOTHING SENT BY A MACHINE IS AN ANSWER", StringComparison.Ordinal),
+                "a monitoring system reports; it is not waiting for a mail and cannot read one");
+
+            Check("and names the wording that fooled it",
+                question.Contains("muss repariert werden", StringComparison.Ordinal)
+                    && question.Contains("action required", StringComparison.Ordinal),
+                "the model needs the actual phrases, not the principle behind them");
+
+            Check("a ticket notification is answered in the ticket, not by mail",
+                question.Contains("the place to answer a ticket is the ticket", StringComparison.Ordinal));
+
+            Check("and ANSWER is reserved for a person",
+                question.Contains("a PERSON is waiting", StringComparison.Ordinal));
+
+            // The version is what carries a rule change back over mail that is already
+            // judged. A change to the rules without a bump governs only future mail, and
+            // the desk goes on being wrong in exactly the way the rule was written to fix.
+            Check("the rules carry a version, so a change reaches what is already judged",
+                DeskTriage.RulesVersion >= 2,
+                $"currently {DeskTriage.RulesVersion}: 1 added the message body, "
+                    + "2 stopped machines needing answers");
+
             // ------------------------------------------- shapes that were dropped whole
             //
             // Both of these appeared in use as "none of the 10 could be sorted": the model

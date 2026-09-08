@@ -54,7 +54,7 @@ internal static class TriageProbe
         bool rejudging = batch.Count == 0;
 
         if (rejudging)
-            batch = store.JudgedWithoutBody(since, DeskTriage.PerBatch);
+            batch = store.JudgedUnderOldRules(since, DeskTriage.RulesVersion, DeskTriage.PerBatch);
 
         if (batch.Count == 0)
         {
@@ -63,8 +63,9 @@ internal static class TriageProbe
         }
 
         Console.WriteLine(rejudging
-            ? $"{batch.Count} to re-read of {store.WithoutBodyCount(since)} judged without "
-                + "their text"
+            ? $"{batch.Count} to re-read of "
+                + $"{store.StaleVerdictCount(since, DeskTriage.RulesVersion)} "
+                + $"judged under rules older than {DeskTriage.RulesVersion}"
             : $"{batch.Count} unjudged, oldest {batch[^1].When:dd.MM. HH:mm}");
 
         var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -158,10 +159,10 @@ internal static class TriageProbe
             // sawBody records that this pass READS bodies, not that this message had one --
             // otherwise a notification with an empty body is re-read for ever.
             foreach ((string id, (DeskVerdict verdict, string why)) in verdicts)
-                store.Judge(id, verdict, why, DateTime.Now, sawBody: true);
+                store.Judge(id, verdict, why, DateTime.Now, sawBody: true, rules: DeskTriage.RulesVersion);
 
             Console.WriteLine($"\nstored {verdicts.Count} verdict(s); "
-                + $"{store.WithoutBodyCount(since)} still to re-read");
+                + $"{store.StaleVerdictCount(since, DeskTriage.RulesVersion)} still to re-read");
         }
 
         Console.WriteLine();

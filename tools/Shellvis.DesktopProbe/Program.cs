@@ -46,8 +46,12 @@ internal static class Program
                 // it separates is a prompt the parser cannot read from a call that never got
                 // far enough to produce one, and only the real endpoint answers that.
                 // --bodies reads each message's text through Outlook, as the app does.
+                // --write stores the verdicts, which is what the application does. Off by
+                // default: a harness with an opinion about somebody's inbox is not a harness.
                 "triage" => await TriageProbe
-                    .RunAsync(args.Any(a => a.Equals("--bodies", StringComparison.OrdinalIgnoreCase)))
+                    .RunAsync(
+                        args.Any(a => a.Equals("--bodies", StringComparison.OrdinalIgnoreCase)),
+                        args.Any(a => a.Equals("--write", StringComparison.OrdinalIgnoreCase)))
                     .ConfigureAwait(false),
 
                 // What the real store holds, for when the page and the expectation disagree.

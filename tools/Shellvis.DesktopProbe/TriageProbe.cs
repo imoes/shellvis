@@ -30,9 +30,11 @@ namespace Shellvis.DesktopProbe;
 /// </summary>
 internal static class TriageProbe
 {
-    public static async Task<int> RunAsync(bool withBodies)
+    public static async Task<int> RunAsync(bool withBodies, bool write = false)
     {
-        Console.WriteLine("triage: one real sorting pass, no tools, nothing written\n");
+        Console.WriteLine(write
+            ? "triage: one real sorting pass, no tools, VERDICTS WILL BE STORED\n"
+            : "triage: one real sorting pass, no tools, nothing written\n");
 
         ShellvisConfig settings = ConfigStore.Load().Config;
 
@@ -47,13 +49,23 @@ internal static class TriageProbe
         DateTime since = DateTime.Now - store.Retention;
         IReadOnlyList<DeskObject> batch = store.Unjudged(since, DeskTriage.PerBatch);
 
+        // The same order the application uses: what nobody has judged first, then what was
+        // judged before the sorting could read message text.
+        bool rejudging = batch.Count == 0;
+
+        if (rejudging)
+            batch = store.JudgedWithoutBody(since, DeskTriage.PerBatch);
+
         if (batch.Count == 0)
         {
-            Console.WriteLine("nothing unjudged in the store. Sorting has caught up.");
+            Console.WriteLine("nothing unjudged and nothing to re-read. Sorting has caught up.");
             return 0;
         }
 
-        Console.WriteLine($"{batch.Count} unjudged, oldest {batch[^1].When:dd.MM. HH:mm}");
+        Console.WriteLine(rejudging
+            ? $"{batch.Count} to re-read of {store.WithoutBodyCount(since)} judged without "
+                + "their text"
+            : $"{batch.Count} unjudged, oldest {batch[^1].When:dd.MM. HH:mm}");
 
         var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
 
@@ -127,12 +139,29 @@ internal static class TriageProbe
             if (verdicts.TryGetValue(one.Id, out var judged))
             {
                 Console.WriteLine($"  {judged.Verdict,-11} {judged.Why}");
-                Console.WriteLine($"              ({Flat(one.Subject, 70)})");
+
+                // The reason it had before, when there was one, because the whole point of
+                // a re-read is that the new sentence says more than the old one.
+                if (one.VerdictWhy is { Length: > 0 } before)
+                    Console.WriteLine($"       was:   {Flat(before, 70)}");
+
+                Console.WriteLine($"       subj:  {Flat(one.Subject, 70)}");
             }
             else
             {
                 Console.WriteLine($"  UNREAD      -- no verdict for: {Flat(one.Subject, 70)}");
             }
+        }
+
+        if (write && verdicts.Count > 0)
+        {
+            // sawBody records that this pass READS bodies, not that this message had one --
+            // otherwise a notification with an empty body is re-read for ever.
+            foreach ((string id, (DeskVerdict verdict, string why)) in verdicts)
+                store.Judge(id, verdict, why, DateTime.Now, sawBody: true);
+
+            Console.WriteLine($"\nstored {verdicts.Count} verdict(s); "
+                + $"{store.WithoutBodyCount(since)} still to re-read");
         }
 
         Console.WriteLine();

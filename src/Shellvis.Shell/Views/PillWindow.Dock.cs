@@ -261,6 +261,7 @@ public sealed partial class PillWindow
         // overlapping the taskbar's own buttons.
         int bandTop = taskbarTop + Math.Max(0, (taskbarHeight - bandHeight) / 2);
 
+
         // Where the taskbar is actually empty, asked rather than assumed. The arithmetic
         // this replaces -- a fixed offset from the right, never left of centre -- is right
         // on an empty taskbar and wrong on a working one: Windows 11 centres the app
@@ -269,14 +270,27 @@ public sealed partial class PillWindow
         int trayReserve = (int)Math.Round(230 * scale);
         int x;
 
-        TaskbarLayout.Span? free = TaskbarLayout.FindFreeSpan(
+        TaskbarLayout.Placement room = TaskbarLayout.FindRoom(
             stripTop: taskbarTop,
             stripBottom: outer.Y + outer.Height,
             stripLeft: work.X,
             stripRight: work.X + work.Width,
             needed: width);
 
-        if (free is { } span)
+        // A full taskbar means the bar comes OFF the strip, not that it takes the icons'
+        // pixels. Raised by its own height so it rests on top of the taskbar instead of in
+        // it: still at the bottom of the screen, still reachable, covering nothing.
+        //
+        // This is the third report of the bar covering icons and the first one where the
+        // measurement was right -- there genuinely was no room. Parking at a fixed offset
+        // from the right, which is the fallback for a taskbar that cannot be read at all,
+        // picks exactly the pixels a full taskbar is using.
+        bool onTop = room.State == TaskbarLayout.StripState.Full;
+
+        if (onTop)
+            bandTop = taskbarTop - bandHeight - (int)Math.Round(4 * scale);
+
+        if (room is { State: TaskbarLayout.StripState.Free, Where: var span })
         {
             // Against the side the icons are on, so the bar reads as part of the row rather
             // than as something adrift in the middle of an empty stretch. The left-hand gap

@@ -310,6 +310,33 @@ internal static class PageProbe
         Check("a list says it is waiting rather than showing nothing",
             html.Contains("noch nicht sortiert", StringComparison.Ordinal));
 
+        // Fresh first, older only when nothing fresh is waiting.
+        //
+        // Both alternatives were shipped and both were reported. Unbounded, the trays
+        // filled with month-old alerts whose reasons paraphrased their subject lines.
+        // Bounded hard, the summaries were finally worth reading and could not be seen at
+        // all: two rows inside a fortnight against fifty-three in the store. So the rows
+        // arrive newest first over everything held, each knowing whether it is inside the
+        // period, and the page draws a line instead of dropping any.
+        Check("older rows are marked rather than withheld",
+            html.Contains("row.old", StringComparison.Ordinal)
+                && html.Contains("older-line", StringComparison.Ordinal),
+            "a tray that stands empty while summarised mail waits is the defect this "
+                + "replaced, and so is a tray full of month-old alerts");
+
+        // Two literals and the distance between them, not a regex. A pattern that has to
+        // escape a quote, a plus and a backslash to match a line of JavaScript is a pattern
+        // that fails for its own reasons -- this one did, on its first run.
+        // The class ASSIGNMENT, not the CSS rule for it. The first occurrence of the bare
+        // name is the stylesheet a few hundred lines earlier, which put the two literals
+        // half a file apart and failed a distance check that was measuring the wrong pair.
+        int lineAt = html.IndexOf("className = \"older-line\"", StringComparison.Ordinal);
+        int daysAt = html.IndexOf("\"den letzten \" + days", StringComparison.Ordinal);
+
+        Check("and the line says how far back the period reached",
+            lineAt >= 0 && daysAt > lineAt && daysAt - lineAt < 600,
+            "\"älter:\" with no number is a line nobody can check against the setting");
+
         Check("entries are built as text, not as markup",
             html.Contains("textContent", StringComparison.Ordinal)
                 && !Regex.IsMatch(html, @"innerHTML\s*="),

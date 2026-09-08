@@ -433,7 +433,13 @@ public sealed partial class VorzimmerWindow : Window
     /// given no id and no handle -- there is nothing for a document to do with an EntryID,
     /// and putting one in the payload would be handing out a key nobody there needs.
     /// </summary>
-    public sealed record DeskEntry(string Id, string Who, string When, string What, string Why);
+    /// <param name="Old">
+    /// Whether this fell outside the remembering period. Marked, not withheld: the trays
+    /// lead with what is fresh and reach further back only when they would otherwise stand
+    /// empty, and a row shown without saying it is three weeks old is a row that misleads.
+    /// </param>
+    public sealed record DeskEntry(
+        string Id, string Who, string When, string What, string Why, bool Old = false);
 
     /// <summary>
     /// camelCase, because the script reads <c>counts</c> and <c>takenAt</c>.

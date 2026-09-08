@@ -171,6 +171,23 @@ public sealed partial class PillWindow
 
             // The notification, before the page: it has to work whether or not anybody is
             // looking at the page, and the page is the case that needs it least.
+            // Fresh first, older only when nothing fresh is waiting.
+            //
+            // One query per tray does it: the newest four with that verdict over everything
+            // the store holds, each row knowing whether it falls inside the period. Newest
+            // first means the fresh ones lead by themselves, and a tray only reaches back
+            // when it would otherwise stand empty.
+            //
+            // Both of the earlier arrangements were wrong in opposite directions. Unbounded,
+            // the trays filled with month-old alerts whose reasons were paraphrased subject
+            // lines. Bounded hard, the summaries were finally worth reading and could not be
+            // seen at all -- two rows inside a fortnight against fifty-three in the store.
+            IReadOnlyList<VorzimmerWindow.DeskEntry> answers =
+                Judged(store, keeping, fresh, DeskVerdict.Answer);
+
+            IReadOnlyList<VorzimmerWindow.DeskEntry> notes =
+                Judged(store, keeping, fresh, DeskVerdict.Information);
+
             AnnounceChange(reading.Counts, tally);
 
             _vorzimmer?.Show(
@@ -178,13 +195,15 @@ public sealed partial class PillWindow
                 _deskBaseline,
                 window.Describe(),
                 tally,
-                Judged(store, fresh, DeskVerdict.Answer),
-                Judged(store, fresh, DeskVerdict.Information),
+                answers,
+                notes,
 
-                // How much is out of sight behind each tray, and how far the trays reach.
+                // What the four rows leave out, and where the line between fresh and older
+                // falls. A truncation count now, not an age count: the trays reach back on
+                // their own, so what is missing is simply everything past the fourth row.
                 new VorzimmerWindow.Backlog(
-                    Answer: Math.Max(0, tally.Answer - recent.Answer),
-                    Information: Math.Max(0, tally.Information - recent.Information),
+                    Answer: Math.Max(0, tally.Answer - answers.Count),
+                    Information: Math.Max(0, tally.Information - notes.Count),
                     Days: window.Days),
 
                 // The watcher's own settings, from the same clamped values the timer uses.
@@ -347,9 +366,15 @@ public sealed partial class PillWindow
     /// an answer to "does this need something from me". The verdict is a judgement about the
     /// contents, made once per message by the model and kept -- so this is a lookup.
     /// </summary>
+    /// <param name="since">How far back to look at all: everything the store keeps.</param>
+    /// <param name="fresh">
+    /// Where the period ends. Rows older than this are marked, not excluded -- the page
+    /// leads with what is fresh and reaches back only when a tray would stand empty.
+    /// </param>
     private static IReadOnlyList<VorzimmerWindow.DeskEntry> Judged(
         DeskStore? store,
         DateTime since,
+        DateTime fresh,
         DeskVerdict verdict)
     {
         if (store is null)
@@ -370,7 +395,11 @@ public sealed partial class PillWindow
                     : t.When.ToString("dd.MM. HH:mm", CultureInfo.CurrentCulture),
 
                 What: t.Subject,
-                Why: t.VerdictWhy ?? string.Empty))
+                Why: t.VerdictWhy ?? string.Empty,
+
+                // Marked rather than filtered. The rows are newest first, so the fresh ones
+                // lead and the page can draw a line before the first of these.
+                Old: t.When < fresh))
             .ToList();
     }
 

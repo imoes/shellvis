@@ -47,15 +47,43 @@ public static class TaskbarLayout
     /// <summary>Air left between the bar and whatever it sits beside.</summary>
     private const int Margin = 8;
 
+    /// <summary>What the strip turned out to be.</summary>
+    public enum StripState
+    {
+        /// <summary>
+        /// The taskbar could not be read: Explorer restarting, a UIA timeout, a shell that
+        /// no longer publishes its buttons. Nothing is known about where the icons are.
+        /// </summary>
+        Unreadable,
+
+        /// <summary>
+        /// It was read, and there is no run of free pixels wide enough. This is a FACT about
+        /// a taskbar with a lot on it, not a failure -- and the difference matters, because
+        /// the only safe thing to do with it is to stay off the strip.
+        /// </summary>
+        Full,
+
+        /// <summary>There is room, and <see cref="Placement.Where"/> is where.</summary>
+        Free,
+    }
+
+    /// <summary>Where the bar may go, and why.</summary>
+    /// <remarks>
+    /// <b>Two answers, not one nullable.</b> "Could not read the taskbar" and "the taskbar
+    /// is full" were both a null span, and the caller treated them the same: it fell back to
+    /// arithmetic -- so many pixels in from the right. On an unreadable taskbar that is the
+    /// best available guess. On a FULL one it is the worst possible answer, because the
+    /// pixels it picks are exactly the ones the icons are using. That is the report this
+    /// distinction exists for: "when there is not enough room in the taskbar, the panel
+    /// covers the icons again."
+    /// </remarks>
+    public readonly record struct Placement(StripState State, Span Where);
+
     /// <summary>
-    /// Somewhere on the strip that is free and at least <paramref name="needed"/> wide, or
-    /// null when the taskbar cannot be read.
-    ///
-    /// Null rather than a guess: the caller has a fallback that has been on screen for
-    /// months, and replacing a known-mediocre position with an invented one is not an
-    /// improvement.
+    /// Somewhere on the strip that is free and at least <paramref name="needed"/> wide.
     /// </summary>
-    public static Span? FindFreeSpan(int stripTop, int stripBottom, int stripLeft, int stripRight, int needed)
+    public static Placement FindRoom(
+        int stripTop, int stripBottom, int stripLeft, int stripRight, int needed)
     {
         List<Span> occupied;
 
@@ -68,18 +96,40 @@ public static class TaskbarLayout
             // Deliberately broad. This reaches into another process's UI tree through COM:
             // Explorer restarting mid-call, a UIA timeout and a shell update that renames a
             // class all surface differently, and none of them is a reason to fail to place a
-            // window. The fallback placement is right there.
-            return null;
+            // window.
+            return new Placement(StripState.Unreadable, default);
         }
 
+        return RoomIn(occupied, stripLeft, stripRight, needed);
+    }
+
+    /// <summary>
+    /// The same decision, over occupancy that is already measured.
+    /// </summary>
+    /// <remarks>
+    /// <b>Separated so the three outcomes can be checked without a taskbar.</b> Reading the
+    /// strip needs UI Automation against Explorer, so the live harness can only exercise
+    /// whatever the machine happens to look like -- and right now both of this machine's
+    /// taskbars have room, which means the interesting case is the one that cannot be
+    /// reached. It is also the case that was wrong: "could not read the strip" and "the
+    /// strip is full" were one null, and the caller's fallback is only right for the first.
+    /// </remarks>
+    public static Placement RoomIn(
+        IReadOnlyList<Span> occupied, int stripLeft, int stripRight, int needed)
+    {
+        ArgumentNullException.ThrowIfNull(occupied);
+
+        // A taskbar always has at least a Start button, so nothing found means the
+        // measurement failed rather than that the strip is empty. Treating it as empty is
+        // precisely how the bar came to sit on somebody's icons the first time.
         if (occupied.Count == 0)
-            return null;
+            return new Placement(StripState.Unreadable, default);
 
         // The gaps between what is occupied, in order.
         var gaps = new List<Span>();
         int cursor = stripLeft;
 
-        foreach (Span used in occupied)
+        foreach (Span used in occupied.OrderBy(u => u.Left))
         {
             if (used.Left - cursor >= needed + (2 * Margin))
                 gaps.Add(new Span(cursor, used.Left));
@@ -91,14 +141,16 @@ public static class TaskbarLayout
             gaps.Add(new Span(cursor, stripRight));
 
         if (gaps.Count == 0)
-            return null;
+            return new Placement(StripState.Full, default);
 
         // The first gap is the one before the leftmost element -- the stretch beside Start on
         // a centred taskbar. Taken when it fits, for the reason in the class comment: it is
         // the only free space that does not move when a window opens. Otherwise the widest.
-        return gaps[0].Left == stripLeft
-            ? gaps[0]
-            : gaps.OrderByDescending(g => g.Width).First();
+        return new Placement(
+            StripState.Free,
+            gaps[0].Left == stripLeft
+                ? gaps[0]
+                : gaps.OrderByDescending(g => g.Width).First());
     }
 
     /// <summary>

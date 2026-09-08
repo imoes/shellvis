@@ -407,6 +407,19 @@
     color: var(--ink-faint);
   }
 
+  /* The line between the desk and the pile beside it. A rule and a caption, not a
+     heading: what follows is the same kind of thing, only older. */
+  .tray ul.live > li.older-line {
+    font-family: var(--f-mono);
+    font-size: .62rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--rule-soft);
+    padding-top: .5rem;
+    margin-top: .25rem;
+  }
+
   /* The remembering period is a SETTING and lives in the settings, not here.
      It was a slider on this page first, and that was the wrong home: this page
      reports what is on the desk, and a control that changes behaviour sitting
@@ -785,31 +798,41 @@
       }
 
       var behind = older > 0
-        ? older + (older === 1 ? " älteres liegt noch da" : " ältere liegen noch da")
+        ? "und " + older + (older === 1 ? " weitere" : " weitere")
         : "";
 
       if (!rows || rows.length === 0) {
         var nothing = document.createElement("li");
         nothing.className = "empty";
-
-        /* An empty tray with a backlog behind it must not read as "nothing to do".
-         *
-         * The lists reach back as far as the remembering period and no further, because
-         * the alternative was a desk holding month-old server alerts that had long since
-         * resolved themselves. But a bound that shows nothing and says nothing is the same
-         * lie told the other way round -- so when there is something outside the window,
-         * the tray says how much. */
-        nothing.textContent = behind
-          ? "nichts aus " + (days ? "den letzten " + days + " Tagen" : "dem Zeitraum")
-              + " — " + behind
-          : "nichts davon";
-
+        nothing.textContent = "nichts davon";
         list.appendChild(nothing);
         return;
       }
 
+      var markedOlder = false;
+
       for (var i = 0; i < rows.length; i++) {
         var row = rows[i];
+
+        /* The line between what is on the desk and what has been lying there.
+         *
+         * The rows arrive newest first, so the first one outside the period is where the
+         * line goes. It is drawn rather than the older rows being dropped, because both
+         * of the alternatives were reported as defects: unbounded, the trays filled with
+         * month-old alerts; bounded hard, the trays stood empty while summarised mail
+         * waited three weeks back. Fresh leads, older follows, and says so. */
+        if (row.old && !markedOlder) {
+          markedOlder = true;
+
+          var line = document.createElement("li");
+          line.className = "older-line";
+          line.textContent = i === 0
+            ? "nichts aus " + (days ? "den letzten " + days + " Tagen" : "dem Zeitraum")
+                + " — älter:"
+            : "älter:";
+
+          list.appendChild(line);
+        }
 
         var item = document.createElement("li");
 
@@ -864,7 +887,7 @@
       if (behind) {
         var rest = document.createElement("li");
         rest.className = "empty";
-        rest.textContent = "und " + behind;
+        rest.textContent = behind;
         list.appendChild(rest);
       }
     }

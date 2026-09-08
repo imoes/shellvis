@@ -31,6 +31,8 @@ internal static class TaskbarProbe
         Console.WriteLine("=== Taskbar placement ===");
         Console.WriteLine();
 
+        int failures = Deciding();
+
         // Physical pixels throughout. The window is placed in physical pixels and UI
         // Automation reports physical pixels; converting anything here would only introduce
         // the DPI mistake this is meant to catch.
@@ -50,8 +52,6 @@ internal static class TaskbarProbe
 
         Console.WriteLine($"{screens.Count} monitor(s); the docked bar needs {needed}px at scale {scale:0.##}");
         Console.WriteLine();
-
-        int failures = 0;
 
         foreach ((RECT monitor, RECT work, bool primary) in screens)
         {
@@ -86,17 +86,35 @@ internal static class TaskbarProbe
                     ? $"{used.Count} occupied run(s), first at x {used[0].Left}..{used[0].Right}"
                     : "a taskbar always has a Start button; nothing found means nothing was read");
 
-            TaskbarLayout.Span? free = TaskbarLayout.FindFreeSpan(
+            TaskbarLayout.Placement room = TaskbarLayout.FindRoom(
                 stripTop, stripBottom, work.Left, work.Right, needed);
 
-            if (free is not { } span)
+            // Full is a legitimate answer and NOT a failure. A taskbar with a lot on it has
+            // no room, and the right response is to come off the strip -- which covers
+            // nothing. Counting that as a failure would push towards the one behaviour this
+            // file exists to prevent: taking the icons' pixels because there is nowhere
+            // else. What must never happen is falling back to arithmetic in this state.
+            if (room.State == TaskbarLayout.StripState.Full)
             {
-                failures += Check("a free span was found", false,
-                    "the bar would fall back to arithmetic, which is what covered the icons");
+                Console.WriteLine(
+                    $"   full   no run of {needed}px free; the bar rests ON the strip "
+                    + "instead of in it");
 
                 Console.WriteLine();
                 continue;
             }
+
+            if (room.State == TaskbarLayout.StripState.Unreadable)
+            {
+                failures += Check("the strip could be read", false,
+                    "unreadable is the one state where the bar falls back to arithmetic, "
+                        + "which is what covered the icons");
+
+                Console.WriteLine();
+                continue;
+            }
+
+            TaskbarLayout.Span span = room.Where;
 
             Console.WriteLine($"   free   x {span.Left}..{span.Right}  ({span.Width}px)");
 
@@ -124,6 +142,67 @@ internal static class TaskbarProbe
             : $"{failures} taskbar check(s) FAILED.");
 
         return failures == 0 ? 0 : 1;
+    }
+
+    /// <summary>
+    /// The three answers, decided over occupancy handed in rather than measured.
+    /// </summary>
+    /// <remarks>
+    /// <b>Because the interesting case cannot be produced on demand.</b> Everything below
+    /// this method examines the taskbars this machine actually has, and those have room
+    /// today -- so the state that was wrong, "read fine, and full", is exactly the one the
+    /// live section cannot reach. It was wrong because it shared a null with "could not read
+    /// the strip", whose fallback parks the bar at a fixed offset from the right: the very
+    /// pixels a full taskbar is using.
+    /// </remarks>
+    private static int Deciding()
+    {
+        Console.WriteLine("-- the three answers, over occupancy handed in --");
+
+        int failures = 0;
+
+        // A 1920 strip with a centred cluster: room on both sides.
+        List<TaskbarLayout.Span> centred =
+            [new(700, 1100), new(1600, 1900)];
+
+        TaskbarLayout.Placement free = TaskbarLayout.RoomIn(centred, 0, 1920, 348);
+
+        failures += Check("a strip with a gap reports Free",
+            free.State == TaskbarLayout.StripState.Free);
+
+        failures += Check("and the gap beside Start is the one taken",
+            free.Where.Left == 0,
+            "it is the only free run whose width does not change when a window opens");
+
+        // The same strip with enough open windows to fill it. Nothing 348 wide is left.
+        List<TaskbarLayout.Span> crowded =
+            [new(0, 300), new(320, 700), new(720, 1100), new(1120, 1500), new(1520, 1920)];
+
+        failures += Check("a strip with no room reports Full, not Unreadable",
+            TaskbarLayout.RoomIn(crowded, 0, 1920, 348).State == TaskbarLayout.StripState.Full,
+            "Full means come off the strip; Unreadable means fall back to arithmetic, "
+                + "which is what covered the icons");
+
+        // Nothing measured at all. A taskbar always has a Start button.
+        failures += Check("an empty measurement reports Unreadable",
+            TaskbarLayout.RoomIn([], 0, 1920, 348).State == TaskbarLayout.StripState.Unreadable,
+            "a strip that reads as empty is a strip the bar would sit in the middle of");
+
+        // Out of order, because UIA does not promise document order.
+        failures += Check("occupancy in any order gives the same answer",
+            TaskbarLayout.RoomIn([new(1600, 1900), new(700, 1100)], 0, 1920, 348)
+                is { State: TaskbarLayout.StripState.Free, Where.Left: 0 });
+
+        // The margin is load-bearing: a gap exactly as wide as the bar leaves it touching
+        // an icon on both sides, which reads as overlapping even when it is not.
+        failures += Check("a gap the exact width of the bar is not enough",
+            TaskbarLayout.RoomIn([new(0, 100), new(448, 1920)], 0, 1920, 348).State
+                == TaskbarLayout.StripState.Full,
+            "348px of gap for a 348px bar leaves no air on either side");
+
+        Console.WriteLine();
+
+        return failures;
     }
 
     private static int Check(string what, bool passed, string detail = "")

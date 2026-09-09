@@ -336,6 +336,56 @@ internal static class DeskProbe
             Check("and ANSWER is reserved for a person",
                 question.Contains("a PERSON is waiting", StringComparison.Ordinal));
 
+            // The summary is the one thing on a row that Shellvis writes, and a length cap
+            // is what decides whether it can say anything. Twelve words turned "koennten Sie
+            // das bitte einmal im Testsystem testen?" into four nouns lifted off the subject
+            // line, naming neither who asked nor what of whom.
+            Check("the summary is asked for as sentences, not keywords",
+                question.Contains("two complete sentences", StringComparison.Ordinal)
+                    && !question.Contains("twelve words", StringComparison.Ordinal),
+                "a word limit is what produced a pile of nouns instead of who wants what");
+
+            Check("and the whole message is to be read, not the subject",
+                question.Contains("Read the WHOLE message", StringComparison.Ordinal));
+
+            Check("a ticket notification has to say where the ticket stands",
+                question.Contains("the STATUS is part of the summary", StringComparison.Ordinal),
+                "a Jira mail whose summary omits the state has left out the point of it");
+
+            // A cap in the store would clip a sentence the prompt just asked for, which is
+            // the same defect one layer down and invisible on the page.
+            var longEnough = new[]
+            {
+                Mail(DeskObject.MakeId(DeskKind.Mail, "long@example.com"), "Test", now),
+            };
+
+            string sentence =
+                "Berger vom EDI-Team des Dienstleisters bittet Frau Adler, den neuen "
+                + "Signaturschluessel im Testsystem zu pruefen, damit er vor dem Wechsel "
+                + "am Montag bestaetigt ist.";
+
+            Check("a two-sentence summary survives being stored",
+                DeskTriage.Read($"1 | ANSWER | {sentence}", longEnough)
+                    [longEnough[0].Id].Why == sentence,
+                $"{sentence.Length} characters, and the cap was 120");
+
+            // The ticket key reaches the question, or the model cannot name the status it
+            // has just been told to name.
+            var ticketed = new[]
+            {
+                Mail(
+                    DeskObject.MakeId(DeskKind.Mail, "jira@example.com"),
+                    "IMIT-2443 packages",
+                    now,
+                    ticketKey: "IMIT-2443"),
+            };
+
+            Check("the ticket key is in the question when there is one",
+                DeskTriage.Ask(ticketed).Contains("ticket: IMIT-2443", StringComparison.Ordinal));
+
+            Check("and nothing is invented when there is not",
+                !DeskTriage.Ask(longEnough).Contains("ticket:", StringComparison.Ordinal));
+
             // The version is what carries a rule change back over mail that is already
             // judged. A change to the rules without a bump governs only future mail, and
             // the desk goes on being wrong in exactly the way the rule was written to fix.

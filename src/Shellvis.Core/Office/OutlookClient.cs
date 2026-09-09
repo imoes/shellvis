@@ -345,7 +345,7 @@ public sealed partial class OutlookClient(ComApartment apartment)
     /// </remarks>
     public Task<string> PreviewBodyAsync(
         string entryId,
-        int maxChars = 900,
+        int maxChars = 2400,
         CancellationToken cancellationToken = default)
     {
         return apartment.InvokeAsync(() =>

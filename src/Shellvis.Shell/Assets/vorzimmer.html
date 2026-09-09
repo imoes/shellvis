@@ -402,8 +402,13 @@
 
     /* It wraps, and it is allowed the room to. A summary of a mail is a sentence,
        not a label: clipped to one line it says "Zwischenmeldung eines Ticket-Al…"
-       and answers nothing. Three lines is enough for any sentence worth keeping
-       and short enough that four rows still fit in a tray without scrolling.
+       and answers nothing.
+
+       Four lines, matched to what the store keeps. The summary is now one or two
+       sentences of up to about forty words and is stored to 400 characters; at
+       the full width of a stacked tray a line holds roughly a hundred, so four
+       is the clamp that cannot cut a summary the store was willing to keep. It
+       was three, from when the prompt asked for twelve words.
 
        anywhere, because a ticket reference with no spaces in it is otherwise one
        unbreakable word as wide as it is long. */
@@ -411,7 +416,7 @@
     overflow-wrap: anywhere;
     display: -webkit-box;
     -webkit-box-orient: vertical;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 4;
     overflow: hidden;
   }
 

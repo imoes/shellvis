@@ -469,26 +469,61 @@ public sealed partial class PillWindow
                 .Select(o => o.Id)
                 .ToHashSet(StringComparer.Ordinal);
 
-            if (reading.Objects.Where(o => o.Kind == DeskKind.Mail).Select(o => o.When)
-                    is { } moments && stillUnread.Count > 0)
-            {
-                DateTime from = moments.Min();
-                int marked = store.MarkRead(stillUnread, from);
+            // AN EMPTY WALK IS TWO DIFFERENT THINGS, and treating them alike left the trays
+            // full of mail that had all been read.
+            //
+            // The guard here used to be "stillUnread.Count > 0", so a walk that found
+            // nothing skipped the marking entirely. That is right when the walk failed and
+            // catastrophic when it succeeded: read everything in the inbox and the pass
+            // finds no unread mail, marks nothing, and every row keeps the state it was
+            // first written with for three months. Reported exactly that way -- "die
+            // ungelesenen Mails sind jetzt alle gelesen aber verschwinden nicht".
+            //
+            // The folder's own UnReadItemCount tells the two apart. It is Outlook's number,
+            // not the walk's, so it is still trustworthy when the walk returned nothing.
+            int marked = 0;
+            string covered;
 
-                // Said out loud when it actually changes something, because this is the one
-                // write in the pass that can be wrong in a way nothing else would show: it
-                // decides that mail has been READ. Silent, it turned every recent row to
-                // read while the folder still reported eighty-five unread, and the page
-                // showed four zeroes with no hint of where they came from.
-                if (marked > 0)
-                {
-                    AddRow(
-                        GlyphTool,
-                        $"{stillUnread.Count} still unread back to {from:dd.MM. HH:mm}; "
-                            + $"marked {marked} row(s) read",
-                        "desk");
-                }
+            if (stillUnread.Count > 0)
+            {
+                // Bounded by what the scan actually covered. Beyond the oldest message it
+                // looked at, "not seen" is no evidence, and marking those read would hide
+                // mail that is genuinely waiting.
+                DateTime from = reading.Objects
+                    .Where(o => o.Kind == DeskKind.Mail)
+                    .Select(o => o.When)
+                    .Min();
+
+                marked = store.MarkRead(stillUnread, from);
+                covered = $"{stillUnread.Count} still unread back to {from:dd.MM. HH:mm}";
             }
+            else if (reading.Counts.Unread == 0)
+            {
+                // The inbox itself says there is nothing unread. Then everything the store
+                // still calls unread has been dealt with, however old, and the bound can be
+                // the whole retention horizon rather than a scan that found nothing to
+                // bound it with.
+                marked = store.MarkRead(
+                    new HashSet<string>(StringComparer.Ordinal),
+                    reading.Counts.TakenAt - store.Retention);
+
+                covered = "the inbox reports nothing unread";
+            }
+            else
+            {
+                // Outlook says there IS unread mail and the walk brought none back. That is
+                // a failed look, not an empty desk, and nothing is written on the strength
+                // of it.
+                covered = string.Empty;
+            }
+
+            // Said out loud when it actually changes something, because this is the one
+            // write in the pass that can be wrong in a way nothing else would show: it
+            // decides that mail has been READ. Silent, it turned every recent row to read
+            // while the folder still reported eighty-five unread, and the page showed four
+            // zeroes with no hint of where they came from.
+            if (marked > 0 && covered.Length > 0)
+                AddRow(GlyphTool, $"{covered}; marked {marked} row(s) read", "desk");
 
             store.Prune(reading.Counts.TakenAt);
         }

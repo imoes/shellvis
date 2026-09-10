@@ -84,6 +84,15 @@ internal static class TriageProbe
 
             owner = me.Address is { Length: > 0 } ? $"{me.Name} <{me.Address}>" : me.Name;
 
+            // Printed, because every ANSWER decision turns on it and "the desk knows whose
+            // it is" is a claim rather than an observation until somebody has seen the line
+            // the model is actually given. An empty address here means Outlook would not
+            // resolve the Exchange user, and the sorting is back to guessing who was asked.
+            Console.WriteLine(owner.Length > 0
+                ? $"this desk belongs to: {owner}"
+                : "WHOSE DESK IS UNKNOWN -- Outlook did not resolve the signed-in mailbox, "
+                    + "so the model cannot tell a request to this person from one to anybody else");
+
             foreach (DeskObject one in batch)
             {
                 if (one.EntryId is not { Length: > 0 } handle)

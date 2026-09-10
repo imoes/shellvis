@@ -233,6 +233,22 @@ internal static class DeskProbe
                 store.Get(oldId2)?.State == "unread",
                 "beyond the scan, not-seen is no evidence; marking it read would hide waiting mail");
 
+            // AN EMPTY UNREAD SET CLEARS THE LOT, given a bound to work over.
+            //
+            // This is what happens when somebody reads their whole inbox: the walk finds no
+            // unread mail, so there is nothing to exclude. The caller used to skip the
+            // marking entirely in that case and every row kept the state it was written
+            // with for three months -- "die ungelesenen Mails sind jetzt alle gelesen aber
+            // verschwinden nicht". The store has to do the obvious thing here, or the fix
+            // one layer up has nothing to stand on.
+            int cleared = store.MarkRead(
+                new HashSet<string>(StringComparer.Ordinal),
+                now.AddDays(-92));
+
+            Check("an empty unread set marks everything in range read",
+                store.Get(keepId)?.State == "read" && store.Get(oldId2)?.State == "read",
+                $"cleared {cleared}; this is the inbox somebody has just emptied");
+
             // --------------------------------------------------------------- triage
             //
             // The parsing is the part that fails silently. A model that renumbers the list,

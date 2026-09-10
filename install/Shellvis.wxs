@@ -177,15 +177,24 @@
     <Property Id="WHISPERMODEL" Value="medium" Secure="yes" />
 
     <!--
-      And the model is fetched as the last thing the installation does, from a tick box on
-      the final page. Ticked by default, because being asked which model to use and then
-      not getting it is the report this answers.
+      The model is fetched as the last thing the installation does, and NOT from a tick box.
+
+      There was one, ticked by default, on the final page. It asked a second time for a
+      consent the model page has already taken: that page offers five answers and one of
+      them is "None - use the Windows recogniser, download nothing". Asking again buys
+      nothing and adds a way to fail. It is also the step that demonstrably did not happen,
+      reported as "das Whisper wird nicht automatisch bei der Installation
+      runtergeladen", and unanswerable afterwards because the whole path leaves no trace:
+      the action, its condition and its ordering were all verified correct in the cached
+      package on the machine that reported it, and the model still was not there.
+
+      So the choice on the model page is the only question, and the fetch follows from it.
+      Nothing to tick, nothing to miss.
+
+      A silent install has no ExitDialog and therefore still fetches nothing; that is not a
+      regression and not a gap. The application fetches the model on first start and says so
+      in its console while it does, which is what actually delivered it on the machine above.
     -->
-    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT"
-              Value="Download the speech model now, so dictation works offline" />
-
-    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
-
     <!--
       AFTER the installation, not inside it, and the reason is whose profile it is.
       The model lands in %LOCALAPPDATA%\Shellvis\Models, which belongs to a person. A
@@ -197,9 +206,9 @@
       cannot explain itself, and a failure that would have to either roll the installation
       back or be swallowed. Detached, it is a console window that can be closed and retried,
       and the installation is complete either way.
-      The tick box is unconditional because MSI cannot cheaply express "a model was chosen
-      and is not already on disk". Shellvis.Setup decides that and says so, which is why
-      ticking it with the model already present costs one sentence rather than 1.5 GB.
+      "Already on disk" is not expressed here either, because MSI cannot cheaply express it.
+      Shellvis.Setup decides that and says so, which is why running with the model already
+      present costs one sentence rather than 1.5 GB.
     -->
     <CustomAction Id="FetchSpeechModel"
                   Directory="INSTALLFOLDER"
@@ -357,12 +366,19 @@
       <Publish Dialog="VerifyReadyDlg" Control="Back" Event="NewDialog" Value="WhisperDlg" Order="10" />
 
       <!--
-        Only on a fresh install, and only when the box is ticked. On a repair or an upgrade
-        the model is already there and the tool would say so, but asking at all would be
-        noise on a page nobody reads twice.
+        Conditioned on the answer the user actually gave, not on a second tick box.
+
+        WHISPERMODEL is what the model page sets, and "none" is one of its five answers, so
+        this reads the decision that was already made rather than asking for it again. The
+        comparison is case-insensitive (~=) because the property is also settable from a
+        command line, where nobody promises the case.
+
+        Fresh installs only. On a repair or an upgrade the model is already on disk and the
+        tool would say so, which is a console window opening to report that nothing needed
+        doing: noise, on a page nobody reads twice.
       -->
       <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="FetchSpeechModel"
-               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+               Condition="NOT Installed AND WHISPERMODEL AND NOT (WHISPERMODEL ~= &quot;none&quot;)" />
     </UI>
 
 

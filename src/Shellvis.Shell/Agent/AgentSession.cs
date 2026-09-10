@@ -615,9 +615,28 @@ internal sealed partial class AgentSession : IDisposable
             // Configuring a provider is a statement of intent to use it. Saving settings for
             // an endpoint and then continuing to talk to a different one is not a defensible
             // reading of that gesture.
-            string wanted = string.IsNullOrWhiteSpace(defaultModel)
-                ? resolved.DefaultModel
-                : defaultModel.Trim();
+            // A BLANK MODEL BOX MEANS UNCHANGED, which is what it means in every other box
+            // in that dialog and did not mean here.
+            //
+            // The box is deliberately empty when a provider is edited: its placeholder shows
+            // the inherited value without claiming it was set, so that pressing the button
+            // does not freeze a catalogue default into config.yaml. But this line then read
+            // the empty box as "use the catalogue default" and switched the session to it --
+            // so opening the provider dialog and pressing "Use this", changing nothing,
+            // replaced the model actually in force with a placeholder. For the private
+            // llama.cpp entry that placeholder was the string "laguna", which is the
+            // provider's own id and not a model at all; it is "local-model" now, which is no
+            // more real. Reported as "die LLM Modellauswahl ist nicht korrekt, es steht
+            // standardmaessig laguna als id", and that is exactly what it was.
+            //
+            // A new provider is the one case where keeping the current model would be wrong:
+            // it was chosen for a different endpoint, and this one has never been used. So
+            // the catalogue default is right THERE and nowhere else.
+            bool sameProvider = resolved.Id.Equals(Provider.Id, StringComparison.OrdinalIgnoreCase);
+
+            string wanted = defaultModel is { Length: > 0 } && defaultModel.Trim().Length > 0
+                ? defaultModel.Trim()
+                : sameProvider ? ModelName : resolved.DefaultModel;
 
             return $"saved settings for {resolved.DisplayName}. " + SetModel(resolved, wanted);
         }

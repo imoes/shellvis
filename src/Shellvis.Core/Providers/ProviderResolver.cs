@@ -86,6 +86,21 @@ public static class ProviderResolver
         return null;
     }
 
+    /// <summary>
+    /// Whether a configured default model is really the provider's own key.
+    /// </summary>
+    /// <remarks>
+    /// The one shape this rejects is <c>defaultModel</c> naming the provider it sits under.
+    /// Nothing legitimately does that: a provider key identifies an endpoint, a model name
+    /// identifies what answers on it, and the two coinciding is the signature of the value
+    /// the laguna entry used to ship. Anything else the file says is honoured, including a
+    /// model called "local-model", "gpt-4o" or whatever an internal server calls its weights.
+    /// </remarks>
+    private static bool ProviderKeyAsModel(ProviderProfile profile, string? configured) =>
+        configured is { Length: > 0 }
+        && profile.DefaultModel is { Length: > 0 }
+        && configured.Trim().Equals(profile.Id, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Overlay the fields the config actually set onto a built-in.</summary>
     private static ProviderProfile Apply(ProviderProfile profile, ProviderSection? section)
     {
@@ -110,7 +125,25 @@ public static class ProviderResolver
             // exactly as one typed into the dialog. The file keeps what the user wrote.
             BaseUrl = EndpointUrl.Normalise(section.BaseUrl) ?? profile.BaseUrl,
             ApiKeyEnvVar = Or(section.ApiKeyEnvVar, profile.ApiKeyEnvVar),
-            DefaultModel = Or(section.DefaultModel, profile.DefaultModel),
+
+            // A defaultModel equal to the provider's own id is the old bug written to disk,
+            // and it is ignored rather than honoured.
+            //
+            // The laguna entry shipped with DefaultModel "laguna" -- the provider key, which
+            // reads as a model name and is not one. The catalogue was corrected to
+            // "local-model", and that fixed nothing for anybody who had already run Shellvis:
+            // config.yaml keeps what it was given, the overlay below puts the file's value
+            // back on top of the catalogue's, and the dialog goes on offering "laguna" in a
+            // box labelled Model. A fix in code that a stale file silently undoes is not a
+            // fix, and this is the second report of it.
+            //
+            // Narrow on purpose. Only when the built-in HAS a default of its own, so a
+            // provider that exists only in config.yaml can still be told its model is called
+            // whatever its author called it.
+            DefaultModel = ProviderKeyAsModel(profile, section.DefaultModel)
+                ? profile.DefaultModel
+                : Or(section.DefaultModel, profile.DefaultModel),
+
             Transport = ParseTransport(section.Transport) ?? profile.Transport,
             RequiresKey = section.RequiresKey ?? profile.RequiresKey,
             Quirks = quirks,

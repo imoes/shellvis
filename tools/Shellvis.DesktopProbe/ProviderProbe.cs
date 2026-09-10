@@ -1,4 +1,5 @@
 using Microsoft.Extensions.AI;
+using Shellvis.Core.Config;
 using Shellvis.Core.Providers;
 
 namespace Shellvis.DesktopProbe;
@@ -88,6 +89,42 @@ internal static class ProviderProbe
         }
 
         failures += Check("every key-requiring entry names its variable", failures == 0);
+
+        // A default model must not be the provider's own id.
+        //
+        // The laguna entry shipped with DefaultModel "laguna" -- a provider key in a field
+        // that names weights. Harmless against llama.cpp, which ignores the field, and not
+        // harmless anywhere it is read as a name: it was shown in a box labelled Model, and
+        // the provider dialog switched the session to it whenever that box was left blank.
+        foreach (ProviderProfile profile in ProviderCatalog.Known)
+        {
+            if (profile.DefaultModel.Equals(profile.Id, StringComparison.OrdinalIgnoreCase))
+                failures += Check($"'{profile.Id}' does not name itself as its model", false);
+        }
+
+        failures += Check("no entry names itself as its default model", failures == 0);
+
+        // And a config file that still carries the old value is ignored rather than obeyed.
+        // Fixing the catalogue did nothing for anybody who had already run Shellvis: the
+        // file keeps what it was given and the overlay puts it back on top.
+        var stale = new ShellvisConfig();
+        stale.Providers["laguna"] = new ProviderSection { DefaultModel = "laguna" };
+
+        string? staleResolves = ProviderResolver.Find("laguna", stale)?.DefaultModel;
+
+        failures += Check(
+            $"a stale 'defaultModel: laguna' in config.yaml is not honoured "
+                + $"(resolves to '{staleResolves}')",
+            staleResolves is { Length: > 0 }
+                && !staleResolves.Equals("laguna", StringComparison.OrdinalIgnoreCase));
+
+        // The guard is narrow: anything that is not the provider's own key still wins.
+        var deliberate = new ShellvisConfig();
+        deliberate.Providers["laguna"] = new ProviderSection { DefaultModel = "qwen3-35b" };
+
+        failures += Check(
+            "and a real model name in the file still wins",
+            ProviderResolver.Find("laguna", deliberate)?.DefaultModel == "qwen3-35b");
 
         failures += Check(
             "the local entries need no key",

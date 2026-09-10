@@ -103,25 +103,57 @@ public sealed partial class PillWindow
             // stored during the walk because Body is the one expensive property on an
             // Outlook item: ten reads per pass, instead of two hundred for messages nobody
             // will ask about.
-            var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
+            var facing = new Dictionary<string, Shellvis.Core.Office.MailFacing>(
+                StringComparer.Ordinal);
 
             foreach (DeskObject one in batch)
             {
                 if (one.EntryId is not { Length: > 0 } handle)
                     continue;
 
-                string preview = await _session.Outlook
-                    .PreviewBodyAsync(handle)
+                Shellvis.Core.Office.MailFacing read = await _session.Outlook
+                    .ReadFacingAsync(handle)
                     .ConfigureAwait(true);
 
-                if (preview.Length > 0)
-                    bodies[one.Id] = preview;
+                if (read.Body.Length > 0 || read.To.Length > 0)
+                    facing[one.Id] = read;
             }
+
+            // How many of them fit in one question, now that none of them is truncated.
+            //
+            // A batch of ten short notifications and a batch of ten long threads are not the
+            // same question: the second can be a hundred thousand characters, which at this
+            // endpoint's speed is twenty minutes of prompt processing and a stream abandoned
+            // as stalled long before it. So the count gives way and the text does not.
+            int fits = DeskTriage.Fit(batch, facing);
+
+            if (fits < batch.Count)
+            {
+                batch = [.. batch.Take(fits)];
+
+                AddRow(
+                    GlyphTool,
+                    $"reading {fits} of them in this pass: their threads are long, and the "
+                        + "whole of each one goes to the model rather than an opening",
+                    "desk");
+            }
+
+            // Whose desk this is. Without it the model reads "X bittet Frau Y, das zu
+            // bestaetigen" as a request and cannot tell that Frau Y is somebody else --
+            // which put three messages from one thread under "braucht eine Antwort" when
+            // this mailbox was only on cc.
+            Shellvis.Core.Office.OutlookClient.Mailbox me = await _session.Outlook
+                .OwnMailboxAsync()
+                .ConfigureAwait(true);
+
+            string owner = me.Address is { Length: > 0 }
+                ? $"{me.Name} <{me.Address}>"
+                : me.Name;
 
             var answer = new System.Text.StringBuilder();
 
             await _session.AskAsideAsync(
-                DeskTriage.Ask(batch, bodies),
+                DeskTriage.Ask(batch, facing, owner),
                 agentEvent =>
                 {
                     // Nothing is rendered. This is not a conversation and its answer is a

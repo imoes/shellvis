@@ -68,31 +68,50 @@ internal static class TriageProbe
                 + $"judged under rules older than {DeskTriage.RulesVersion}"
             : $"{batch.Count} unjudged, oldest {batch[^1].When:dd.MM. HH:mm}");
 
-        var bodies = new Dictionary<string, string>(StringComparer.Ordinal);
+        var facing = new Dictionary<string, Shellvis.Core.Office.MailFacing>(StringComparer.Ordinal);
+        string owner = string.Empty;
 
         if (withBodies)
         {
             // The same fetch the application does, and the same reason: without the text the
-            // model can only paraphrase the subject, which is what "die Tickets werden nicht
-            // zusammengefasst" was about.
+            // model can only paraphrase the subject, and without the addressing it cannot
+            // tell a request put to this desk from one it is merely copied on.
             using var apartment = new Shellvis.Core.Office.ComApartment();
             var outlook = new Shellvis.Core.Office.OutlookClient(apartment);
+
+            Shellvis.Core.Office.OutlookClient.Mailbox me =
+                await outlook.OwnMailboxAsync().ConfigureAwait(false);
+
+            owner = me.Address is { Length: > 0 } ? $"{me.Name} <{me.Address}>" : me.Name;
 
             foreach (DeskObject one in batch)
             {
                 if (one.EntryId is not { Length: > 0 } handle)
                     continue;
 
-                string preview = await outlook.PreviewBodyAsync(handle).ConfigureAwait(false);
+                Shellvis.Core.Office.MailFacing read =
+                    await outlook.ReadFacingAsync(handle).ConfigureAwait(false);
 
-                if (preview.Length > 0)
-                    bodies[one.Id] = preview;
+                if (read.Body.Length > 0 || read.To.Length > 0)
+                    facing[one.Id] = read;
             }
 
-            Console.WriteLine($"{bodies.Count} of them still had a body to read");
+            Console.WriteLine($"{facing.Count} of them still had text to read");
+
+            int fits = DeskTriage.Fit(batch, facing);
+
+            if (fits < batch.Count)
+            {
+                Console.WriteLine(
+                    $"{fits} of {batch.Count} fit in one question; the rest wait for the next "
+                    + "pass, because no message is truncated");
+
+                batch = [.. batch.Take(fits)];
+            }
         }
 
-        string prompt = DeskTriage.Ask(batch, bodies.Count > 0 ? bodies : null);
+        string prompt = DeskTriage.Ask(
+            batch, facing.Count > 0 ? facing : null, owner.Length > 0 ? owner : null);
 
         // Characters, not tokens, because nothing here can tokenise -- but the ratio is
         // stable enough to say whether a prompt is a page or a book.

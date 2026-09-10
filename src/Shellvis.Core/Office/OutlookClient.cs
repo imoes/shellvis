@@ -32,6 +32,22 @@ public sealed record MailSummary(
     }
 }
 
+/// <summary>
+/// One message as the sorting needs to see it: who it is addressed to, and what it says.
+/// </summary>
+/// <remarks>
+/// Top level rather than nested in <see cref="OutlookClient"/>, beside MailSummary and for
+/// the same reason: the desk builds its question out of this and has no business naming a
+/// mail client to do it.
+/// </remarks>
+/// <param name="To">The To line, verbatim. Empty when Outlook will not say.</param>
+/// <param name="Cc">
+/// The Cc line, which is the half that decides whether a request is aimed at this desk or
+/// merely visible from it.
+/// </param>
+/// <param name="Body">The message text, whole.</param>
+public sealed record MailFacing(string To, string Cc, string Body);
+
 /// <summary>A calendar entry.</summary>
 /// <param name="EntryId">
 /// Outlook's id for this entry, so a later call can act on it. Empty for an occurrence of a
@@ -343,9 +359,29 @@ public sealed partial class OutlookClient(ComApartment apartment)
     /// An id that no longer resolves yields an empty string. A message moved or deleted
     /// between the walk and the sorting is ordinary, not an error.
     /// </remarks>
-    public Task<string> PreviewBodyAsync(
+    /// <summary>
+    /// Read one message's addressing and text together.
+    /// </summary>
+    /// <remarks>
+    /// <b>The addressing is not a detail; it is the question.</b> Sorting asks whether
+    /// somebody is waiting for a reply FROM THE PERSON WHOSE DESK THIS IS, and a mail that
+    /// contains a request answers that only together with who the request was put to. Three
+    /// messages in one thread were filed under "braucht eine Antwort" when the thread was
+    /// two other people arranging something between themselves with this mailbox copied in.
+    ///
+    /// One COM trip for all three, because each property access is a call across a process
+    /// boundary and the message is already open.
+    /// </remarks>
+    /// <param name="maxChars">
+    /// A ceiling on the text, or 0 for none. Zero is the default and is the instruction:
+    /// "die KI soll den gesamten Mailverlauf lesen, ohne irgendwelche Token-Limits". A reply
+    /// carries the thread quoted beneath it, so the whole body IS the history, and a cap of
+    /// any size cuts it off at the point where the earlier exchange begins -- which is
+    /// exactly the part that says who owes whom an answer.
+    /// </param>
+    public Task<MailFacing> ReadFacingAsync(
         string entryId,
-        int maxChars = 2400,
+        int maxChars = 0,
         CancellationToken cancellationToken = default)
     {
         return apartment.InvokeAsync(() =>
@@ -364,15 +400,22 @@ public sealed partial class OutlookClient(ComApartment apartment)
                 session = outlook.Session;
                 item = session.GetItemFromID(entryId);
 
+                // Read before the early return below: a notification with no body still has
+                // a To line, and the To line is what says whether anybody is asking THIS
+                // desk for anything.
+                string to = Str(() => item.To);
+                string cc = Str(() => item.CC);
+
                 string body = Str(() => item.Body);
 
                 if (body.Length == 0)
-                    return string.Empty;
+                    return new MailFacing(to, cc, string.Empty);
 
                 // Blank lines and runs of spaces come from HTML converted to text and carry
                 // nothing. Removed here rather than left to the model, which pays for them
-                // by the token.
-                var tidy = new StringBuilder(Math.Min(body.Length, maxChars + 64));
+                // by the token. This is the only thing dropped: it removes whitespace, never
+                // a word, so the whole exchange still arrives.
+                var tidy = new StringBuilder(body.Length);
 
                 foreach (string line in body.ReplaceLineEndings("\n").Split('\n'))
                 {
@@ -383,19 +426,20 @@ public sealed partial class OutlookClient(ComApartment apartment)
 
                     tidy.Append(trimmed).Append('\n');
 
-                    if (tidy.Length >= maxChars)
+                    if (maxChars > 0 && tidy.Length >= maxChars)
                         break;
                 }
 
-                string preview = tidy.ToString().TrimEnd();
+                string text = tidy.ToString().TrimEnd();
 
-                return preview.Length > maxChars ? preview[..maxChars] : preview;
+                return new MailFacing(
+                    to, cc, maxChars > 0 && text.Length > maxChars ? text[..maxChars] : text);
             }
             catch (Exception)
             {
                 // A vanished id, a message in a store that is offline, a corrupted item.
                 // None of them is worth failing a sorting pass over.
-                return string.Empty;
+                return new MailFacing(string.Empty, string.Empty, string.Empty);
             }
             finally
             {

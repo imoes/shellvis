@@ -386,6 +386,63 @@ internal static class DeskProbe
             Check("and nothing is invented when there is not",
                 !DeskTriage.Ask(longEnough).Contains("ticket:", StringComparison.Ordinal));
 
+            // ------------------------------------------ whose desk, and who was asked
+            //
+            // Three messages from one thread landed under "braucht eine Antwort" while two
+            // other people arranged something between themselves with this mailbox on cc.
+            // The prompt never said who was reading, so "X bittet Frau Y, das zu
+            // bestaetigen" was a request and could not be anything else.
+            string addressed = DeskTriage.Ask(
+                longEnough,
+                new Dictionary<string, Shellvis.Core.Office.MailFacing>(StringComparer.Ordinal)
+                {
+                    [longEnough[0].Id] = new(
+                        To: "Adler, Gudrun <adler@example.com>",
+                        Cc: "Kern, J <kern@example.com>",
+                        Body: "Koennten Sie das bitte bestaetigen?"),
+                },
+                owner: "Kern, J <kern@example.com>");
+
+            Check("the question says whose desk it is",
+                addressed.Contains("This desk belongs to: Kern, J", StringComparison.Ordinal),
+                "without it, a request to somebody else is indistinguishable from one to you");
+
+            Check("and shows who the message was addressed to",
+                addressed.Contains("to:   Adler, Gudrun", StringComparison.Ordinal)
+                    && addressed.Contains("cc:   Kern, J", StringComparison.Ordinal));
+
+            // Matched on a fragment that cannot be split by the raw string's line wrapping.
+            // The full sentence spans two lines in the prompt, so searching for it whole
+            // failed against a rule that was present and correct.
+            Check("being copied is named as not being asked",
+                addressed.Contains("Being copied is not", StringComparison.Ordinal)
+                    && addressed.Contains("ASKED OF SOMEBODY ELSE", StringComparison.Ordinal));
+
+            // The body is not clipped. Two caps have been tried and both cut the thread off
+            // where the earlier exchange begins, which is the part that says who owes whom.
+            string longThread = new('x', 12_000);
+
+            string whole = DeskTriage.Ask(
+                longEnough,
+                new Dictionary<string, Shellvis.Core.Office.MailFacing>(StringComparer.Ordinal)
+                {
+                    [longEnough[0].Id] = new(To: "", Cc: "", Body: longThread),
+                });
+
+            Check("a long thread reaches the model whole",
+                whole.Contains(longThread, StringComparison.Ordinal),
+                "\"ohne irgendwelche Token-Limits\" -- 900 and 2,400 were both tried");
+
+            Check("and the separator is still neutralised",
+                !DeskTriage.Ask(
+                    longEnough,
+                    new Dictionary<string, Shellvis.Core.Office.MailFacing>(StringComparer.Ordinal)
+                    {
+                        [longEnough[0].Id] = new(To: "", Cc: "", Body: "a | b\nc"),
+                    })
+                    .Contains("a | b", StringComparison.Ordinal),
+                "a pipe or a newline in a body would break the numbered list apart");
+
             // The version is what carries a rule change back over mail that is already
             // judged. A change to the rules without a bump governs only future mail, and
             // the desk goes on being wrong in exactly the way the rule was written to fix.

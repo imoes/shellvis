@@ -482,39 +482,46 @@ public sealed partial class PillWindow
             // The folder's own UnReadItemCount tells the two apart. It is Outlook's number,
             // not the walk's, so it is still trustworthy when the walk returned nothing.
             int marked = 0;
-            string covered;
+            string covered = string.Empty;
 
-            if (stillUnread.Count > 0)
+            // Outlook says there IS unread mail and the walk brought none back. A failed
+            // look, not an empty desk -- Restrict matching nothing silently is a failure
+            // mode this project has met before -- and nothing is written on the strength
+            // of it.
+            bool lookFailed = stillUnread.Count == 0 && reading.Counts.Unread > 0;
+
+            if (!lookFailed)
             {
-                // Bounded by what the scan actually covered. Beyond the oldest message it
-                // looked at, "not seen" is no evidence, and marking those read would hide
-                // mail that is genuinely waiting.
-                DateTime from = reading.Objects
-                    .Where(o => o.Kind == DeskKind.Mail)
-                    .Select(o => o.When)
-                    .Min();
+                // WHETHER THE WALK WAS CAPPED IS THE WHOLE QUESTION, and the bound used to
+                // be tied to the wrong measurement.
+                //
+                // It was the oldest message still unread. That is right only when the walk
+                // stopped at its limit: then coverage genuinely ends there and older rows
+                // cannot be proved read. When the walk ran out of unread mail first it saw
+                // EVERY unread message in the folder, and "not in the set" is conclusive at
+                // any age.
+                //
+                // Measured on the machine that reported this: Outlook held 4 unread, the
+                // walk looked at 4 of a possible 200 and returned all four, the oldest of
+                // them from 15:01 that afternoon -- and the store went on calling 57 rows
+                // unread because 53 of them were older than 15:01. Every one had been read.
+                // The trays kept them for what would have been three months.
+                bool capped = reading.Counts.Scanned >= OutlookClient.DeskScan;
+
+                DateTime from = capped
+                    ? reading.Objects
+                        .Where(o => o.Kind == DeskKind.Mail)
+                        .Select(o => o.When)
+                        .DefaultIfEmpty(reading.Counts.TakenAt)
+                        .Min()
+                    : reading.Counts.TakenAt - store.Retention;
 
                 marked = store.MarkRead(stillUnread, from);
-                covered = $"{stillUnread.Count} still unread back to {from:dd.MM. HH:mm}";
-            }
-            else if (reading.Counts.Unread == 0)
-            {
-                // The inbox itself says there is nothing unread. Then everything the store
-                // still calls unread has been dealt with, however old, and the bound can be
-                // the whole retention horizon rather than a scan that found nothing to
-                // bound it with.
-                marked = store.MarkRead(
-                    new HashSet<string>(StringComparer.Ordinal),
-                    reading.Counts.TakenAt - store.Retention);
 
-                covered = "the inbox reports nothing unread";
-            }
-            else
-            {
-                // Outlook says there IS unread mail and the walk brought none back. That is
-                // a failed look, not an empty desk, and nothing is written on the strength
-                // of it.
-                covered = string.Empty;
+                covered = capped
+                    ? $"{stillUnread.Count} still unread, scan capped at {reading.Counts.Scanned} "
+                        + $"back to {from:dd.MM. HH:mm}"
+                    : $"the walk saw all {stillUnread.Count} unread message(s) there are";
             }
 
             // Said out loud when it actually changes something, because this is the one

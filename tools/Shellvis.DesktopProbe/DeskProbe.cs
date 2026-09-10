@@ -249,6 +249,34 @@ internal static class DeskProbe
                 store.Get(keepId)?.State == "read" && store.Get(oldId2)?.State == "read",
                 $"cleared {cleared}; this is the inbox somebody has just emptied");
 
+            // THE BOUND IS THE WHOLE QUESTION, and it was tied to the wrong measurement.
+            //
+            // Read the old mail and leave one new message unread, and "the oldest still
+            // unread" is a recent timestamp -- so every row below it is untouched however
+            // thoroughly it has been read. Measured on the machine that reported it:
+            // Outlook held 4 unread from 15:01 onwards, the store went on calling 57 rows
+            // unread, and 53 of them had been read that morning.
+            //
+            // An uncapped walk enumerated EVERY unread message, so the bound then has to be
+            // the retention horizon and not the newest thing it happened to find.
+            string readThisMorning = DeskObject.MakeId(DeskKind.Mail, "morning@example.com");
+            string unreadJustNow = DeskObject.MakeId(DeskKind.Mail, "justnow@example.com");
+
+            store.See(Mail(readThisMorning, "heute frueh gelesen", now.AddHours(-6)));
+            store.See(Mail(unreadJustNow, "gerade eingetroffen", now));
+
+            // The bound an UNCAPPED walk should use: everything the store keeps.
+            int sweep = store.MarkRead(
+                new HashSet<string>(new[] { unreadJustNow }, StringComparer.Ordinal),
+                now.AddDays(-92));
+
+            Check("mail read BEFORE the oldest unread one is still cleared",
+                store.Get(readThisMorning)?.State == "read",
+                $"swept {sweep}; the bound must be the retention horizon, not 'oldest unread'");
+
+            Check("and the one that is genuinely unread survives it",
+                store.Get(unreadJustNow)?.State == "unread");
+
             // --------------------------------------------------------------- triage
             //
             // The parsing is the part that fails silently. A model that renumbers the list,

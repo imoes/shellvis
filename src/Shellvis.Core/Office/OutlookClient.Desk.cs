@@ -29,7 +29,13 @@ public sealed partial class OutlookClient
     /// on a timer. Two hundred is the recent end of the pile, which is the part a desk is
     /// about; the snapshot reports how many it actually looked at so the page can say so.
     /// </remarks>
-    private const int DeskScan = 200;
+    /// <remarks>
+    /// Public because the caller has to know whether a walk was CAPPED, and that is this
+    /// number compared against <see cref="DeskSnapshot.Scanned"/>. A walk that stopped short
+    /// of it enumerated every unread message in the folder, which is what makes "not in the
+    /// set" mean "has been read" rather than meaning nothing.
+    /// </remarks>
+    public const int DeskScan = 200;
 
     /// <summary>
     /// Count what is on the desk: unread mail by kind, what starts today, what is late.

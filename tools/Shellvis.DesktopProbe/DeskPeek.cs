@@ -44,6 +44,63 @@ internal static class DeskPeek
         // which is how a rule change reaches mail that is already on the desk.
         Console.WriteLine($"\nsorting rules are at version {DeskTriage.RulesVersion}");
 
+        // WHAT THE FOLDER SAYS, beside what the store believes.
+        //
+        // The two disagreeing is the single most useful fact when a tray will not empty,
+        // and it has been needed three times now -- each time reasoned about rather than
+        // looked at, because nothing printed it. The store's "unread" is a belief written
+        // during a walk; the folder's is Outlook's own count. Whether the walk hit its cap
+        // decides whether "not seen" means "has been read" or means nothing at all.
+        if (Shellvis.Core.Office.OutlookClient.IsAvailable)
+        {
+            try
+            {
+                using var apartment = new Shellvis.Core.Office.ComApartment();
+                var outlook = new Shellvis.Core.Office.OutlookClient(apartment);
+
+                Shellvis.Core.Office.DeskReading look =
+                    outlook.TakeSnapshotAsync(DateTime.Now).GetAwaiter().GetResult();
+
+                var unreadMail = look.Objects
+                    .Where(o => o.Kind == DeskKind.Mail)
+                    .ToList();
+
+                Console.WriteLine();
+                Console.WriteLine("-- what Outlook says right now --");
+                Console.WriteLine($"   folder reports {look.Counts.Unread} unread");
+                Console.WriteLine($"   the walk looked at {look.Counts.Scanned} and returned "
+                    + $"{unreadMail.Count} unread mail item(s)");
+
+                if (unreadMail.Count > 0)
+                {
+                    Console.WriteLine(
+                        $"   oldest still unread: {unreadMail.Min(o => o.When):dd.MM. HH:mm}");
+                }
+
+                // The line that answers "why will this tray not empty".
+                bool capped = look.Counts.Scanned >= 200;
+
+                Console.WriteLine(capped
+                    ? "   THE WALK HIT ITS CAP, so rows older than the oldest above cannot be "
+                        + "proved read and are left alone"
+                    : "   the walk saw every unread message, so anything the store still "
+                        + "calls unread has been read");
+
+                int believes = store.Tally(DateTime.Now - store.Retention).Total;
+
+                if (believes != unreadMail.Count)
+                {
+                    Console.WriteLine(
+                        $"   MISMATCH: the store believes {believes} unread, Outlook returned "
+                        + $"{unreadMail.Count}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"\n   could not look at Outlook: {ex.Message}");
+            }
+        }
+
         Console.WriteLine();
         Console.WriteLine("-- the newest mail rows, whatever their state --");
 

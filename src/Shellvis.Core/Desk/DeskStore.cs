@@ -378,6 +378,12 @@ public sealed class DeskStore : IDisposable
     /// the candidates it was shown; null clears it. Overwritten with the verdict, because
     /// it is part of the verdict.
     /// </param>
+    /// <param name="digest">
+    /// The long form written in the same call as the verdict, when the pass produced one.
+    /// Null leaves whatever long form the row has -- a re-read that came back without the
+    /// four blocks must not erase the ones from last time.
+    /// </param>
+    /// <param name="digestMessages">How many messages of the thread that long form covered.</param>
     public void Judge(
         string id,
         DeskVerdict verdict,
@@ -385,7 +391,9 @@ public sealed class DeskStore : IDisposable
         DateTime when,
         bool sawBody = false,
         int rules = 0,
-        string? related = null)
+        string? related = null,
+        string? digest = null,
+        int digestMessages = 0)
     {
         using SqliteCommand command = _connection.CreateCommand();
 
@@ -396,7 +404,10 @@ public sealed class DeskStore : IDisposable
                 verdict_at = $at,
                 verdict_body = $body,
                 verdict_rules = $rules,
-                related = $related
+                related = $related,
+                digest = coalesce($digest, digest),
+                digest_messages = CASE WHEN $digest IS NULL THEN digest_messages ELSE $messages END,
+                digest_at = CASE WHEN $digest IS NULL THEN digest_at ELSE $at END
             WHERE id = $id;
             """;
 
@@ -407,6 +418,8 @@ public sealed class DeskStore : IDisposable
         command.Parameters.AddWithValue("$body", sawBody ? 1 : 0);
         command.Parameters.AddWithValue("$rules", rules);
         command.Parameters.AddWithValue("$related", related is { Length: > 0 } ? related : DBNull.Value);
+        command.Parameters.AddWithValue("$digest", digest is { Length: > 0 } ? digest.Trim() : DBNull.Value);
+        command.Parameters.AddWithValue("$messages", digestMessages);
 
         command.ExecuteNonQuery();
     }

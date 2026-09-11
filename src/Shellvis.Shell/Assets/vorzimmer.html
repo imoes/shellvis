@@ -1282,6 +1282,17 @@
         var wrapped = entry(open, row.id);
         item.appendChild(wrapped);
 
+        /* The long form arrives WITH the row when the analysis wrote both parts in one
+         * call, and is put in place folded, so the chevron opens it at once. A row judged
+         * before that has none, and pressing the chevron asks for it -- the only case
+         * left that ever says "reading the conversation". */
+        if (wrapped.long && row.digest) {
+          wrapped.long.setAttribute("data-state", "ready");
+          wrapped.long.querySelector(".long-text").textContent = row.digest;
+          wrapped.long.querySelector(".long-note").textContent = row.digestNote || "";
+          wrapped.long.querySelector(".reread").hidden = false;
+        }
+
         /* The earlier thing the sorting tied this to: the same request made before, the
          * mail that confirmed the order this one asks about. Its own button under the row,
          * because a button cannot sit inside a button and because it opens a DIFFERENT

@@ -119,6 +119,70 @@ public sealed partial class PillWindow
                     facing[one.Id] = read;
             }
 
+            // The rest of each thread, for the long form: who wrote when, and the text of
+            // what was written FROM this desk. The incoming body quotes what others said;
+            // the owner's own replies sit in the sent folder and nowhere in it, and a long
+            // form that does not know they replied on Tuesday tells them to reply on
+            // Thursday. Own replies are read to a bound; the others need only their heads.
+            var conversation = new Dictionary<string, IReadOnlyList<DeskTriage.ThreadMessage>>(
+                StringComparer.Ordinal);
+
+            Shellvis.Core.Office.OutlookClient.Mailbox me = await _session.Outlook
+                .OwnMailboxAsync()
+                .ConfigureAwait(true);
+
+            foreach (DeskObject one in batch)
+            {
+                if (one.EntryId is not { Length: > 0 } handle)
+                    continue;
+
+                try
+                {
+                    IReadOnlyList<Shellvis.Core.Office.MailSummary> heads = await _session.Outlook
+                        .ReadThreadAsync(handle, DeskTriage.DigestMessages)
+                        .ConfigureAwait(true);
+
+                    var thread = new List<DeskTriage.ThreadMessage>();
+
+                    foreach (Shellvis.Core.Office.MailSummary head in heads)
+                    {
+                        if (head.EntryId == handle)
+                            continue;
+
+                        bool own = me.Address is { Length: > 0 } mine
+                            && (head.SenderAddress.Equals(mine, StringComparison.OrdinalIgnoreCase)
+                                || head.From.Contains(me.Name, StringComparison.OrdinalIgnoreCase));
+
+                        string body = string.Empty;
+
+                        if (own)
+                        {
+                            try
+                            {
+                                body = (await _session.Outlook
+                                    .ReadFacingAsync(head.EntryId, maxChars: 3_000)
+                                    .ConfigureAwait(true)).Body;
+                            }
+                            catch (Exception)
+                            {
+                                // A reply that will not open costs its text, not the thread.
+                            }
+                        }
+
+                        thread.Add(new DeskTriage.ThreadMessage(head.From, head.Received, head.Subject, body, own));
+                    }
+
+                    if (thread.Count > 0)
+                        conversation[one.Id] = thread;
+                }
+                catch (Exception ex)
+                {
+                    // The thread is context for the long form; the message itself is still
+                    // judged from its own body, which quotes most of it anyway.
+                    AddRow(GlyphWarning, $"could not read the thread of '{one.Subject}': {ex.Message}", "desk", isWarning: true);
+                }
+            }
+
             // How many of them fit in one question, now that none of them is truncated.
             //
             // A batch of ten short notifications and a batch of ten long threads are not the
@@ -142,10 +206,6 @@ public sealed partial class PillWindow
             // bestaetigen" as a request and cannot tell that Frau Y is somebody else --
             // which put three messages from one thread under "braucht eine Antwort" when
             // this mailbox was only on cc.
-            Shellvis.Core.Office.OutlookClient.Mailbox me = await _session.Outlook
-                .OwnMailboxAsync()
-                .ConfigureAwait(true);
-
             string owner = me.Address is { Length: > 0 }
                 ? $"{me.Name} <{me.Address}>"
                 : me.Name;
@@ -191,7 +251,7 @@ public sealed partial class PillWindow
             var answer = new System.Text.StringBuilder();
 
             await _session.AskAsideAsync(
-                DeskTriage.Ask(batch, facing, owner, earlier),
+                DeskTriage.Ask(batch, facing, owner, earlier, conversation),
                 agentEvent =>
                 {
                     // Nothing is rendered. This is not a conversation and its answer is a
@@ -218,11 +278,17 @@ public sealed partial class PillWindow
             // re-read on every pass, for ever.
             foreach ((string id, DeskTriage.Judgement judged) in verdicts)
             {
+                // The long form covered the message itself plus what the thread listing
+                // returned, which is the count a later opening compares against.
+                int covered = 1 + (conversation.TryGetValue(id, out IReadOnlyList<DeskTriage.ThreadMessage>? t) ? t.Count : 0);
+
                 store.Judge(
                     id, judged.Verdict, judged.Why, DateTime.Now,
                     sawBody: true,
                     rules: DeskTriage.RulesVersion,
-                    related: judged.Related);
+                    related: judged.Related,
+                    digest: judged.Digest,
+                    digestMessages: covered);
             }
 
             // Said plainly, including when it comes to nothing. A pass that read no verdicts
@@ -345,9 +411,11 @@ public sealed partial class PillWindow
         int information = verdicts.Values.Count(v => v.Verdict == DeskVerdict.Information);
         int ignore = verdicts.Values.Count(v => v.Verdict == DeskVerdict.Ignore);
         int related = verdicts.Values.Count(v => v.Related is not null);
+        int digested = verdicts.Values.Count(v => v.Digest is { Length: > 0 });
 
         return $"sorted {verdicts.Count}: {answer} need an answer, "
             + $"{information} to know about, {ignore} not worth reading"
-            + (related > 0 ? $", {related} tied to something the desk already held" : string.Empty);
+            + (related > 0 ? $", {related} tied to something the desk already held" : string.Empty)
+            + (digested < verdicts.Count ? $", {verdicts.Count - digested} without a long form" : string.Empty);
     }
 }

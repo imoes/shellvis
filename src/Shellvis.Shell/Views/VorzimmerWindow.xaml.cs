@@ -584,6 +584,12 @@ public sealed partial class VorzimmerWindow : Window
     /// 4711 bestaetigt". The date is the point -- the summary says "am 03.09." and this is
     /// where that date can be followed.
     /// </param>
+    /// <param name="Digest">
+    /// The long form, written in the same call as the sentence and kept on the row, so the
+    /// chevron shows it at once. Null on a row judged before the analysis had two parts;
+    /// the page then asks for it when the row is opened.
+    /// </param>
+    /// <param name="DigestNote">Small print under it: how many messages it covered.</param>
     public sealed record DeskEntry(
         string Id,
         string Who,
@@ -592,7 +598,9 @@ public sealed partial class VorzimmerWindow : Window
         string Why,
         bool Old = false,
         string? RelatedId = null,
-        string? RelatedLabel = null);
+        string? RelatedLabel = null,
+        string? Digest = null,
+        string? DigestNote = null);
 
     /// <summary>
     /// One appointment of the day, as the page lists it: the time, the title, the room, and a

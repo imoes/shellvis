@@ -1159,7 +1159,13 @@ public sealed partial class PillWindow
                         : Words.SeeAlso
                             + tied.When.ToString("dd.MM.yyyy", CultureInfo.CurrentCulture)
                             + " · "
-                            + (tied.Subject is { Length: > 0 } about ? about : KindWord(tied.Kind)));
+                            + (tied.Subject is { Length: > 0 } about ? about : KindWord(tied.Kind)),
+
+                    // The long form travels with the row, so the chevron has it before it
+                    // is pressed. Written in the same call as the sentence; a row from
+                    // before that has none, and the page asks for it on opening.
+                    Digest: t.Digest is { Length: > 0 } digest ? digest : null,
+                    DigestNote: t.Digest is { Length: > 0 } ? DigestNote(t.DigestMessages, null) : null);
             })
             .ToList();
     }

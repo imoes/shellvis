@@ -187,7 +187,7 @@ internal static class TriageProbe
             // sawBody records that this pass READS bodies, not that this message had one --
             // otherwise a notification with an empty body is re-read for ever.
             foreach ((string id, DeskTriage.Judgement judged) in verdicts)
-                store.Judge(id, judged.Verdict, judged.Why, DateTime.Now, sawBody: true, rules: DeskTriage.RulesVersion, related: judged.Related);
+                store.Judge(id, judged.Verdict, judged.Why, DateTime.Now, sawBody: true, rules: DeskTriage.RulesVersion, related: judged.Related, digest: judged.Digest, digestMessages: 1);
 
             Console.WriteLine($"\nstored {verdicts.Count} verdict(s); "
                 + $"{store.StaleVerdictCount(since, DeskTriage.RulesVersion)} still to re-read");

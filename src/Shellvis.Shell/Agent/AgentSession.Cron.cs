@@ -307,7 +307,13 @@ internal sealed partial class AgentSession
                 DenyEverythingGate.Instance,
                 new AgentOptions(
                     MaxIterations: withTools ? 8 : 1,
-                    SystemPrompt: AsideSystemPrompt));
+                    SystemPrompt: AsideSystemPrompt,
+
+                    // The configured value, not the record's default. Ninety seconds is
+                    // less than the prompt processing of one sorting batch takes here,
+                    // and a stream abandoned before its first token reads as a model that
+                    // said nothing.
+                    StallTimeoutSeconds: _stallTimeoutSeconds));
 
             var answer = new System.Text.StringBuilder();
             var streamed = new System.Text.StringBuilder();

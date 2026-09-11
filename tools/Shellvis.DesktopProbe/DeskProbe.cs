@@ -357,6 +357,67 @@ internal static class DeskProbe
                 DeskTriage.Read(string.Empty, batch).Count == 0
                     && DeskTriage.Read(null, batch).Count == 0);
 
+            // --------------------------------------------- two parts from one answer
+            //
+            // "Jede Mail-Analyse hat zwei Teile, und es soll ein LLM-Call sein." The first
+            // line is the sentence for the tray; the lines under it are the long form for
+            // the row that unfolds. The parser has to keep them apart without a marker,
+            // because a model keeps markers about as reliably as it keeps indentation.
+            Console.WriteLine("\n-- the short part and the long part, out of one answer --");
+
+            IReadOnlyDictionary<string, DeskTriage.Judgement> twoPart = DeskTriage.Read(
+                """
+                1 | ANSWER | Weber wartet auf das Angebot | -
+                WORUM ES GEHT
+                Frau Weber hat am 01.09. ein Angebot erbeten.
+
+                VERLAUF
+                01.09. Weber bittet um ein Angebot bis Freitag.
+                OFFEN
+                Das Angebot.
+                ZU TUN
+                Angebot bis Freitag schicken.
+                2 IGNORE Rundschreiben
+                WORUM ES GEHT
+                Ein Newsletter.
+                3 | INFORMATION | nur ein Hinweis | -
+                """,
+                batch);
+
+            Check("the first line of each message is still the verdict",
+                twoPart.Count == 3
+                    && twoPart[batch[0].Id].Verdict == DeskVerdict.Answer
+                    && twoPart[batch[1].Id].Verdict == DeskVerdict.Ignore
+                    && twoPart[batch[2].Id].Verdict == DeskVerdict.Information,
+                $"{twoPart.Count} verdict(s)");
+
+            Check("and the lines beneath it are its long form, blank lines kept as paragraph breaks",
+                twoPart[batch[0].Id].Digest is { } longForm
+                    && longForm.StartsWith("WORUM ES GEHT", StringComparison.Ordinal)
+                    && longForm.Contains("\n\nVERLAUF", StringComparison.Ordinal)
+                    && longForm.Contains("ZU TUN", StringComparison.Ordinal)
+                    && longForm.EndsWith("schicken.", StringComparison.Ordinal),
+                twoPart[batch[0].Id].Digest ?? "(none)");
+
+            Check("a dated history line is not mistaken for a verdict",
+                twoPart[batch[0].Id].Digest!.Contains("01.09. Weber bittet", StringComparison.Ordinal),
+                "\"01.09.\" begins with a number in range; only a number AND a label is a verdict");
+
+            Check("a verdict line without the separator still ends the long form before it and starts its own",
+                twoPart[batch[1].Id].Digest == "WORUM ES GEHT\nEin Newsletter.",
+                "\"2 IGNORE Rundschreiben\" is the shape the parser accepted before, and still does");
+
+            Check("a message with no long form has none, rather than the next message's",
+                twoPart[batch[2].Id].Digest is null);
+
+            Check("the one-line shape from before still reads, with no long form",
+                DeskTriage.Read("1 | ANSWER | wartet", batch)[batch[0].Id].Digest is null);
+
+            Check("and the question asks for the two parts, labelled, in both languages",
+                DeskTriage.Ask(batch).Contains("EVERY MESSAGE GETS TWO PARTS", StringComparison.Ordinal)
+                    && DeskTriage.Ask(batch).Contains("WORUM ES GEHT", StringComparison.Ordinal)
+                    && DeskTriage.Ask(batch).Contains("ABOUT / HISTORY / OPEN / TO DO", StringComparison.Ordinal));
+
             // ------------------------------------- what the desk already held about it
             //
             // "Die KI soll bei unklarer Informationslage die Suche benutzen": the same

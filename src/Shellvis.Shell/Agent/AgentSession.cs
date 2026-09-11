@@ -382,6 +382,7 @@ internal sealed partial class AgentSession : IDisposable
             Provider = profile,
             ModelName = model ?? profile.DefaultModel,
             _requestTimeoutSeconds = settings.Agent.RequestTimeoutSeconds,
+            _stallTimeoutSeconds = settings.Agent.StallTimeoutSeconds,
             _skills = skills,
             _memory = memory,
             _notes = notes,
@@ -455,6 +456,18 @@ internal sealed partial class AgentSession : IDisposable
     /// silently drop back to the library's own hundred-second default.
     /// </summary>
     private int _requestTimeoutSeconds = 300;
+
+    /// <summary>
+    /// How long a stream may go silent before it is abandoned, for the aside calls too.
+    ///
+    /// The main loop was given the configured value and the aside calls were not: they
+    /// built their options with the record's default of ninety seconds, while prompt
+    /// processing on this estate's endpoint runs at about 88 tokens a second -- so a
+    /// sorting batch of ten thousand tokens was abandoned before its first character and
+    /// the page said "none of the 1 could be sorted; the model answered: (no output)".
+    /// One value, from one setting, for every call this session makes.
+    /// </summary>
+    private int _stallTimeoutSeconds = 300;
 
     /// <summary>
     /// A second client to the same model, with the reasoning switched off, or null when

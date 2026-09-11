@@ -4,6 +4,25 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.15.0
+
+- **Das Vorzimmer ist in der Reihenfolge eines Briefings aufgebaut.** Oben das Datum, dann der
+  Tag als Liste mit Uhrzeiten, der nächste Termin markiert, Terminanfragen darunter; dann die
+  Post, die eine Antwort braucht, dann die, die man wissen muss; rechts die überfälligen
+  Aufgaben mit Namen, das Nicht-Lesenswerte als Zahl und die Angaben zur Zählung als
+  Kleingedrucktes. Das Band aus acht gleichen Zahlen ist weg, und ein Morgen passt auf einen
+  Bildschirm.
+- **Das Vorzimmer kann suchen.** Ein Feld in der Kopfzeile fragt das Gedächtnis des
+  Schreibtischs und Outlook zugleich und sagt, wer was gefunden hat. Erinnerte Treffer tragen
+  den Satz des Modells, reine Outlook-Treffer eine Vorschau; ein Klick öffnet sie. Nach den
+  direkten Treffern schreibt das Modell auf, wie die gesuchte Mail lauten würde — in der
+  Sprache des Rechners und auf Englisch — und die Suche wird um diese Begriffe erweitert.
+- **Die Sortierung schaut nach, was der Schreibtisch schon weiß.** Bevor eine Mail beurteilt
+  wird, stellt sich das Modell das Gegenstück vor, das schon da sein könnte — dieselbe Anfrage
+  von vor zwei Wochen, die Bestätigung der Bestellung, nach der gefragt wird — und das
+  Gedächtnis wird damit durchsucht. Die Zusammenfassung nennt den Fund mit Datum, und die
+  Zeile verlinkt ihn. Bereits beurteilte Post wird nach und nach neu gelesen.
+
 ## 0.14.0
 
 - **Shellvis spricht Englisch und Deutsch.** Welche Sprache, entscheidet die Anzeigesprache

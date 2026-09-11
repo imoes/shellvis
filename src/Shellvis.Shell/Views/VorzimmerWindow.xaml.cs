@@ -250,6 +250,23 @@ public sealed partial class VorzimmerWindow : Window
                 return;
             }
 
+            // "expand:<desk-id>" -- a row was opened, and the page wants the long form of
+            // it. "reread:<desk-id>" is the same with the kept digest set aside, for a
+            // reader who does not believe it any more.
+            if (message.StartsWith("expand:", StringComparison.Ordinal)
+                && message.Length > "expand:".Length)
+            {
+                ExpandRequested?.Invoke(message["expand:".Length..], false);
+                return;
+            }
+
+            if (message.StartsWith("reread:", StringComparison.Ordinal)
+                && message.Length > "reread:".Length)
+            {
+                ExpandRequested?.Invoke(message["reread:".Length..], true);
+                return;
+            }
+
             // "search:<words>" -- somebody typed a question into the field. The words go up
             // as typed; what is searched, and how, is the owner's decision, because it holds
             // both the store and the Outlook client and this window holds neither.
@@ -306,6 +323,28 @@ public sealed partial class VorzimmerWindow : Window
 
     /// <summary>Raised when the search field was submitted, with the words as typed.</summary>
     public event Action<string>? SearchRequested;
+
+    /// <summary>
+    /// Raised when a row was opened for its long form: the desk id, and whether the kept
+    /// digest is to be set aside and the thread read again.
+    /// </summary>
+    public event Action<string, bool>? ExpandRequested;
+
+    /// <summary>Hand the page the long form of one mail, or the state of getting it.</summary>
+    public void Digest(DigestOutcome digest) =>
+        Send(JsonSerializer.Serialize(new { digest }, PayloadFormat));
+
+    /// <summary>
+    /// The long form of one mail as the page draws it.
+    /// </summary>
+    /// <param name="Id">Which row it belongs to; the same mail may sit in a tray and in a search.</param>
+    /// <param name="State">"reading" while the thread is read and the model writes; "ready"; "failed".</param>
+    /// <param name="Text">The overview, in the four blocks the prompt asks for. Empty until ready.</param>
+    /// <param name="Note">
+    /// Small print under it: how many messages it covered and when it was written, so a
+    /// reader can tell a digest from this morning from one written before the reply came.
+    /// </param>
+    public sealed record DigestOutcome(string Id, string State, string Text, string Note);
 
     /// <summary>
     /// Redraw the day alone, once the mail about each appointment has been looked up.

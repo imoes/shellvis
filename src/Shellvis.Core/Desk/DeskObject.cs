@@ -67,6 +67,17 @@ public enum DeskKind
 /// recognised one among the candidates it was shown, so the page can link the two and the
 /// sentence can say "already asked on the 4th". Null when nothing earlier was recognised.
 /// </param>
+/// <param name="Digest">
+/// The long form: what the whole conversation comes to, written once by the model when
+/// somebody opened the row on the page, and kept so the second opening costs nothing.
+/// The short sentence beside the verdict is what the reader sees instead of the mail;
+/// this is what they see instead of the thread.
+/// </param>
+/// <param name="DigestMessages">
+/// How many messages the thread had when the digest was written. A thread that has grown
+/// since is re-read; one that has not is not, because a second model call for the same
+/// twelve messages says the same thing more slowly.
+/// </param>
 public sealed record DeskObject(
     string Id,
     DeskKind Kind,
@@ -85,7 +96,9 @@ public sealed record DeskObject(
     DateTime LastSeen,
     DeskVerdict? Verdict = null,
     string? VerdictWhy = null,
-    string? Related = null)
+    string? Related = null,
+    string? Digest = null,
+    int DigestMessages = 0)
 {
     /// <summary>The prefix for a kind, which is also the first half of every id.</summary>
     public static string Prefix(DeskKind kind) => kind switch

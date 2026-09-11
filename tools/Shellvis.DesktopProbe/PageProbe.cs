@@ -425,6 +425,32 @@ internal static class PageProbe
         // says "am 03.09.". The date has to be followable, so the row carries a second
         // button that opens THAT thing. A summary that names a date nobody can reach is a
         // claim the reader has to take on trust.
+        // The long form. The sentence is what the reader sees instead of the mail; the
+        // overview is what they see instead of the thread -- and it is asked for by a
+        // second control beside the row, because the row itself still opens Outlook and a
+        // changelog promised it would.
+        Check("a mail row can be opened for the whole conversation as an overview",
+            html.Contains("button.more", StringComparison.Ordinal)
+                && html.Contains("\"expand:\" + moreId", StringComparison.Ordinal)
+                && html.Contains("data-long", StringComparison.Ordinal),
+            "the short sentence replaces the mail; this replaces the thread");
+
+        Check("and the row itself still opens the mail in Outlook",
+            html.IndexOf("\"open:\" + id", StringComparison.Ordinal) > 0
+                && html.Contains("closest(\"button.row\")", StringComparison.Ordinal),
+            "two asks, two buttons: read it here, open it there");
+
+        Check("the overview arrives from the application, and can be read again on request",
+            html.Contains("data.digest", StringComparison.Ordinal)
+                && html.Contains("\"reread:\" + rereadId", StringComparison.Ordinal)
+                && html.Contains(Shellvis.Core.Ui.UiText.En.ReadAgain, StringComparison.Ordinal),
+            "written once by the model and kept on the row; a reader who doubts it can ask again");
+
+        Check("and it is drawn as text with its line breaks, never as markup",
+            Regex.IsMatch(html, @"\.long-text \{[^}]*white-space: pre-line")
+                && !Regex.IsMatch(html, @"innerHTML\s*="),
+            "the four blocks are lines the model wrote; a page that rendered them would render whatever a mail said");
+
         // The look-ahead: "before an appointment, what came in about it since it was
         // booked". A reminder after the meeting is worthless, so the mail about a meeting
         // belongs on the meeting's own row -- and it has to be openable, because the count

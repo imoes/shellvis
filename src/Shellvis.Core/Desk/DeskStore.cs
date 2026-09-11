@@ -142,6 +142,13 @@ public sealed class DeskStore : IDisposable
             // with it, overwritten with it, and shown beside it -- and a link table entry
             // would outlive the verdict it explained.
             ("related", "TEXT NULL"),
+
+            // The long form of a mail: the whole conversation, as an overview, written by
+            // the model when somebody opened the row. With the count of messages it covered,
+            // so a thread that has grown is read again and one that has not is not.
+            ("digest", "TEXT NULL"),
+            ("digest_messages", "INTEGER NOT NULL DEFAULT 0"),
+            ("digest_at", "TEXT NULL"),
         });
 
         // The three questions this store is actually asked: what is recent, what is about
@@ -400,6 +407,35 @@ public sealed class DeskStore : IDisposable
         command.Parameters.AddWithValue("$body", sawBody ? 1 : 0);
         command.Parameters.AddWithValue("$rules", rules);
         command.Parameters.AddWithValue("$related", related is { Length: > 0 } ? related : DBNull.Value);
+
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Keep the long form of one thing: the conversation it belongs to, as an overview.
+    /// </summary>
+    /// <remarks>
+    /// <b>Replaced, not appended</b>, like a verdict and unlike an enrichment: this is the
+    /// current reading of the whole thread, and two readings of the same thread is not more
+    /// understanding, it is a page twice as long. The message count is what decides whether
+    /// the next opening reads again.
+    /// </remarks>
+    public void Digest(string id, string text, int messages, DateTime when)
+    {
+        using SqliteCommand command = _connection.CreateCommand();
+
+        command.CommandText = """
+            UPDATE objects
+            SET digest = $digest,
+                digest_messages = $messages,
+                digest_at = $at
+            WHERE id = $id;
+            """;
+
+        command.Parameters.AddWithValue("$id", id);
+        command.Parameters.AddWithValue("$digest", text.Trim());
+        command.Parameters.AddWithValue("$messages", messages);
+        command.Parameters.AddWithValue("$at", Text(when));
 
         command.ExecuteNonQuery();
     }
@@ -699,7 +735,8 @@ public sealed class DeskStore : IDisposable
         command.CommandText = """
             SELECT o.id, o.kind, o.subject, o.who_name, o.who_address, o.happened, o.due,
                    o.state, o.ticket_key, o.thread, o.entry_id, o.facts, o.enrichment,
-                   o.first_seen, o.last_seen, o.verdict, o.verdict_why, o.related
+                   o.first_seen, o.last_seen, o.verdict, o.verdict_why, o.related,
+                   o.digest, o.digest_messages
             FROM objects_fts f
             JOIN objects o ON o.rowid = f.rowid
             WHERE objects_fts MATCH $query
@@ -847,7 +884,7 @@ public sealed class DeskStore : IDisposable
     private const string Select = """
         SELECT id, kind, subject, who_name, who_address, happened, due, state,
                ticket_key, thread, entry_id, facts, enrichment, first_seen, last_seen,
-               verdict, verdict_why, related
+               verdict, verdict_why, related, digest, digest_messages
         FROM objects
         """;
 
@@ -881,7 +918,9 @@ public sealed class DeskStore : IDisposable
         LastSeen: When(reader, 14) ?? DateTime.MinValue,
         Verdict: reader.FieldCount > 15 && !reader.IsDBNull(15) ? Verdict(reader.GetString(15)) : null,
         VerdictWhy: reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetString(16) : null,
-        Related: reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetString(17) : null);
+        Related: reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetString(17) : null,
+        Digest: reader.FieldCount > 18 && !reader.IsDBNull(18) ? reader.GetString(18) : null,
+        DigestMessages: reader.FieldCount > 19 && !reader.IsDBNull(19) ? reader.GetInt32(19) : 0);
 
     /// <summary>A verdict as it was written, or null when it is a word nobody knows.</summary>
     private static DeskVerdict? Verdict(string said) => said switch

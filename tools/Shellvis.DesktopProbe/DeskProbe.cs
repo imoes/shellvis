@@ -501,6 +501,42 @@ internal static class DeskProbe
                     && aboutRead[meeting[0].Id].Contains("Kernel-Update", StringComparison.Ordinal),
                 "one shape for every imagined document, so one place can get it wrong");
 
+            // The long form: the whole thread as four blocks, written once when a row is
+            // opened. The dates in the history block are what make it a history.
+            var conversation = new[]
+            {
+                new DeskTriage.ThreadMessage("Weber, Anna", now.AddDays(-3), "Angebot bis Freitag?", "Koennten Sie das Angebot bis Freitag schicken?", Own: false),
+                new DeskTriage.ThreadMessage("Kluge, Thomas", now.AddDays(-2), "AW: Angebot bis Freitag?", "Ja, kommt Donnerstag.", Own: true),
+                new DeskTriage.ThreadMessage("Weber, Anna", now, "AW: Angebot bis Freitag?", "Danke -- und die Preisliste dazu?", Own: false),
+            };
+
+            string digest = DeskTriage.Digest(batch[0], conversation, "Thomas Kluge <thomas@example.com>", "German");
+
+            Check("the digest asks for four blocks, oldest first, with dates",
+                digest.Contains("WORUM ES GEHT", StringComparison.Ordinal)
+                    && digest.Contains("VERLAUF", StringComparison.Ordinal)
+                    && digest.Contains("OFFEN", StringComparison.Ordinal)
+                    && digest.Contains("ZU TUN", StringComparison.Ordinal)
+                    && digest.Contains("each beginning", StringComparison.Ordinal)
+                    && digest.Contains("with its date as dd.MM.", StringComparison.Ordinal),
+                "without the dates a history is a plot summary");
+
+            Check("it names the desk's owner and marks their own messages",
+                digest.Contains("This desk belongs to: Thomas Kluge", StringComparison.Ordinal)
+                    && digest.Contains("own: Kluge, Thomas", StringComparison.Ordinal)
+                    && digest.Contains("from: Weber, Anna", StringComparison.Ordinal),
+                "ZU TUN is wrong without knowing what was already answered from here");
+
+            Check("every message of the thread is in it, in order, with its text",
+                digest.IndexOf("1. ", StringComparison.Ordinal) < digest.IndexOf("2. ", StringComparison.Ordinal)
+                    && digest.IndexOf("2. ", StringComparison.Ordinal) < digest.IndexOf("3. ", StringComparison.Ordinal)
+                    && digest.Contains("Preisliste", StringComparison.Ordinal)
+                    && digest.Contains("3 message(s)", StringComparison.Ordinal));
+
+            Check("and it says not to invent what the thread does not say",
+                digest.Contains("not invent anything that is not in the text", StringComparison.Ordinal),
+                "six fabricated appointments, once, is why every prompt here says this");
+
             Check("and on an English desk, English alone",
                 DeskTriage.LanguageRule("English").Contains("Write it in English", StringComparison.Ordinal)
                     && !DeskTriage.LanguageRule("English").Contains("semicolon", StringComparison.Ordinal));

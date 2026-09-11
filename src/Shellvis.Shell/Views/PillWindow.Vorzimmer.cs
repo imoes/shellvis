@@ -62,6 +62,7 @@ public sealed partial class PillWindow
             _vorzimmer.RememberDaysChanged += RememberOver;
             _vorzimmer.OpenRequested += OpenFromDesk;
             _vorzimmer.SearchRequested += words => _ = SearchTheDeskAsync(words);
+            _vorzimmer.ExpandRequested += (id, again) => _ = ExpandAsync(id, again);
         }
 
         _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
@@ -341,6 +342,153 @@ public sealed partial class PillWindow
             _ = CountTheDeskAsync(saveBaseline: false);
         }
     }
+
+    /// <summary>The rows whose long form is being written right now, so a double click is one call.</summary>
+    private readonly HashSet<string> _expanding = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The long form of one mail: the whole conversation as an overview, written once and
+    /// kept.
+    ///
+    /// <b>On demand, one call, cached on the row.</b> The sentence beside the verdict costs
+    /// a model call per unread mail and is paid on a timer; this costs one per mail that
+    /// somebody actually opened, and is paid once. The row keeps the digest and the number
+    /// of messages it covered: the second opening is a lookup, and a thread that has grown
+    /// since is read again because the overview would otherwise stop before the reply.
+    ///
+    /// <b>The whole thread, both directions.</b> The conversation is read out of the inbox
+    /// and the sent items together, so what was already answered from this desk is in the
+    /// overview -- the "ZU TUN" block is wrong without it. Each message is read to a bound,
+    /// because a reply quotes the thread beneath it and the twelfth copy of the first mail
+    /// adds nothing but prompt time.
+    /// </summary>
+    private async Task ExpandAsync(string id, bool again)
+    {
+        if (_session?.Desk is not { } store || _vorzimmer is null)
+            return;
+
+        if (!_expanding.Add(id))
+            return;
+
+        try
+        {
+            DeskObject? mail = store.Get(id);
+
+            if (mail is null || mail.EntryId is not { Length: > 0 } handle)
+            {
+                _vorzimmer.Digest(new VorzimmerWindow.DigestOutcome(id, "failed", string.Empty, Words.ThreadFailed));
+                return;
+            }
+
+            if (_session.Outlook is not { } outlook)
+            {
+                _vorzimmer.Digest(new VorzimmerWindow.DigestOutcome(id, "failed", string.Empty, Words.OutlookUnreachable));
+                return;
+            }
+
+            _vorzimmer.Digest(new VorzimmerWindow.DigestOutcome(id, "reading", string.Empty, Words.ReadingThread));
+
+            IReadOnlyList<MailSummary> heads = await outlook
+                .ReadThreadAsync(handle, DeskTriage.DigestMessages * 2)
+                .ConfigureAwait(true);
+
+            // Newest kept when the thread is longer than the bound: the end of a
+            // conversation is where it stands, the beginning is quoted in the end anyway.
+            if (heads.Count > DeskTriage.DigestMessages)
+                heads = [.. heads.Skip(heads.Count - DeskTriage.DigestMessages)];
+
+            // What is kept is good enough when the thread has not grown since it was
+            // written. Checked after the thread is listed rather than before, because the
+            // count is the check.
+            if (!again
+                && mail.Digest is { Length: > 0 } kept
+                && mail.DigestMessages >= Math.Max(1, heads.Count))
+            {
+                _vorzimmer.Digest(new VorzimmerWindow.DigestOutcome(
+                    id, "ready", kept, DigestNote(mail.DigestMessages, null)));
+                return;
+            }
+
+            Shellvis.Core.Office.OutlookClient.Mailbox me = await outlook
+                .OwnMailboxAsync()
+                .ConfigureAwait(true);
+
+            var thread = new List<DeskTriage.ThreadMessage>();
+
+            foreach (MailSummary head in heads)
+            {
+                string body = string.Empty;
+
+                try
+                {
+                    MailFacing facing = await outlook
+                        .ReadFacingAsync(head.EntryId, maxChars: DeskTriage.DigestChars)
+                        .ConfigureAwait(true);
+
+                    body = facing.Body;
+                }
+                catch (Exception)
+                {
+                    // One message that will not open costs its text and not the overview.
+                }
+
+                bool own = me.Address is { Length: > 0 } mine
+                    && (head.SenderAddress.Equals(mine, StringComparison.OrdinalIgnoreCase)
+                        || head.From.Contains(me.Name, StringComparison.OrdinalIgnoreCase));
+
+                thread.Add(new DeskTriage.ThreadMessage(head.From, head.Received, head.Subject, body, own));
+            }
+
+            if (thread.Count == 0)
+            {
+                _vorzimmer.Digest(new VorzimmerWindow.DigestOutcome(id, "failed", string.Empty, Words.ThreadFailed));
+                return;
+            }
+
+            string owner = me.Address is { Length: > 0 } ? $"{me.Name} <{me.Address}>" : me.Name;
+
+            var said = new System.Text.StringBuilder();
+
+            await _session.AskAsideAsync(
+                DeskTriage.Digest(mail, thread, owner, MailboxLanguage),
+                agentEvent =>
+                {
+                    if (agentEvent is Shellvis.Core.Agent.AgentEvent.AssistantMessage message)
+                        said.Append(message.Text);
+                },
+                CancellationToken.None,
+                withTools: false).ConfigureAwait(true);
+
+            string digest = said.ToString().Trim();
+
+            if (digest.Length == 0)
+            {
+                _vorzimmer.Digest(new VorzimmerWindow.DigestOutcome(id, "failed", string.Empty, Words.ThreadFailed));
+                return;
+            }
+
+            DateTime now = DateTime.Now;
+            store.Digest(id, digest, thread.Count, now);
+
+            AddRow(GlyphTool, $"read the conversation behind '{Oneline(mail.Subject)}': {thread.Count} message(s)", "desk");
+
+            _vorzimmer.Digest(new VorzimmerWindow.DigestOutcome(
+                id, "ready", digest, DigestNote(thread.Count, now)));
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"could not read the conversation for '{id}': {ex.Message}", "desk", isWarning: true);
+            _vorzimmer?.Digest(new VorzimmerWindow.DigestOutcome(id, "failed", string.Empty, Words.ThreadFailed));
+        }
+        finally
+        {
+            _expanding.Remove(id);
+        }
+    }
+
+    private static string DigestNote(int messages, DateTime? when) =>
+        messages.ToString(CultureInfo.CurrentCulture) + Words.MessagesWord
+            + (when is { } at ? " · " + Words.ReadAt + at.ToString("HH:mm", CultureInfo.CurrentCulture) : string.Empty);
 
     /// <summary>The prefix of a row id that points into the last search rather than the store.</summary>
     private const string FoundPrefix = "found:";

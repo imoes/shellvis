@@ -88,6 +88,22 @@ public sealed class UiText
     /// <summary>What the day tray says while the mail about each appointment is being looked up.</summary>
     public required string LookingAhead { get; init; }
 
+    // ---------------------------------------------------------- the page: the long form
+    //
+    // A row opens. Under the sentence the sorting wrote appears the whole conversation as
+    // an overview, written once by the model and kept.
+    public required string UnfoldTip { get; init; }
+    public required string FoldTip { get; init; }
+    public required string ReadingThread { get; init; }
+    public required string ThreadFailed { get; init; }
+    public required string ReadAgain { get; init; }
+
+    /// <summary>" Nachrichten" / " messages" -- after the count the digest covered.</summary>
+    public required string MessagesWord { get; init; }
+
+    /// <summary>"gelesen " / "read " -- before the time the digest was written.</summary>
+    public required string ReadAt { get; init; }
+
     // ------------------------------------------------------------- the page: the search
     //
     // The trays show a handful and put the rest behind a count. The search is how the rest
@@ -329,6 +345,14 @@ public sealed class UiText
         MailsAbout = " mails about it",
         LookingAhead = "looking for mail about today's meetings ...",
 
+        UnfoldTip = "Show the whole conversation as an overview",
+        FoldTip = "Fold it away",
+        ReadingThread = "reading the conversation ...",
+        ThreadFailed = "The conversation could not be read",
+        ReadAgain = "Read again",
+        MessagesWord = " messages",
+        ReadAt = "read ",
+
         SearchPlaceholder = "Search the mailbox and the desk",
         SearchButton = "Search",
         SearchHeading = "Search",
@@ -461,6 +485,14 @@ public sealed class UiText
         OneMailAbout = "1 Mail dazu",
         MailsAbout = " Mails dazu",
         LookingAhead = "sucht Post zu den heutigen Terminen ...",
+
+        UnfoldTip = "Den ganzen Verlauf als Übersicht zeigen",
+        FoldTip = "Wieder zuklappen",
+        ReadingThread = "liest den Verlauf ...",
+        ThreadFailed = "Der Verlauf konnte nicht gelesen werden",
+        ReadAgain = "Neu lesen",
+        MessagesWord = " Nachrichten",
+        ReadAt = "gelesen ",
 
         SearchPlaceholder = "Postfach und Schreibtisch durchsuchen",
         SearchButton = "Suchen",

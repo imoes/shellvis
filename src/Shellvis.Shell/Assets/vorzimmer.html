@@ -413,6 +413,96 @@
     overflow: hidden;
   }
 
+  /* ------------------------------------------------------------ the long form
+     A row and its chevron side by side; the overview folded beneath, full width. The
+     chevron is the quietest control on the page until the pointer finds it: the row is
+     what people press, and a second button competing with it would make every row a
+     choice. */
+  .tray ul.live .entry { min-width: 0; }
+
+  .tray ul.live .entry-head {
+    display: flex;
+    align-items: flex-start;
+    gap: .25rem;
+    min-width: 0;
+  }
+
+  .tray ul.live .entry-head > button.row { flex: 1 1 auto; }
+
+  .tray ul.live button.more {
+    flex: 0 0 auto;
+    font: inherit;
+    font-size: var(--step-0);
+    line-height: 1.2;
+    color: var(--ink-faint);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 2px;
+    width: 1.6rem;
+    padding: .25rem 0;
+    margin-top: .1rem;
+    cursor: pointer;
+  }
+
+  .tray ul.live button.more:hover { color: var(--tab); border-color: var(--rule); }
+  .tray ul.live button.more:focus-visible { outline: 2px solid var(--tab); outline-offset: 1px; }
+  .tray ul.live button.more[aria-expanded="true"] { color: var(--tab); }
+
+  /* The overview itself: reading size, the line breaks the model wrote kept, on the card
+     with a rule down its left so it reads as belonging to the row above and not as a row
+     of its own. The four labels the prompt asks for arrive as plain lines and are left
+     as such -- a heading style for a word the model may or may not have written exactly is
+     a style that misfires. */
+  .tray ul.live .long {
+    margin: .3rem 0 .5rem .35rem;
+    padding: .55rem .9rem .5rem;
+    border-left: 3px solid var(--rule);
+    background: color-mix(in srgb, var(--tab) 4%, transparent);
+    min-width: 0;
+  }
+
+  .tray ul.live .long[hidden] { display: none !important; }
+
+  .tray ul.live .long-text {
+    font-size: var(--step--1);
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    max-width: 90ch;
+  }
+
+  .tray ul.live .long[data-state="reading"] .long-note,
+  .tray ul.live .long[data-state="failed"] .long-note { color: var(--tab); }
+
+  .tray ul.live .long-foot {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .75rem;
+    margin-top: .4rem;
+    font-family: var(--f-mono);
+    font-size: .66rem;
+    color: var(--ink-faint);
+  }
+
+  .tray ul.live .long-text:empty + .long-foot { margin-top: 0; }
+
+  .tray ul.live button.reread {
+    font: inherit;
+    font-size: .66rem;
+    font-family: var(--f-mono);
+    letter-spacing: .04em;
+    background: none;
+    border: 1px solid var(--rule);
+    color: var(--ink-soft);
+    padding: .05rem .4rem .1rem;
+    cursor: pointer;
+  }
+
+  .tray ul.live button.reread:hover { border-color: var(--tab); color: var(--ink); }
+  .tray ul.live button.reread[hidden] { display: none !important; }
+
   /* The line under a row that points at what the desk already held about it. Mono and
      small like the subject, in the accent because it can be followed, indented so it
      reads as belonging to the row above rather than as a row of its own. */
@@ -1009,6 +1099,100 @@
       return open;
     }
 
+    /* A mail row and the control that opens its long form, side by side, with the long
+     * form folded beneath.
+     *
+     * Two buttons, not one: pressing the row opens the mail in Outlook, which is what it
+     * has always done and what the changelog promised. The chevron is a second control
+     * beside it, because a button cannot sit inside a button and because "read it here"
+     * and "open it there" are different asks. The long form arrives from the application
+     * -- written once by the model, kept on the row -- and is drawn as text, in the four
+     * blocks the prompt asks for. */
+    function entry(open, id) {
+      var wrap = document.createElement("div");
+      wrap.className = "entry";
+
+      var head = document.createElement("div");
+      head.className = "entry-head";
+      head.appendChild(open);
+
+      if (id && id.indexOf("mail:") === 0) {
+        var more = document.createElement("button");
+        more.type = "button";
+        more.className = "more";
+        more.setAttribute("data-more", id);
+        more.setAttribute("aria-expanded", "false");
+        more.title = "{{UnfoldTip}}";
+        more.textContent = "▸";
+        head.appendChild(more);
+
+        var long = document.createElement("div");
+        long.className = "long";
+        long.setAttribute("data-long", id);
+        long.hidden = true;
+
+        var text = document.createElement("p");
+        text.className = "long-text";
+
+        var foot = document.createElement("p");
+        foot.className = "long-foot";
+
+        var note = document.createElement("span");
+        note.className = "long-note";
+
+        var reread = document.createElement("button");
+        reread.type = "button";
+        reread.className = "reread";
+        reread.setAttribute("data-reread", id);
+        reread.textContent = "{{ReadAgain}}";
+        reread.hidden = true;
+
+        foot.appendChild(note);
+        foot.appendChild(reread);
+        long.appendChild(text);
+        long.appendChild(foot);
+
+        wrap.appendChild(head);
+
+        /* The long form goes LAST in the item, after the lines that point elsewhere --
+         * "dazu:" and the mail about a meeting -- so those stay next to the sentence they
+         * qualify and the overview reads as the footnote it is. The caller appends it. */
+        wrap.long = long;
+        return wrap;
+      }
+
+      wrap.appendChild(head);
+      return wrap;
+    }
+
+    /* What the application says about one row's long form: reading, ready, or failed.
+     * Every element for that id is filled, because the same mail can sit in a tray and in
+     * a search result at once and the two must not disagree. */
+    function showDigest(digest) {
+      var boxes = document.querySelectorAll('[data-long="' + digest.id + '"]');
+
+      for (var i = 0; i < boxes.length; i++) {
+        var box = boxes[i];
+        var text = box.querySelector(".long-text");
+        var note = box.querySelector(".long-note");
+        var reread = box.querySelector(".reread");
+
+        box.setAttribute("data-state", digest.state || "");
+        text.textContent = digest.state === "ready" ? (digest.text || "") : "";
+        note.textContent = digest.note || "";
+        reread.hidden = digest.state === "reading";
+        box.hidden = false;
+      }
+
+      var chevrons = document.querySelectorAll('[data-more="' + digest.id + '"]');
+
+      for (var j = 0; j < chevrons.length; j++) {
+        chevrons[j].textContent = "▾";
+        chevrons[j].setAttribute("aria-expanded", "true");
+        chevrons[j].title = "{{FoldTip}}";
+      }
+    }
+
     /* The real entries.
      *
      * Built with createElement and textContent rather than by assembling HTML, and that is
@@ -1095,7 +1279,8 @@
         what.title = row.what || "";
         open.appendChild(what);
 
-        item.appendChild(open);
+        var wrapped = entry(open, row.id);
+        item.appendChild(wrapped);
 
         /* The earlier thing the sorting tied this to: the same request made before, the
          * mail that confirmed the order this one asks about. Its own button under the row,
@@ -1107,6 +1292,10 @@
           tied.textContent = "↳ " + row.relatedLabel;
           tied.title = row.relatedLabel;
           item.appendChild(tied);
+        }
+
+        if (wrapped.long) {
+          item.appendChild(wrapped.long);
         }
 
         list.appendChild(item);
@@ -1173,7 +1362,16 @@
         subject.title = row.what || "";
         open.appendChild(subject);
 
-        item.appendChild(open);
+        /* A hit the desk remembered can be opened for its long form like a tray row; one
+         * only Outlook found cannot, because the long form is kept on the desk's row and
+         * there is none. */
+        var hit = row.preview ? open : entry(open, row.id);
+        item.appendChild(hit);
+
+        if (hit.long) {
+          item.appendChild(hit.long);
+        }
+
         list.appendChild(item);
       }
 
@@ -1468,7 +1666,54 @@
       /* One handler for every row, on the container. Rows are rebuilt on every count, so
        * a listener per row would be attached and abandoned a few times a minute. */
       document.addEventListener("click", function (event) {
-        var row = event.target.closest ? event.target.closest("button.row") : null;
+        var target = event.target;
+
+        if (!target.closest) { return; }
+
+        /* The chevron: fold the long form out or away. Out for the first time asks the
+         * application for it and says so meanwhile; out again is free, the text is still
+         * there. The state travels on the box, not in a variable, so a row rebuilt by the
+         * next count starts folded like every other. */
+        var more = target.closest("button.more");
+
+        if (more) {
+          var moreId = more.getAttribute("data-more");
+          var box = more.closest("li").querySelector('[data-long="' + moreId + '"]');
+
+          if (!box) { return; }
+
+          if (!box.hidden) {
+            box.hidden = true;
+            more.textContent = "▸";
+            more.setAttribute("aria-expanded", "false");
+            more.title = "{{UnfoldTip}}";
+            return;
+          }
+
+          if (box.getAttribute("data-state") === "ready") {
+            box.hidden = false;
+            more.textContent = "▾";
+            more.setAttribute("aria-expanded", "true");
+            more.title = "{{FoldTip}}";
+            return;
+          }
+
+          showDigest({ id: moreId, state: "reading", text: "", note: "{{ReadingThread}}" });
+          window.chrome.webview.postMessage("expand:" + moreId);
+          return;
+        }
+
+        /* "Read again": the kept overview set aside and the thread read afresh. */
+        var reread = target.closest("button.reread");
+
+        if (reread) {
+          var rereadId = reread.getAttribute("data-reread");
+          showDigest({ id: rereadId, state: "reading", text: "", note: "{{ReadingThread}}" });
+          window.chrome.webview.postMessage("reread:" + rereadId);
+          return;
+        }
+
+        var row = target.closest("button.row");
 
         if (!row) { return; }
 
@@ -1514,6 +1759,8 @@
 
           if (data && data.counts) {
             render(data);
+          } else if (data && data.digest) {
+            showDigest(data.digest);
           } else if (data && data.day) {
             /* The day alone, redrawn once the mail about each meeting has been found. Not
              * a fresh snapshot: recounting a mailbox over COM to change three lines would

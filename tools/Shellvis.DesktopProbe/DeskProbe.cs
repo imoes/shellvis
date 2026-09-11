@@ -357,6 +357,47 @@ internal static class DeskProbe
                 DeskTriage.Read(string.Empty, batch).Count == 0
                     && DeskTriage.Read(null, batch).Count == 0);
 
+            // Two shapes the real endpoint produced for a batch of ONE, both dropped whole
+            // until this: "none of the 1 could be sorted; the model answered: 11 | IGNORE |
+            // INFORMATION | DKIM-Schlüsseländerung ist produktiv ... | C".
+            var single = new[] { batch[0] };
+
+            var singleEarlier = new Dictionary<string, IReadOnlyList<DeskObject>>(StringComparer.Ordinal)
+            {
+                [batch[0].Id] = [batch[1], batch[2], Mail(DeskObject.MakeId(DeskKind.Mail, "e3@example.com"), "Dritte", now)],
+            };
+
+            IReadOnlyDictionary<string, DeskTriage.Judgement> odd = DeskTriage.Read(
+                "11 | IGNORE | INFORMATION | DKIM-Schlüsseländerung ist produktiv; Atos meldet Fertigstellung. | C",
+                single,
+                singleEarlier);
+
+            Check("with one message asked about, any number is that message",
+                odd.Count == 1 && odd.ContainsKey(batch[0].Id),
+                "the numeral carries no information when there is nothing to tell apart");
+
+            Check("two labels in a row: the later one stands, and the summary begins after it",
+                odd.TryGetValue(batch[0].Id, out DeskTriage.Judgement? oddOne)
+                    && oddOne.Verdict == DeskVerdict.Information
+                    && oddOne.Why.StartsWith("DKIM", StringComparison.Ordinal),
+                odd.TryGetValue(batch[0].Id, out DeskTriage.Judgement? o) ? $"{o.Verdict}: {o.Why}" : "(none)");
+
+            Check("and the letter after the summary is still read, upper case included",
+                oddOne is not null && oddOne.Related == singleEarlier[batch[0].Id][2].Id);
+
+            Check("a label with no number at all is that one message too",
+                DeskTriage.Read("IGNORE | Werbung", single) is { Count: 1 } bare
+                    && bare[batch[0].Id].Verdict == DeskVerdict.Ignore
+                    && bare[batch[0].Id].Why == "Werbung");
+
+            Check("but with several messages an out-of-range number is still refused",
+                DeskTriage.Read("11 | IGNORE | Werbung", batch).Count == 0,
+                "guessing which of three is meant would put a verdict on the wrong mail");
+
+            Check("a summary that begins with a label word is a summary, not a second label",
+                DeskTriage.Read("1 | IGNORE | Informationen zum Update der Telefonanlage, nichts zu tun", batch)
+                    [batch[0].Id].Why.StartsWith("Informationen zum Update", StringComparison.Ordinal));
+
             // --------------------------------------------- two parts from one answer
             //
             // "Jede Mail-Analyse hat zwei Teile, und es soll ein LLM-Call sein." The first

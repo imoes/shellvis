@@ -941,17 +941,11 @@ public static class DeskTriage
             if (parts.Length < 2 && Unseparated(line) is { } loose)
                 parts = loose;
 
-            // Not a verdict line: a number in range followed by one of the three labels is
+            // Not a verdict line: a message number followed by one of the three labels is
             // the only thing that is. Everything else after a verdict is its long form --
             // a block label, a dated history line, a sentence -- and everything else before
             // the first verdict is preamble.
-            bool isVerdict = parts.Length >= 2
-                && LeadingNumber(parts[0]) is { } n
-                && n >= 1
-                && n <= asked.Count
-                && Label(parts[1]) is not null;
-
-            if (!isVerdict)
+            if (!VerdictLine(parts, asked.Count, out int number, out DeskVerdict verdict, out string whyField, out string? letterField))
             {
                 if (current is not null)
                     digest.Append(line).Append('\n');
@@ -961,14 +955,11 @@ public static class DeskTriage
 
             Close();
 
-            int number = LeadingNumber(parts[0])!.Value;
-            DeskVerdict verdict = Label(parts[1])!.Value;
-
             // 400, not 120. The old cap was set when the prompt asked for twelve words, and
             // it clipped the first summary that was actually a sentence -- which is the one
             // thing on the row worth reading. Two sentences of forty words is around 280
             // characters, so this leaves room without becoming a paragraph.
-            string why = parts.Length > 2 ? Short(parts[2].Trim('*', ' '), 400) : string.Empty;
+            string why = Short(whyField.Trim('*', ' '), 400);
 
             DeskObject about = asked[number - 1];
 
@@ -978,10 +969,10 @@ public static class DeskTriage
             // beyond the list, or a letter where nothing was shown, is nothing.
             string? related = null;
 
-            if (parts.Length > 3
+            if (letterField is not null
                 && earlier is not null
                 && earlier.TryGetValue(about.Id, out IReadOnlyList<DeskObject>? shown)
-                && Letter(parts[3]) is { } index
+                && Letter(letterField) is { } index
                 && index < shown.Count
                 && index < EarlierShown)
             {
@@ -1000,6 +991,79 @@ public static class DeskTriage
         Close();
 
         return verdicts;
+    }
+
+    /// <summary>
+    /// Read the fields of one line as a verdict, if that is what the line is.
+    /// </summary>
+    /// <remarks>
+    /// <b>Forgiving about the numeral, strict about the label.</b> Two shapes came back from
+    /// the real endpoint and were both dropped whole, and a dropped verdict is a pass that
+    /// reports "none of the 1 could be sorted" over an answer that was right:
+    ///
+    /// <list type="bullet">
+    /// <item>"11 | IGNORE | ..." for a batch of ONE message. With one message asked about,
+    /// the number carries no information at all -- whatever it says, the line is about that
+    /// message -- so for a batch of one any number, or none, is accepted. For a batch of
+    /// several the number is the only thing that says which message is meant, and one out
+    /// of range is still refused rather than guessed.</item>
+    /// <item>"11 | IGNORE | INFORMATION | summary | C": two labels in a row. That is a model
+    /// correcting itself mid-line, and the later word is what it settled on. The summary
+    /// starts after the last label, not after the first -- otherwise the summary on the row
+    /// would have been the word INFORMATION. Only a short field is taken as a second label,
+    /// because <see cref="Label"/> matches by containing the word and a summary that begins
+    /// "Informationen zum Update" is a summary.</item>
+    /// </list>
+    /// </remarks>
+    private static bool VerdictLine(
+        string[] parts,
+        int count,
+        out int number,
+        out DeskVerdict verdict,
+        out string why,
+        out string? letter)
+    {
+        number = 0;
+        verdict = default;
+        why = string.Empty;
+        letter = null;
+
+        if (parts.Length < 2)
+            return false;
+
+        // Where the label is: the second field when a number leads, the first when the
+        // model dropped the number altogether.
+        int at = Label(parts[1]) is not null ? 1
+            : Label(parts[0]) is not null && parts[0].Trim('*', ' ').Length <= 16 ? 0
+            : -1;
+
+        if (at < 0)
+            return false;
+
+        int? given = at == 1 ? LeadingNumber(parts[0]) : null;
+
+        if (count == 1)
+            number = 1;
+        else if (given is { } n && n >= 1 && n <= count)
+            number = n;
+        else
+            return false;
+
+        // A second label straight after the first is a correction; the later one stands.
+        int last = at;
+
+        if (last + 1 < parts.Length
+            && parts[last + 1].Trim('*', ' ').Length <= 16
+            && Label(parts[last + 1]) is not null)
+        {
+            last++;
+        }
+
+        verdict = Label(parts[last])!.Value;
+        why = parts.Length > last + 1 ? parts[last + 1] : string.Empty;
+        letter = parts.Length > last + 2 ? parts[last + 2] : null;
+
+        return true;
     }
 
     /// <summary>The index a letter names, or null for a dash, a word, or nothing.</summary>

@@ -425,6 +425,21 @@ internal static class PageProbe
         // says "am 03.09.". The date has to be followable, so the row carries a second
         // button that opens THAT thing. A summary that names a date nobody can reach is a
         // claim the reader has to take on trust.
+        // The look-ahead: "before an appointment, what came in about it since it was
+        // booked". A reminder after the meeting is worthless, so the mail about a meeting
+        // belongs on the meeting's own row -- and it has to be openable, because the count
+        // is only useful if the mail behind it can be read.
+        Check("an appointment carries the mail found about it, and that opens",
+            html.Contains("row.aboutCount", StringComparison.Ordinal)
+                && html.Contains("rowButton(row.aboutId", StringComparison.Ordinal)
+                && html.Contains(Shellvis.Core.Ui.UiText.En.OneMailAbout, StringComparison.Ordinal),
+            "searching the meeting's own title finds the invitation and nothing else");
+
+        Check("and the day can be redrawn alone once that look-up finishes",
+            html.Contains("data.day", StringComparison.Ordinal)
+                && html.Contains("fillDay(data.day)", StringComparison.Ordinal),
+            "a fresh snapshot would recount a mailbox over COM to change three lines");
+
         Check("a row can point at the earlier thing it was tied to, and that opens too",
             html.Contains("row.relatedId", StringComparison.Ordinal)
                 && html.Contains("rowButton(row.relatedId", StringComparison.Ordinal),

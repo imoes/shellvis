@@ -6,43 +6,43 @@ readable summary of what changed for you.
 
 ## 0.15.0
 
-- **Das Vorzimmer ist in der Reihenfolge eines Briefings aufgebaut.** Oben das Datum, dann der
-  Tag als Liste mit Uhrzeiten, der nächste Termin markiert, Terminanfragen darunter; dann die
-  Post, die eine Antwort braucht, dann die, die man wissen muss; rechts die überfälligen
-  Aufgaben mit Namen, das Nicht-Lesenswerte als Zahl und die Angaben zur Zählung als
-  Kleingedrucktes. Das Band aus acht gleichen Zahlen ist weg, und ein Morgen passt auf einen
-  Bildschirm.
-- **Das Vorzimmer kann suchen.** Ein Feld in der Kopfzeile fragt das Gedächtnis des
-  Schreibtischs und Outlook zugleich und sagt, wer was gefunden hat. Erinnerte Treffer tragen
-  den Satz des Modells, reine Outlook-Treffer eine Vorschau; ein Klick öffnet sie. Nach den
-  direkten Treffern schreibt das Modell auf, wie die gesuchte Mail lauten würde — in der
-  Sprache des Rechners und auf Englisch — und die Suche wird um diese Begriffe erweitert.
-- **Die Sortierung schaut nach, was der Schreibtisch schon weiß.** Bevor eine Mail beurteilt
-  wird, stellt sich das Modell das Gegenstück vor, das schon da sein könnte — dieselbe Anfrage
-  von vor zwei Wochen, die Bestätigung der Bestellung, nach der gefragt wird — und das
-  Gedächtnis wird damit durchsucht. Die Zusammenfassung nennt den Fund mit Datum, und die
-  Zeile verlinkt ihn. Bereits beurteilte Post wird nach und nach neu gelesen.
+- **Das Vorzimmer is laid out in the order a briefing is given.** The date at the top, then
+  the day as a list with times, the next appointment marked and meeting requests under it;
+  then the mail that needs a reply, then the mail worth knowing; and in a column beside them
+  the overdue tasks by name, what is not worth reading as a number, and the figures about the
+  counting itself as small print. The band of eight equal numbers is gone, and a morning fits
+  on one screen.
+- **Das Vorzimmer can search.** A field in the masthead asks the desk's own memory and Outlook
+  at once, and says which of them found what. A remembered hit carries the sentence Shellvis
+  wrote about it, a hit only Outlook knew carries a preview; a click opens either. After the
+  direct hits, the model writes down how the mail being looked for would read — in the
+  language of the machine and in English — and the search is widened with those words.
+- **The sorting looks up what the desk already knows.** Before a mail is judged, the model
+  imagines the counterpart that may already be there — the same request from a fortnight ago,
+  the confirmation of the order being asked after — and the memory is searched with that. The
+  summary names what it found, with the date, and the row links it. Mail that was judged
+  before is re-read over the following passes.
 
 ## 0.14.0
 
-- **Shellvis spricht Englisch und Deutsch.** Welche Sprache, entscheidet die Anzeigesprache
-  des Rechners; `ui.language` in der `config.yaml` überstimmt sie mit `de` oder `en`. Das
-  Vorzimmer, alle Beschriftungen, Tooltips und Meldungen sind übersetzt. Die Konsole unter
-  der Leiste bleibt Englisch: sie ist ein Protokoll von Werkzeugnamen und Ergebnissen, und
-  drei übersetzte Wörter um `browser_navigate` herum helfen niemandem.
+- **Shellvis speaks English and German.** Which one is decided by the machine's display
+  language; `ui.language` in `config.yaml` overrides it with `de` or `en`. Das Vorzimmer,
+  every label, tooltip and message is translated. The console under the bar stays English: it
+  is a log of tool names and results, and three translated words around `browser_navigate`
+  help nobody.
 
 ## 0.12.0
 
-- **Das Vorzimmer sortiert die Post, statt sie nur zu zählen.** Jede ungelesene Nachricht
-  wird gelesen und beurteilt — braucht eine Antwort, muss man wissen, oder nicht lesenswert
-  — mit einem Satz dazu, warum. Ein Klick auf eine Zeile öffnet sie in Outlook. Auf dem
-  Tisch liegt, was in den Erinnerungszeitraum fällt; Älteres wird gezählt und nicht
-  aufgeführt, weil ein Alarm von vor vier Wochen sich selbst erledigt hat. Das Urteil wird
-  drei Monate behalten, also wird jede Nachricht einmal beurteilt und nicht bei jedem Blick.
-- **Eine Webseite lesen geht ohne Browser.** `web_fetch` holt eine Adresse per HTTP, so wie
-  curl es tut: keine gespeicherten Anmeldungen, kein Skript, keine Sitzung, in der etwas
-  getan werden könnte — und deshalb ohne Rückfrage. Der Browser bleibt für das, was einen
-  braucht: eine Seite hinter einer Anmeldung, oder eine, die sich erst im Skript aufbaut.
+- **Das Vorzimmer sorts the post instead of merely counting it.** Every unread message is
+  read and judged — needs a reply, worth knowing, or not worth reading — with a sentence
+  saying why. A click on a row opens it in Outlook. On the desk is what falls inside the
+  remembering period; older post is counted and not listed, because an alert from four weeks
+  ago has resolved itself. A verdict is kept for three months, so each message is judged once
+  rather than on every look.
+- **Reading a web page works without a browser.** `web_fetch` retrieves an address over HTTP
+  the way curl does: no stored logins, no script, no session in which anything could be done
+  — and therefore without asking. The browser stays for what needs one: a page behind a
+  login, or one that only assembles itself in script.
 
 ## 0.9.9
 

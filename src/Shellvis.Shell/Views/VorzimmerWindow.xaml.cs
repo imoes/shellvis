@@ -308,6 +308,17 @@ public sealed partial class VorzimmerWindow : Window
     public event Action<string>? SearchRequested;
 
     /// <summary>
+    /// Redraw the day alone, once the mail about each appointment has been looked up.
+    ///
+    /// <b>Its own message, like <see cref="Sorting"/> and for the same reason.</b> The
+    /// look-up costs a model call and a mailbox search, so it happens after the page is
+    /// already drawn; sending a whole fresh snapshot to change three lines would recount a
+    /// mailbox over COM to deliver what one list says.
+    /// </summary>
+    public void Day(IReadOnlyList<DayEntry> today) =>
+        Send(JsonSerializer.Serialize(new { day = today }, PayloadFormat));
+
+    /// <summary>
     /// Hand the page what a search found.
     ///
     /// Its own message rather than a field on the snapshot, for the same reason
@@ -550,8 +561,24 @@ public sealed partial class VorzimmerWindow : Window
     /// </summary>
     /// <param name="Past">Its end has passed. Drawn in the faint grey, kept so the day has a shape.</param>
     /// <param name="Next">The first one still to come. The one row on the page with an accent mark.</param>
+    /// <param name="AboutCount">
+    /// How much mail was found about this meeting. Zero draws nothing: a line saying "0
+    /// Mails dazu" under every appointment is the kind of figure that teaches the eye to
+    /// skip the row it sits in.
+    /// </param>
+    /// <param name="AboutId">The newest of those mails, so the line can be pressed.</param>
+    /// <param name="AboutLabel">Who it is from and what it says, in a few words.</param>
     public sealed record DayEntry(
-        string Id, string When, string What, string Where, string Note, bool Past, bool Next);
+        string Id,
+        string When,
+        string What,
+        string Where,
+        string Note,
+        bool Past,
+        bool Next,
+        int AboutCount = 0,
+        string? AboutId = null,
+        string? AboutLabel = null);
 
     /// <summary>One overdue task: what it is and when it was due.</summary>
     public sealed record DueEntry(string Id, string What, string Due);

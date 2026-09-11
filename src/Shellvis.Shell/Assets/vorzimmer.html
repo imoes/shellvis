@@ -496,6 +496,40 @@
   .tray ul.agenda button.row.day.next { border-left-color: var(--tab); }
   .tray ul.agenda button.row.day.next .note { color: var(--tab); font-weight: 500; }
 
+  /* What came in about a meeting. Under its row, indented to belong to it, in the accent
+     because it can be pressed: the count in mono so it scans down the column, the newest
+     mail's sender and sentence after it in the quiet grey of a subject line. */
+  .tray ul.agenda button.row.about {
+    display: flex;
+
+    /* Row, explicitly. `button.row` is a column by default -- a mail row stacks sender,
+       summary and subject -- and without this the count and the mail it counts sat on two
+       lines and doubled the height of every appointment. */
+    flex-direction: row;
+    align-items: baseline;
+    gap: .5rem;
+    padding: .1rem .35rem .2rem 4.35rem;
+    margin-top: -.2rem;
+    min-width: 0;
+  }
+
+  .tray ul.agenda .how-many {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    color: var(--tab);
+    white-space: nowrap;
+  }
+
+  .tray ul.agenda .newest {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    color: var(--ink-faint);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   /* Meeting requests, under the day: a line, shown only when there are any. */
   .tray p.requests {
     font-size: var(--step--1);
@@ -1199,6 +1233,31 @@
         open.appendChild(title);
         open.appendChild(note);
         item.appendChild(open);
+
+        /* What came in about this meeting since it was booked: the count, and the newest
+         * of it, as a button that opens that mail. Drawn only when something was found --
+         * a line reading "0 Mails dazu" under every appointment is the kind of figure that
+         * teaches the eye to skip the tray it sits in. The count arrives after the page is
+         * drawn, because finding it costs a model call and a mailbox search. */
+        if (row.aboutCount > 0 && row.aboutId) {
+          var about = rowButton(row.aboutId, "about");
+
+          var howMany = document.createElement("span");
+          howMany.className = "how-many";
+          howMany.textContent = row.aboutCount === 1
+            ? "{{OneMailAbout}}"
+            : row.aboutCount + "{{MailsAbout}}";
+
+          var newest = document.createElement("span");
+          newest.className = "newest";
+          newest.textContent = row.aboutLabel || "";
+
+          about.appendChild(howMany);
+          about.appendChild(newest);
+          about.title = row.aboutLabel || "";
+          item.appendChild(about);
+        }
+
         list.appendChild(item);
       }
     }
@@ -1455,6 +1514,11 @@
 
           if (data && data.counts) {
             render(data);
+          } else if (data && data.day) {
+            /* The day alone, redrawn once the mail about each meeting has been found. Not
+             * a fresh snapshot: recounting a mailbox over COM to change three lines would
+             * pay for a mailbox query to draw a caption. */
+            fillDay(data.day);
           } else if (data && data.search) {
             showSearch(data.search);
           } else if (data && data.problem) {

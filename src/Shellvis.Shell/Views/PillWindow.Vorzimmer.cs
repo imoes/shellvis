@@ -197,6 +197,17 @@ public sealed partial class PillWindow
             IReadOnlyList<VorzimmerWindow.DayEntry> day = Day(reading, now);
             IReadOnlyList<VorzimmerWindow.DueEntry> late = Late(reading);
 
+            // What the day list is missing until the look-ahead has run: the mail about each
+            // meeting. Kept for the day rather than looked up on every tick, because it
+            // costs a model call and a mailbox search and a meeting's post does not change
+            // every three minutes.
+            _dayToday = day;
+
+            // What is already known about each meeting, folded back in. Without this a
+            // count three minutes later would wipe the lines the look-ahead just drew.
+            if (_dayAboutFor == now.Date && _dayAbout.Count > 0)
+                day = WithAbout(day);
+
             _vorzimmer?.Show(
                 reading.Counts,
                 _deskBaseline,
@@ -226,6 +237,13 @@ public sealed partial class PillWindow
 
             if (saveBaseline)
                 SaveDesk(reading.Counts);
+
+            // The look-ahead: what came in about the meetings that have not happened yet.
+            // Only when somebody is looking at the page -- the page opened, or the button
+            // pressed -- because it is a model call and a search, and neither belongs on a
+            // three-minute timer for a window nobody has open.
+            if (thenSort)
+                _ = LookAheadAsync(reading, now);
 
             if (thenSort)
                 _ = JudgeSomeMailAsync();
@@ -262,19 +280,28 @@ public sealed partial class PillWindow
         if (_session?.Outlook is null)
             return;
 
-        // A search hit the desk never saw. The page was given a token into the last
-        // result rather than the handle itself, and this is where the token is spent.
-        if (id.StartsWith(FoundPrefix, StringComparison.Ordinal))
+        // A mail the desk never saw, found by a search or by the look-ahead. The page was
+        // given a token into that result rather than the handle itself, and this is where
+        // the token is spent. Two pools, because a new search must not invalidate the
+        // links under today's appointments.
+        foreach ((string prefix, List<MailSummary> pool) in new[]
         {
-            if (int.TryParse(id.AsSpan(FoundPrefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int index)
+            (FoundPrefix, _found),
+            (DayFoundPrefix, _dayFound),
+        })
+        {
+            if (!id.StartsWith(prefix, StringComparison.Ordinal))
+                continue;
+
+            if (int.TryParse(id.AsSpan(prefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int index)
                 && index >= 0
-                && index < _found.Count)
+                && index < pool.Count)
             {
-                _ = OpenItAsync(_found[index].EntryId, _found[index].Subject);
+                _ = OpenItAsync(pool[index].EntryId, pool[index].Subject);
             }
             else
             {
-                AddRow(GlyphWarning, $"nothing to open for '{id}': the search it came from has been replaced", "desk", isWarning: true);
+                AddRow(GlyphWarning, $"nothing to open for '{id}': the result it came from has been replaced", "desk", isWarning: true);
             }
 
             return;
@@ -318,6 +345,9 @@ public sealed partial class PillWindow
     /// <summary>The prefix of a row id that points into the last search rather than the store.</summary>
     private const string FoundPrefix = "found:";
 
+    /// <summary>The same for a mail the look-ahead found about an appointment.</summary>
+    private const string DayFoundPrefix = "dayfound:";
+
     /// <summary>How many hits the search panel shows before the rest is a count.</summary>
     /// <remarks>
     /// Ten. More than a tray, because a search is a question somebody asked and the answer
@@ -331,6 +361,260 @@ public sealed partial class PillWindow
     /// pressed on the page can be opened without the page ever holding the handle.
     /// </summary>
     private readonly List<MailSummary> _found = [];
+
+    /// <summary>The same pool for the look-ahead, kept apart so a search cannot clear it.</summary>
+    private readonly List<MailSummary> _dayFound = [];
+
+    /// <summary>What the mail about each appointment came to, keyed by the appointment's id.</summary>
+    private readonly Dictionary<string, VorzimmerWindow.DayEntry> _dayAbout = new(StringComparer.Ordinal);
+
+    /// <summary>Which day <see cref="_dayAbout"/> describes, so it is not carried into tomorrow.</summary>
+    private DateTime _dayAboutFor = DateTime.MinValue;
+
+    /// <summary>The day as the last count found it, for redrawing it alone.</summary>
+    private IReadOnlyList<VorzimmerWindow.DayEntry> _dayToday = [];
+
+    private bool _lookingAhead;
+
+    /// <summary>
+    /// Find the mail about today's remaining meetings, and hang it under them.
+    ///
+    /// <b>This is the look-ahead rule, and it needed a query it did not have.</b> "Before an
+    /// appointment: what it is, who is in it, and what came in about it since it was booked."
+    /// Searching for the appointment's own title finds the invitation and nothing else -- the
+    /// mail that matters before the Linux Team Weekly says "Kernel-Update KW 37", which
+    /// shares no word with the meeting's name. So the model first writes what the mail about
+    /// this meeting would say, in the mailbox's language and in English, and the desk and the
+    /// mailbox are searched with those words as well as with the organiser's name.
+    ///
+    /// <b>Only what has not happened yet, and at most three.</b> A reminder after the meeting
+    /// is worthless, and the morning's first three are what a person can still prepare for --
+    /// the same bound the Viva briefing settled on. Each one costs a mailbox search, and a
+    /// page that takes half a minute to finish drawing is a page that looks broken.
+    ///
+    /// <b>Kept for the day.</b> The watcher counts every few minutes; the post about a
+    /// meeting does not change that often, and a model call per tick would be paid for by
+    /// somebody waiting on their own question.
+    /// </summary>
+    private async Task LookAheadAsync(DeskReading reading, DateTime now)
+    {
+        if (_vorzimmer is null || _lookingAhead || _session is null)
+            return;
+
+        // Their turn first, the same rule the sorting pass follows.
+        if (_session.IsBusy)
+            return;
+
+        if (_dayAboutFor != now.Date)
+        {
+            _dayAbout.Clear();
+            _dayFound.Clear();
+            _dayAboutFor = now.Date;
+        }
+
+        // What is still to come, soonest first. An all-day entry is the day's background
+        // rather than a meeting to prepare for, and has nothing to search for.
+        List<DeskObject> ahead = reading.Objects
+            .Where(o => o.Kind == DeskKind.Appointment)
+            .Where(o => (FactsOf(o)?.End ?? o.When) > now && !(FactsOf(o)?.AllDay ?? false))
+            .Where(o => o.Subject is { Length: > 0 })
+            .Where(o => !_dayAbout.ContainsKey(o.Id))
+            .OrderBy(o => o.When)
+            .Take(MeetingsLookedAhead)
+            .ToList();
+
+        if (ahead.Count == 0)
+            return;
+
+        _lookingAhead = true;
+
+        try
+        {
+            AddRow(GlyphTool, $"looking for mail about {ahead.Count} meeting(s) still to come today", "desk");
+
+            IReadOnlyDictionary<string, string> imagined = await ImagineAboutAsync(ahead)
+                .ConfigureAwait(true);
+
+            foreach (DeskObject meeting in ahead)
+            {
+                var hits = new List<(DateTime When, string Id, string Label)>();
+
+                // The desk's own memory first: it carries the sentence the model wrote about
+                // each mail, which is a better label than a subject line.
+                try
+                {
+                    foreach (DeskObject known in _session.Desk?.About(
+                        meeting,
+                        limit: 8,
+                        imagined: imagined.TryGetValue(meeting.Id, out string? document) ? document : null) ?? [])
+                    {
+                        if (known.Kind != DeskKind.Mail)
+                            continue;
+
+                        hits.Add((known.When, known.Id, Label(
+                            known.WhoName is { Length: > 0 } name ? name : known.WhoAddress,
+                            known.VerdictWhy is { Length: > 0 } why ? why : known.Subject)));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddRow(GlyphWarning, $"the desk could not be searched for '{meeting.Subject}': {ex.Message}", "desk", isWarning: true);
+                }
+
+                // Then the mailbox, for what the desk never walked past: the agenda sent
+                // three weeks ago, the document from the organiser, anything already read.
+                foreach (string query in Queries(meeting, imagined))
+                {
+                    if (_session.Outlook is not { } outlook)
+                        break;
+
+                    try
+                    {
+                        MailSearchResult found = await outlook
+                            .SearchMailAsync(query, limit: 10)
+                            .ConfigureAwait(true);
+
+                        foreach (MailSummary mail in found.Page.Messages)
+                        {
+                            if (hits.Any(h => h.Label.Contains(mail.Subject, StringComparison.OrdinalIgnoreCase)))
+                                continue;
+
+                            if (_dayFound.Any(m => m.EntryId == mail.EntryId))
+                                continue;
+
+                            _dayFound.Add(mail);
+
+                            hits.Add((
+                                mail.Received,
+                                DayFoundPrefix + (_dayFound.Count - 1).ToString(CultureInfo.InvariantCulture),
+                                Label(mail.From, mail.Subject)));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        AddRow(GlyphWarning, $"mail search for '{query}' failed: {ex.Message}", "desk", isWarning: true);
+                    }
+                }
+
+                // Newest first: the most recent word about a meeting is the one that changes
+                // what you walk into it knowing.
+                hits.Sort((a, b) => b.When.CompareTo(a.When));
+
+                _dayAbout[meeting.Id] = new VorzimmerWindow.DayEntry(
+                    Id: meeting.Id,
+                    When: string.Empty,
+                    What: string.Empty,
+                    Where: string.Empty,
+                    Note: string.Empty,
+                    Past: false,
+                    Next: false,
+                    AboutCount: hits.Count,
+                    AboutId: hits.Count > 0 ? hits[0].Id : null,
+                    AboutLabel: hits.Count > 0 ? hits[0].Label : null);
+
+                // Published per meeting rather than at the end: the first one is the next
+                // one, and it is the row somebody is waiting to see.
+                _vorzimmer?.Day(WithAbout(_dayToday));
+            }
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"could not look ahead to today's meetings: {ex.Message}", "desk", isWarning: true);
+        }
+        finally
+        {
+            _lookingAhead = false;
+        }
+    }
+
+    /// <summary>How many of today's remaining meetings are looked ahead to.</summary>
+    /// <remarks>
+    /// Three. The same bound the Viva briefing settled on, and for the same reason: the
+    /// morning's first three are what a person can still prepare for, and each one costs a
+    /// mailbox search.
+    /// </remarks>
+    private const int MeetingsLookedAhead = 3;
+
+    /// <summary>What the mailbox is asked, for one meeting: two or three words at a time.</summary>
+    /// <remarks>
+    /// The words are ANDed by the DASL filter, so a query is a conjunction and a long one
+    /// finds nothing. Two queries: the meeting's own distinctive words, and the imagined
+    /// mail's best words that the title did not already carry -- which is the half that
+    /// finds "Kernel-Update KW 37" under "Linux Team Weekly".
+    /// </remarks>
+    private static IEnumerable<string> Queries(
+        DeskObject meeting,
+        IReadOnlyDictionary<string, string> imagined)
+    {
+        IReadOnlyList<string> own = DeskTriage.Keywords(meeting.Subject, most: 2);
+
+        if (own.Count > 0)
+            yield return string.Join(" ", own);
+
+        if (!imagined.TryGetValue(meeting.Id, out string? document))
+            yield break;
+
+        List<string> extra = DeskTriage.Keywords(document, most: 8)
+            .Where(w => !own.Contains(w, StringComparer.OrdinalIgnoreCase))
+            .OrderByDescending(w => w.Any(char.IsDigit))
+            .ThenByDescending(w => w.Length)
+            .Take(2)
+            .ToList();
+
+        if (extra.Count > 0)
+            yield return string.Join(" ", extra);
+    }
+
+    /// <summary>Who it is from and what it says, on one short line.</summary>
+    private static string Label(string who, string what) =>
+        (who is { Length: > 0 } ? Oneline(who) + " · " : string.Empty) + Shorten(Oneline(what), 110);
+
+    /// <summary>The day list with whatever the look-ahead has found so far folded into it.</summary>
+    private IReadOnlyList<VorzimmerWindow.DayEntry> WithAbout(
+        IReadOnlyList<VorzimmerWindow.DayEntry> day) =>
+        day
+            .Select(row => _dayAbout.TryGetValue(row.Id, out VorzimmerWindow.DayEntry? about)
+                ? row with
+                {
+                    AboutCount = about.AboutCount,
+                    AboutId = about.AboutId,
+                    AboutLabel = about.AboutLabel,
+                }
+                : row)
+            .ToList();
+
+    /// <summary>
+    /// The imagined mail for each meeting, or nothing when the model could not be asked.
+    /// Never throws: this is a better query, not the only one.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>> ImagineAboutAsync(
+        IReadOnlyList<DeskObject> meetings)
+    {
+        if (_session is null)
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var said = new System.Text.StringBuilder();
+
+        try
+        {
+            await _session.AskAsideAsync(
+                DeskTriage.ImagineAboutAppointments(meetings, MailboxLanguage),
+                agentEvent =>
+                {
+                    if (agentEvent is Shellvis.Core.Agent.AgentEvent.AssistantMessage message)
+                        said.Append(message.Text);
+                },
+                CancellationToken.None,
+                withTools: false).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"could not imagine the mail about today's meetings: {ex.Message}", "desk", isWarning: true);
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        return DeskTriage.ReadImagined(said.ToString(), meetings);
+    }
 
     /// <summary>
     /// Answer a question typed into the page, from two places at once.

@@ -459,6 +459,48 @@ internal static class DeskProbe
                     && DeskTriage.ImagineOne("x", "Finnish").Contains("in English", StringComparison.Ordinal),
                 "a colleague writes Auftragsbestaetigung; the vendor's system writes order confirmation");
 
+            // The look-ahead needs a query the appointment does not have: "Linux Team
+            // Weekly" appears in the invitation and nowhere else, while the mail that
+            // matters before it says "Kernel-Update KW 37".
+            var meeting = new[]
+            {
+                new DeskObject(
+                    Id: DeskObject.MakeId(DeskKind.Appointment, "g1"),
+                    Kind: DeskKind.Appointment,
+                    Subject: "Linux Team Weekly",
+                    WhoName: "Schwarz, Martin",
+                    WhoAddress: string.Empty,
+                    When: now.AddHours(2),
+                    Due: null,
+                    State: "Raum 2.04",
+                    TicketKey: null,
+                    Thread: null,
+                    EntryId: "0000APPT",
+                    Facts: null,
+                    Enrichment: null,
+                    FirstSeen: now,
+                    LastSeen: now),
+            };
+
+            string aboutMeeting = DeskTriage.ImagineAboutAppointments(meeting, "German");
+
+            Check("a meeting is asked for the mail that would be about it, not for its title",
+                aboutMeeting.Contains("imagine the MAIL that would have arrived about it", StringComparison.Ordinal)
+                    && aboutMeeting.Contains("do not simply repeat its title", StringComparison.Ordinal)
+                    && aboutMeeting.Contains("Linux Team Weekly", StringComparison.Ordinal)
+                    && aboutMeeting.Contains("organiser: Schwarz, Martin", StringComparison.Ordinal)
+                    && aboutMeeting.Contains("where: Raum 2.04", StringComparison.Ordinal));
+
+            Check("and in the mailbox's language and in English, like every other imagining",
+                aboutMeeting.Contains("Write it in German", StringComparison.Ordinal)
+                    && aboutMeeting.Contains("in English", StringComparison.Ordinal));
+
+            Check("its answer is read back by the same parser",
+                DeskTriage.ReadImagined("1 | Kernel-Update KW 37 auf den Webservern, von Schwarz", meeting)
+                    is { Count: 1 } aboutRead
+                    && aboutRead[meeting[0].Id].Contains("Kernel-Update", StringComparison.Ordinal),
+                "one shape for every imagined document, so one place can get it wrong");
+
             Check("and on an English desk, English alone",
                 DeskTriage.LanguageRule("English").Contains("Write it in English", StringComparison.Ordinal)
                     && !DeskTriage.LanguageRule("English").Contains("semicolon", StringComparison.Ordinal));

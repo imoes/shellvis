@@ -79,6 +79,15 @@ public sealed class UiText
     /// <summary>Beside the meeting-request count in the day tray.</summary>
     public required string MeetingRequestsNote { get; init; }
 
+    /// <summary>Under an appointment that has exactly one mail about it.</summary>
+    public required string OneMailAbout { get; init; }
+
+    /// <summary>"Mails dazu" / "mails about it" -- after a count of more than one.</summary>
+    public required string MailsAbout { get; init; }
+
+    /// <summary>What the day tray says while the mail about each appointment is being looked up.</summary>
+    public required string LookingAhead { get; init; }
+
     // ------------------------------------------------------------- the page: the search
     //
     // The trays show a handful and put the rest behind a count. The search is how the rest
@@ -316,6 +325,9 @@ public sealed class UiText
         HoursShort = " h ",
         AllDay = "all day",
         MeetingRequestsNote = "check for a clash",
+        OneMailAbout = "1 mail about it",
+        MailsAbout = " mails about it",
+        LookingAhead = "looking for mail about today's meetings ...",
 
         SearchPlaceholder = "Search the mailbox and the desk",
         SearchButton = "Search",
@@ -446,6 +458,9 @@ public sealed class UiText
         HoursShort = " Std. ",
         AllDay = "ganztägig",
         MeetingRequestsNote = "auf Kollision prüfen",
+        OneMailAbout = "1 Mail dazu",
+        MailsAbout = " Mails dazu",
+        LookingAhead = "sucht Post zu den heutigen Terminen ...",
 
         SearchPlaceholder = "Postfach und Schreibtisch durchsuchen",
         SearchButton = "Suchen",

@@ -277,6 +277,74 @@ public static class DeskTriage
     public const int ImaginedFrom = 600;
 
     /// <summary>
+    /// Ask the model to imagine, for each appointment, the mail that would be about it.
+    /// </summary>
+    /// <remarks>
+    /// <b>The look-ahead rule needs a query, and the appointment's subject is a poor one.</b>
+    /// "Linux Team Weekly" appears in the invitation and in nothing else; the mail that
+    /// matters before that meeting says "Kernel-Update KW 37" or carries the agenda, and it
+    /// shares no word with the appointment's title. So the same HyDE step runs here: the
+    /// model writes what the mail about this meeting would say -- its subject, who would have
+    /// sent it, the documents and identifiers it would carry -- and the desk and the mailbox
+    /// are searched with those words.
+    ///
+    /// <b>Only what is still to come.</b> A reminder after the meeting is worthless, and the
+    /// caller passes only the appointments that have not ended. The attendees are named
+    /// because they are the strongest search term a meeting has: the organiser's name finds
+    /// the mail they sent about it.
+    /// </remarks>
+    public static string ImagineAboutAppointments(
+        IReadOnlyList<DeskObject> appointments,
+        string? language = null)
+    {
+        var sb = new StringBuilder();
+
+        sb.AppendLine("""
+            For each appointment below, imagine the MAIL that would have arrived about it and
+            that its owner should have read before it starts: the agenda, the document to
+            review, a question or a change from somebody attending, a room change, a
+            cancellation, the minutes of the last one. Write that imagined mail in ONE line,
+            the way it would actually be worded: its likely subject, who would have sent it,
+            and every identifier it would carry -- project names, system names, ticket keys,
+            document titles, the topic the meeting is actually about. Concrete words, not a
+            description of the meeting, and do not simply repeat its title.
+            """);
+
+        sb.AppendLine(LanguageRule(language));
+
+        sb.AppendLine("""
+
+            Answer with one line per appointment, nothing else, in this exact form:
+
+                <number> | <the imagined mail, in its own words>
+
+            No preamble, no blank lines, no pipe character inside the line.
+
+            The appointments:
+            """);
+
+        for (int i = 0; i < appointments.Count; i++)
+        {
+            DeskObject one = appointments[i];
+
+            sb.Append(string.Create(CultureInfo.InvariantCulture, $"{i + 1}. "))
+                .Append(one.When.ToString("dd.MM. HH:mm", CultureInfo.InvariantCulture))
+                .Append("  title: ")
+                .Append(Short(one.Subject, 160));
+
+            if (one.WhoName is { Length: > 0 } organiser)
+                sb.Append("  organiser: ").Append(Short(organiser, 60));
+
+            if (one.State is { Length: > 0 } place)
+                sb.Append("  where: ").Append(Short(place, 60));
+
+            sb.AppendLine();
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
     /// The imagined document for one question typed by a person, for the search box.
     /// </summary>
     /// <remarks>

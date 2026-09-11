@@ -110,6 +110,10 @@ internal static class Program
                 // using the feature for ten minutes.
                 "watch" => WatchProbe.Run(),
 
+                // Both languages, and the page rendered in each. Pure: every failure in a
+                // translation is a blank or an untranslated line, and neither throws.
+                "language" => LanguageProbe.Run(),
+
                 // Reading a url over plain HTTP, and the token line in the answer window.
                 // Pure: both fail by producing something that looks right, which is not a
                 // thing anybody catches by using the feature.

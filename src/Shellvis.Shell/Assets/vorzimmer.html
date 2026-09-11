@@ -1,4 +1,4 @@
-<title>Das Vorzimmer</title>
+<title>{{DeskTitle}}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -607,30 +607,30 @@
        says so in words, no send button anywhere -- and a page that states them
        instead has substituted a description for the thing. -->
   <header class="masthead">
-    <p class="eyebrow">Shellvis &middot; Sekretariat</p>
-    <h1>Das Vorzimmer</h1>
+    <p class="eyebrow">{{DeskEyebrow}}</p>
+    <h1>{{DeskTitle}}</h1>
   </header>
 
   <!-- --------------------------------------------------------- the numbers -->
   <section class="band">
     <div class="band-head">
-      <p class="eyebrow">Stand</p>
+      <p class="eyebrow">{{StandEyebrow}}</p>
 
       <div class="head-row">
-        <h2>Was gerade auf dem Schreibtisch liegt</h2>
+        <h2>{{StandHeading}}</h2>
 
         <div class="freshness">
-          <span id="counted-at" class="stale">noch nicht gezählt</span>
-          <button type="button" id="refresh" hidden>Jetzt zählen</button>
+          <span id="counted-at" class="stale">{{NotCountedYet}}</span>
+          <button type="button" id="refresh" hidden>{{CountNow}}</button>
         </div>
       </div>
 
     </div>
 
     <div class="refreshed" id="refreshed" hidden>
-      <strong>Aktualisiert</strong>
+      <strong>{{Refreshed}}</strong>
       <span id="refreshed-what"></span>
-      <button type="button" id="refreshed-close">Schließen</button>
+      <button type="button" id="refreshed-close">{{CloseWord}}</button>
     </div>
 
     <!-- What the model decided, then the facts nobody has to decide.
@@ -639,98 +639,98 @@
          needs no answer, and a system can send something that does. -->
     <div class="desk">
       <div class="desk-cell answer">
-        <span class="desk-label">Braucht Antwort
+        <span class="desk-label">{{NeedsAnswer}}
           <span class="badge" data-badge="answer" hidden></span>
         </span>
         <span class="desk-value" data-count="answer">&mdash;</span>
-        <span class="desk-note">jemand wartet</span>
+        <span class="desk-note">{{NeedsAnswerNote}}</span>
       </div>
 
       <div class="desk-cell">
-        <span class="desk-label">Nur Information
+        <span class="desk-label">{{JustInformation}}
           <span class="badge" data-badge="information" hidden></span>
         </span>
         <span class="desk-value" data-count="information">&mdash;</span>
-        <span class="desk-note">wissen, nicht antworten</span>
+        <span class="desk-note">{{JustInformationNote}}</span>
       </div>
 
       <div class="desk-cell">
-        <span class="desk-label">Nicht lesenswert</span>
+        <span class="desk-label">{{NotWorthReading}}</span>
         <span class="desk-value" data-count="ignore">&mdash;</span>
-        <span class="desk-note">Rundschreiben, Dubletten</span>
+        <span class="desk-note">{{NotWorthReadingNote}}</span>
       </div>
 
       <div class="desk-cell">
-        <span class="desk-label">Noch unsortiert</span>
+        <span class="desk-label">{{NotYetSorted}}</span>
         <span class="desk-value" data-count="pending">&mdash;</span>
-        <span class="desk-note" data-note="pending">wird der Reihe nach beurteilt</span>
+        <span class="desk-note" data-note="pending">{{NotYetSortedNote}}</span>
       </div>
 
       <div class="desk-cell">
-        <span class="desk-label">Ungelesen
+        <span class="desk-label">{{Unread}}
           <span class="badge" data-badge="unread" hidden></span>
         </span>
         <span class="desk-value" data-count="unread">&mdash;</span>
-        <span class="desk-note" data-note="unread">im Posteingang</span>
+        <span class="desk-note" data-note="unread">{{UnreadNote}}</span>
       </div>
 
       <div class="desk-cell">
-        <span class="desk-label">Terminanfragen
+        <span class="desk-label">{{MeetingRequests}}
           <span class="badge" data-badge="requests" hidden></span>
         </span>
         <span class="desk-value" data-count="requests">&mdash;</span>
-        <span class="desk-note">auf Kollision prüfen</span>
+        <span class="desk-note">{{MeetingRequestsNote}}</span>
       </div>
 
       <div class="desk-cell">
-        <span class="desk-label">Heute noch</span>
+        <span class="desk-label">{{LeftToday}}</span>
         <span class="desk-value" data-count="today">&mdash;</span>
-        <span class="desk-note" data-note="next">Termine</span>
+        <span class="desk-note" data-note="next">{{LeftTodayNote}}</span>
       </div>
 
       <div class="desk-cell">
-        <span class="desk-label">Überfällig
+        <span class="desk-label">{{Overdue}}
           <span class="badge" data-badge="overdue" hidden></span>
         </span>
         <span class="desk-value" data-count="overdue">&mdash;</span>
-        <span class="desk-note">Datum liegt in der Vergangenheit</span>
+        <span class="desk-note">{{OverdueNote}}</span>
       </div>
     </div>
     <p class="remembering" id="remembering"></p>
 
-    <p class="counted-not-sorted" id="taken-at">Ohne Postfach keine Zahlen.</p>
+    <p class="counted-not-sorted" id="taken-at">{{NoMailboxNoNumbers}}</p>
   </section>
 
   <!-- ---------------------------------------------------------- the trays -->
   <section class="band">
     <div class="band-head">
-      <p class="eyebrow">Sortiert</p>
-      <h2>Die sortierte Post</h2>
+      <p class="eyebrow">{{SortedEyebrow}}</p>
+      <h2>{{SortedHeading}}</h2>
     </div>
 
     <div class="trays">
       <article class="tray tray-answer">
-        <h3>Braucht eine Antwort
+        <h3>{{TrayAnswer}}
           <span class="badge" data-badge="answer" hidden></span>
         </h3>
         <ul class="live" data-list="answer">
-          <li class="waiting">noch nicht sortiert</li>
+          <li class="waiting">{{NotSortedYet}}</li>
         </ul>
       </article>
 
       <article class="tray tray-information">
-        <h3>Muss man wissen
+        <h3>{{TrayInformation}}
           <span class="badge" data-badge="information" hidden></span>
         </h3>
         <ul class="live" data-list="information">
-          <li class="waiting">noch nicht sortiert</li>
+          <li class="waiting">{{NotSortedYet}}</li>
         </ul>
       </article>
 
       <article class="tray tray-third">
-        <h3>Nicht lesenswert</h3>
+        <h3>{{TrayIgnore}}</h3>
         <p class="count" data-count="ignore">&mdash;</p>
-        <p class="count-note">nicht aufgezählt</p>
+        <p class="count-note">{{TrayIgnoreNote}}</p>
       </article>
     </div>
   </section>
@@ -758,8 +758,10 @@
     var countedAt = document.getElementById("counted-at");
     var refresh = document.getElementById("refresh");
 
-    /* The pending "gezählt" -> "Jetzt zählen" restore, so two counts in quick succession
-     * do not race each other back. */
+    /* The pending "counted" -> "count now" restore, so two counts in quick succession do
+     * not race each other back. Named in English like the rest of the source: the words a
+     * reader sees come from the token map, and a comment quoting one language would be
+     * half wrong in the other. */
     var restore = 0;
 
     /* Whether a sorting pass is running right now. Held here because a full render must
@@ -791,14 +793,14 @@
     /* What each key is called when the notice has to name it. Held here rather than derived
      * from the labels, because a label is styled text and this is a sentence. */
     var NAMES = {
-      answer: "brauchen eine Antwort",
-      information: "zur Information",
-      ignore: "nicht lesenswert",
-      pending: "noch unsortiert",
-      unread: "ungelesen",
-      requests: "Terminanfragen",
-      today: "Termine heute",
-      overdue: "überfällig"
+      answer: "{{NameAnswer}}",
+      information: "{{NameInformation}}",
+      ignore: "{{NameIgnore}}",
+      pending: "{{NamePending}}",
+      unread: "{{NameUnread}}",
+      requests: "{{NameRequests}}",
+      today: "{{NameToday}}",
+      overdue: "{{NameOverdue}}"
     };
 
     function put(attribute, key, text) {
@@ -827,13 +829,13 @@
       }
 
       var behind = older > 0
-        ? "und " + older + (older === 1 ? " weitere" : " weitere")
+        ? "{{AndPrefix}}" + older + "{{MoreSuffix}}"
         : "";
 
       if (!rows || rows.length === 0) {
         var nothing = document.createElement("li");
         nothing.className = "empty";
-        nothing.textContent = "nichts davon";
+        nothing.textContent = "{{NothingOfThat}}";
         list.appendChild(nothing);
         return;
       }
@@ -856,9 +858,9 @@
           var line = document.createElement("li");
           line.className = "older-line";
           line.textContent = i === 0
-            ? "nichts aus " + (days ? "den letzten " + days + " Tagen" : "dem Zeitraum")
-                + " — älter:"
-            : "älter:";
+            ? "{{NothingFromTheLast}}" + (days ? days + "{{DaysSuffix}}" : "{{FromThePeriod}}")
+                + " — {{OlderLabel}}"
+            : "{{OlderLabel}}";
 
           list.appendChild(line);
         }
@@ -873,13 +875,13 @@
         open.type = "button";
         open.className = "row";
         open.setAttribute("data-id", row.id || "");
-        open.title = "In Outlook öffnen";
+        open.title = "{{OpenInOutlook}}";
 
         var who = document.createElement("span");
         who.className = "who";
 
         var name = document.createElement("span");
-        name.textContent = row.who || "(unbekannt)";
+        name.textContent = row.who || "{{UnknownSender}}";
 
         var when = document.createElement("time");
         when.textContent = row.when || "";
@@ -905,7 +907,7 @@
 
         var what = document.createElement("span");
         what.className = "what";
-        what.textContent = row.what || "(kein Betreff)";
+        what.textContent = row.what || "{{NoSubject}}";
         what.title = row.what || "";
         open.appendChild(what);
 
@@ -926,7 +928,7 @@
 
       for (var i = 0; i < nodes.length; i++) {
         if (grown > 0) {
-          nodes[i].textContent = "+" + grown + " neu";
+          nodes[i].textContent = "+" + grown + "{{BadgeNewSuffix}}";
           nodes[i].hidden = false;
         } else {
           nodes[i].hidden = true;
@@ -980,8 +982,8 @@
          * period once left a backlog of unread mail permanently unjudged. What the period
          * does bound is the lists below and what "neulich" means in a question, so both
          * are named rather than left to be inferred from a slider. */
-        remembering.textContent = "Sortiert wird alles Ungelesene. Auf dem Tisch liegen "
-          + desk.remembering + " — Älteres wird nur gezählt. Änderbar in den Einstellungen.";
+        remembering.textContent = "{{PeriodSentenceStart}}"
+          + desk.remembering + "{{PeriodSentenceEnd}}";
       }
 
       if (desk.nextAppointment) {
@@ -997,7 +999,7 @@
         /* The same time next to the heading, which is where it is actually read. Without it
          * a page that refreshed and found nothing changed looks exactly like a page that
          * did not refresh at all -- and the two were indistinguishable until this line. */
-        countedAt.textContent = "gezählt um " + desk.takenAt;
+        countedAt.textContent = "{{CountedAt}}" + desk.takenAt;
         countedAt.classList.remove("stale");
       }
 
@@ -1019,11 +1021,11 @@
         refresh.textContent = "gezählt";
 
         restore = window.setTimeout(function () {
-          refresh.textContent = "Jetzt zählen";
+          refresh.textContent = "{{CountNow}}";
           restore = 0;
         }, 1400);
       } else {
-        refresh.textContent = "Jetzt zählen";
+        refresh.textContent = "{{CountNow}}";
       }
 
       /* The notice, and only when something actually grew. An update that changed nothing is
@@ -1066,13 +1068,13 @@
       refresh.addEventListener("click", function () {
         asked = true;
         refresh.disabled = true;
-        refresh.textContent = "zählt ...";
+        refresh.textContent = "{{Counting}}";
 
         /* The label goes with it. A count on a warm mailbox can come back in well under a
-         * second, so the "zählt ..." on the button may never be seen at all -- and then the
+         * second, so the "{{Counting}}" on the button may never be seen at all -- and then the
          * only evidence left is a timestamp that may not have moved. Changing the label too
          * guarantees the press is acknowledged before the answer arrives. */
-        countedAt.textContent = "zählt ...";
+        countedAt.textContent = "{{Counting}}";
         countedAt.classList.add("stale");
 
         window.chrome.webview.postMessage("refresh");
@@ -1088,8 +1090,8 @@
             if (pendingNote) {
               pendingNote.textContent = sortingNow
                 ? (data.sortingCount > 1
-                    ? "beurteilt gerade " + data.sortingCount + " Nachrichten ..."
-                    : "beurteilt gerade eine Nachricht ...")
+                    ? "{{JudgingManyStart}}" + data.sortingCount + "{{JudgingManyEnd}}"
+                    : "{{JudgingOne}}")
                 : pendingIdle;
             }
 
@@ -1100,7 +1102,7 @@
             render(data);
           } else if (data && data.problem) {
             /* The count could not be taken. The button has to come back either way: a
-             * control left saying "zählt ..." for ever is worse than one that says the
+             * control left saying "{{Counting}}" for ever is worse than one that says the
              * attempt failed. */
             countedAt.textContent = data.problem;
             countedAt.classList.add("stale");
@@ -1117,10 +1119,10 @@
        * not run its script yet. */
       window.chrome.webview.postMessage("ready");
     } else {
-      /* No bridge: this is a copy of the page away from the machine. "Noch nicht gezählt"
+      /* No bridge: this is a copy of the page away from the machine. "{{NotCountedYet}}"
        * would suggest a count is coming; it is not, and saying which is the honest half of
        * showing dashes. */
-      countedAt.textContent = "ohne Postfach keine Zahlen";
+      countedAt.textContent = "{{NoMailboxShort}}";
     }
   })();
 </script>

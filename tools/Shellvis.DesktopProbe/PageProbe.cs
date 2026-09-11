@@ -61,7 +61,17 @@ internal static class PageProbe
             return failures;
         }
 
-        string html = File.ReadAllText(page);
+        // The SOURCE, with its {{tokens}} still in it. Structure is checked against this:
+        // the stylesheet, the absence of a doctype, the external links to be stripped.
+        string source = File.ReadAllText(page);
+
+        // And the page as a reader gets it. Every check about what the page SAYS runs
+        // against this, because since the page became bilingual the words in the file are
+        // token names and the words on screen come from UiText -- so asserting against the
+        // file would be asserting against something nobody reads. Rendering here also means
+        // a token with no string behind it fails a content check rather than passing one.
+        string html = Shellvis.Core.Ui.UiText.En.Tokens
+            .Aggregate(source, (acc, t) => acc.Replace("{{" + t.Key + "}}", t.Value, StringComparison.Ordinal));
 
         // ------------------------------------------------------------------ it ships
         Console.WriteLine("-- it is in the build --");
@@ -75,7 +85,7 @@ internal static class PageProbe
                 && !html.Contains("<html", StringComparison.OrdinalIgnoreCase),
             "the skeleton is supplied by the window and by the artifact host, once each");
 
-        Check("it carries its own title", html.Contains("<title>Das Vorzimmer</title>", StringComparison.Ordinal));
+        Check("it carries its own title", html.Contains("<title>" + Shellvis.Core.Ui.UiText.En.DeskTitle + "</title>", StringComparison.Ordinal));
 
         // ------------------------------------------------------------- nothing leaves
         Console.WriteLine("\n-- nothing leaves the machine --");
@@ -133,7 +143,7 @@ internal static class PageProbe
             ("sorted before anything is said: three trays", "class=\"trays\""),
             ("a handful rather than thirty: a list per tray", "data-list="),
             ("the rest behind a count", "data-count=\"ignore\""),
-            ("an empty tray says so in words", "nichts davon"),
+            ("an empty tray says so in words", Shellvis.Core.Ui.UiText.En.NothingOfThat),
             ("look ahead: what is left today", "data-count=\"today\""),
             ("nothing dropped: what is overdue", "data-count=\"overdue\""),
         })
@@ -200,7 +210,7 @@ internal static class PageProbe
             "a zero claims the mailbox is empty; a dash says it was not measured");
 
         Check("the page admits what has not been judged yet",
-            html.Contains("Noch unsortiert", StringComparison.Ordinal),
+            html.Contains(Shellvis.Core.Ui.UiText.En.NotYetSorted, StringComparison.Ordinal),
             "judging costs a model call each, so a busy morning arrives faster than it is read");
 
         Check("there is somewhere for the update notice to appear",
@@ -265,12 +275,12 @@ internal static class PageProbe
 
         Check("it states the period, and what the period governs",
             html.Contains(@"id=""remembering""", StringComparison.Ordinal)
-                && html.Contains("Sortiert wird alles Ungelesene", StringComparison.Ordinal),
+                && html.Contains(Shellvis.Core.Ui.UiText.En.PeriodSentenceStart.Trim(), StringComparison.Ordinal),
             "the unread count is the whole folder and the verdicts cover the period; "
                 + "side by side without a word they read as a contradiction");
 
         Check("and says where it is changed",
-            html.Contains("in den Einstellungen", StringComparison.Ordinal),
+            html.Contains("in the settings", StringComparison.Ordinal),
             "a value shown with no way to reach its control is a dead end");
 
         // Taken from DeskWindow rather than written out, so the check follows a change to
@@ -308,7 +318,7 @@ internal static class PageProbe
             "this page is also published on the web; nobody's inbox belongs in a file");
 
         Check("a list says it is waiting rather than showing nothing",
-            html.Contains("noch nicht sortiert", StringComparison.Ordinal));
+            html.Contains(Shellvis.Core.Ui.UiText.En.NotSortedYet, StringComparison.Ordinal));
 
         // Fresh first, older only when nothing fresh is waiting.
         //
@@ -330,8 +340,8 @@ internal static class PageProbe
         // The class ASSIGNMENT, not the CSS rule for it. The first occurrence of the bare
         // name is the stylesheet a few hundred lines earlier, which put the two literals
         // half a file apart and failed a distance check that was measuring the wrong pair.
-        int lineAt = html.IndexOf("className = \"older-line\"", StringComparison.Ordinal);
-        int daysAt = html.IndexOf("\"den letzten \" + days", StringComparison.Ordinal);
+        int lineAt = source.IndexOf("className = \"older-line\"", StringComparison.Ordinal);
+        int daysAt = source.IndexOf("{{NothingFromTheLast}}", StringComparison.Ordinal);
 
         Check("and the line says how far back the period reached",
             lineAt >= 0 && daysAt > lineAt && daysAt - lineAt < 600,
@@ -346,9 +356,9 @@ internal static class PageProbe
         // these need an answer, so the heading says so and needs no label underneath
         // explaining that the list below it is something else.
         Check("the trays are named by the verdict they hold",
-            html.Contains("Braucht eine Antwort", StringComparison.Ordinal)
-                && html.Contains("Muss man wissen", StringComparison.Ordinal)
-                && html.Contains("Nicht lesenswert", StringComparison.Ordinal));
+            html.Contains(Shellvis.Core.Ui.UiText.En.TrayAnswer, StringComparison.Ordinal)
+                && html.Contains(Shellvis.Core.Ui.UiText.En.TrayInformation, StringComparison.Ordinal)
+                && html.Contains(Shellvis.Core.Ui.UiText.En.TrayIgnore, StringComparison.Ordinal));
 
         // The summary is what Shellvis adds; the subject belongs to Outlook. It was the
         // last line of the row at two thirds of caption size in the faintest grey -- 13

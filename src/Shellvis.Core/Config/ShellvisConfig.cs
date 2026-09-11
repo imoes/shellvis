@@ -304,6 +304,22 @@ public sealed class WindowSection
     public string[]? YieldTo { get; set; }
 }
 
+/// <summary>What language the interface speaks.</summary>
+public sealed class UiSection
+{
+    /// <summary>
+    /// "auto", "de" or "en". Auto follows the machine's display language.
+    /// </summary>
+    /// <remarks>
+    /// Its own section rather than a field on an existing one, and deliberately not
+    /// <c>voice.language</c>: that setting is the RECOGNITION language, which is what
+    /// dictation listens for. The two are independent -- somebody may dictate German into an
+    /// English interface, or the reverse -- and sharing one value would silently couple
+    /// them, so that changing the interface language would change what Whisper hears.
+    /// </remarks>
+    public string? Language { get; set; }
+}
+
 public sealed class VoiceSection
 {
     /// <summary>
@@ -414,6 +430,9 @@ public sealed class ShellvisConfig
 
     /// <summary>Browser automation policy.</summary>
     public BrowserSection Browser { get; set; } = new();
+
+    /// <summary>Which language the interface is shown in.</summary>
+    public UiSection Ui { get; set; } = new();
 
     /// <summary>Dictation settings.</summary>
     public VoiceSection Voice { get; set; } = new();

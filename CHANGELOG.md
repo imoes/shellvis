@@ -4,6 +4,14 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.14.0
+
+- **Shellvis spricht Englisch und Deutsch.** Welche Sprache, entscheidet die Anzeigesprache
+  des Rechners; `ui.language` in der `config.yaml` überstimmt sie mit `de` oder `en`. Das
+  Vorzimmer, alle Beschriftungen, Tooltips und Meldungen sind übersetzt. Die Konsole unter
+  der Leiste bleibt Englisch: sie ist ein Protokoll von Werkzeugnamen und Ergebnissen, und
+  drei übersetzte Wörter um `browser_navigate` herum helfen niemandem.
+
 ## 0.12.0
 
 - **Das Vorzimmer sortiert die Post, statt sie nur zu zählen.** Jede ungelesene Nachricht

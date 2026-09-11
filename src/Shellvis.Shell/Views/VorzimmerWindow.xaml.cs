@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml;
 
 using Shellvis.Core.Desk;
 using Shellvis.Core.Office;
+using Shellvis.Core.Ui;
 using Shellvis.Shell.Interop;
 
 using Windows.Graphics;
@@ -47,6 +48,17 @@ public sealed partial class VorzimmerWindow : Window
     private bool _placed;
     private bool _trimmed;
     private nint _pillHandle;
+
+    /// <summary>
+    /// The language this window speaks, settled once when it is made.
+    ///
+    /// Once rather than per render: the page is loaded a single time per session and its
+    /// words go into the markup, so changing the setting takes effect when the window is
+    /// next opened. Re-reading it on every count would let half a page say one thing and
+    /// half another.
+    /// </summary>
+    private readonly UiText _text =
+        UiLanguage.For(Shellvis.Core.Config.ConfigStore.Load().Config.Ui.Language);
 
     public VorzimmerWindow()
     {
@@ -92,6 +104,12 @@ public sealed partial class VorzimmerWindow : Window
         // itself, so a drag started inside the page would never reach this handler and the
         // one place a drag DOES work should be the one place it looks like it would.
         MakeDraggable(Header);
+
+        // The two places this window names itself: the taskbar entry and the strip above
+        // the page. The XAML carries German as a default so the designer shows something
+        // real; this is what is actually seen.
+        Title = _text.VorzimmerWindowTitle;
+        HeaderText.Text = _text.VorzimmerWindowTitle;
     }
 
     private const double SurfaceRadius = 8;
@@ -253,7 +271,7 @@ public sealed partial class VorzimmerWindow : Window
             }
         };
 
-        View.NavigateToString(Page(DarkWanted() ? "dark" : "light"));
+        View.NavigateToString(Page(DarkWanted() ? "dark" : "light", _text));
     }
 
     private bool _ready;
@@ -312,7 +330,7 @@ public sealed partial class VorzimmerWindow : Window
                 // acknowledgement has to be finer-grained than the gesture it confirms.
                 TakenAt: now.TakenAt.ToString("HH:mm:ss", CultureInfo.CurrentCulture),
                 NextAppointment: now.NextAppointmentLabel,
-                ScannedNote: ScannedNote(now),
+                ScannedNote: ScannedNote(now, _text),
                 Remembering: remembering,
                 Answer: answer,
                 Information: information,
@@ -334,12 +352,12 @@ public sealed partial class VorzimmerWindow : Window
     /// -- a breakdown that quietly describes the recent two hundred of four hundred unread
     /// messages is a number that looks like an answer and is not one.
     /// </summary>
-    private static string ScannedNote(DeskSnapshot desk) =>
+    private static string ScannedNote(DeskSnapshot desk, UiText text) =>
         desk.Scanned < desk.Unread
             ? string.Create(
                 CultureInfo.CurrentCulture,
-                $"im Posteingang · die Aufteilung zählt die neuesten {desk.Scanned}")
-            : "im Posteingang";
+                $"{text.ScanCappedNote}{desk.Scanned}")
+            : text.UnreadNote;
 
     /// <summary>
     /// Tell the page a sorting pass is running, or has finished.
@@ -476,9 +494,9 @@ public sealed partial class VorzimmerWindow : Window
     /// page is built for exactly that: an explicit stamp wins over the browser's own
     /// preference in both directions, so the document matches the window it is in.
     /// </summary>
-    private static string Page(string theme)
+    private static string Page(string theme, UiText text)
     {
-        string body = Fragment();
+        string body = Fragment(text);
 
         // Every link to somewhere else, whatever its rel: preconnect, stylesheet, or
         // anything a later edit adds. Matched on the scheme rather than on a host, so a
@@ -511,8 +529,19 @@ public sealed partial class VorzimmerWindow : Window
             """;
     }
 
-    /// <summary>The page as it ships, out of the assembly.</summary>
-    private static string Fragment()
+    /// <summary>The page as it ships, out of the assembly, in the chosen language.</summary>
+    /// <remarks>
+    /// <b>One file with tokens, not one file per language.</b> Two copies of a 39 KB page
+    /// drift: a wording is improved in the one the author reads, a layout fix lands in one
+    /// and not the other, and nothing says so until somebody opens the other. The markup and
+    /// the script carry <c>{{PropertyName}}</c> and the strings come from
+    /// <see cref="UiText"/>, so there is one page and one place where its words live.
+    ///
+    /// A token nobody has a string for survives substitution and is visible as
+    /// <c>{{Whatever}}</c> on the page. That is deliberate -- the harness fails on a leftover
+    /// brace, so it is caught in the build rather than shipped as a blank.
+    /// </remarks>
+    private static string Fragment(UiText text)
     {
         Assembly assembly = typeof(VorzimmerWindow).Assembly;
 
@@ -530,7 +559,16 @@ public sealed partial class VorzimmerWindow : Window
 
         using var reader = new StreamReader(stream);
 
-        return reader.ReadToEnd();
+        return Localise(reader.ReadToEnd(), text);
+    }
+
+    /// <summary>Replace every <c>{{Key}}</c> with what that language calls it.</summary>
+    internal static string Localise(string page, UiText text)
+    {
+        foreach ((string key, string value) in text.Tokens)
+            page = page.Replace("{{" + key + "}}", value, StringComparison.Ordinal);
+
+        return page;
     }
 
     /// <summary>

@@ -91,6 +91,10 @@ public sealed partial class PillWindow : Window
     {
         InitializeComponent();
 
+        // Straight after the markup is up and before anything is shown, so nothing is ever
+        // visible in one language and then repainted in the other.
+        ApplyLanguage();
+
         _shaper = new WindowShaper(Win32Interop.GetWindowFromWindowId(AppWindow.Id));
 
         RootHost.Width = PillMetrics.Width;

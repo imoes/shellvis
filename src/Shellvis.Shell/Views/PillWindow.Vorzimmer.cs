@@ -122,7 +122,7 @@ public sealed partial class PillWindow
 
         if (_session?.Outlook is null)
         {
-            _vorzimmer?.Trouble("Outlook ist nicht erreichbar");
+            _vorzimmer?.Trouble(Words.OutlookUnreachable);
             return;
         }
 
@@ -226,7 +226,7 @@ public sealed partial class PillWindow
             // mailbox that has gone offline, is a normal state of the world; the page keeps
             // its dashes and the next tick tries again.
             AddRow(GlyphWarning, $"could not count the desk: {ex.Message}", "desk", isWarning: true);
-            _vorzimmer?.Trouble("konnte nicht gezählt werden");
+            _vorzimmer?.Trouble(Words.CouldNotCount);
         }
         finally
         {
@@ -331,16 +331,16 @@ public sealed partial class PillWindow
 
         // The one that costs attention, first and in its own words.
         if (tally.Answer > wasTally.Answer)
-            said.Add($"{tally.Answer - wasTally.Answer} braucht eine Antwort");
+            said.Add($"{tally.Answer - wasTally.Answer}{Words.NoticeNeedsAnswer}");
 
         if (now.Unread > before.Unread)
-            said.Add($"{now.Unread - before.Unread} neu ungelesen");
+            said.Add($"{now.Unread - before.Unread}{Words.NoticeNewUnread}");
 
         if (now.MeetingRequests > before.MeetingRequests)
-            said.Add($"{now.MeetingRequests - before.MeetingRequests} Terminanfrage(n)");
+            said.Add($"{now.MeetingRequests - before.MeetingRequests}{Words.NoticeMeetingRequests}");
 
         if (now.OverdueTasks > before.OverdueTasks)
-            said.Add($"{now.OverdueTasks - before.OverdueTasks} überfällig");
+            said.Add($"{now.OverdueTasks - before.OverdueTasks}{Words.NoticeOverdue}");
 
         if (said.Count == 0)
             return;

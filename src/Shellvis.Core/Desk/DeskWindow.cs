@@ -47,14 +47,24 @@ public sealed class DeskWindow(int days = 30)
     /// letzten Monat" and "das ganze Vierteljahr" were accusative and singular, and produced
     /// "Auf dem Tisch liegt den letzten Monat".
     /// </remarks>
-    public string Describe() => _days switch
+    public string Describe() => Describe(Ui.UiText.De);
+
+    /// <summary>
+    /// The window in words, in the language the interface speaks.
+    ///
+    /// The parameterless form stays German for the tool results, which are read by the model
+    /// and were tuned that way. The page and the settings form go through this one, because
+    /// an English page saying "On the desk is die letzten vier Wochen" was what the other
+    /// arrangement produced.
+    /// </summary>
+    public string Describe(Ui.UiText text) => _days switch
     {
-        <= 2 => "die letzten zwei Tage",
-        <= 7 => $"die letzten {_days} Tage",
-        <= 14 => "die letzten zwei Wochen",
-        <= 31 => "die letzten vier Wochen",
-        <= 62 => "die letzten zwei Monate",
-        _ => "die letzten drei Monate",
+        <= 2 => text.PeriodTwoDays,
+        <= 7 => text.PeriodDaysStart + _days.ToString(System.Globalization.CultureInfo.InvariantCulture) + text.PeriodDaysEnd,
+        <= 14 => text.PeriodTwoWeeks,
+        <= 31 => text.PeriodFourWeeks,
+        <= 62 => text.PeriodTwoMonths,
+        _ => text.PeriodThreeMonths,
     };
 
     private static int Clamp(int days) => Math.Clamp(days, Least, Most);

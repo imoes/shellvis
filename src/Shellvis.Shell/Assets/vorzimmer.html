@@ -19,6 +19,11 @@
     --rule:       #C2C8BF;
     --rule-soft:  #D7DCD4;
 
+    /* The one other colour on the page, and it is an alarm: what is past its date.
+       Only ever painted when the count is above zero -- an empty tray in a warning
+       colour would be a warning about nothing. */
+    --late:       #9A4A2E;
+
     --f-display: "Zilla Slab", Georgia, "Times New Roman", serif;
     --f-body:    "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
     --f-mono:    "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
@@ -44,6 +49,7 @@
       --tab-ink:    #101413;
       --rule:       #333B37;
       --rule-soft:  #262D29;
+      --late:       #D9906F;
       --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 12px rgba(0, 0, 0, .35);
     }
   }
@@ -58,6 +64,7 @@
     --tab-ink:    #101413;
     --rule:       #333B37;
     --rule-soft:  #262D29;
+    --late:       #D9906F;
     --shadow: 0 1px 0 rgba(0, 0, 0, .3), 0 2px 12px rgba(0, 0, 0, .35);
   }
 
@@ -73,13 +80,16 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* One screen. The page is a briefing and a briefing that has to be scrolled is two
+     of them, so the vertical spend is kept short: a tight top, a modest gap between the
+     masthead and the columns, and the columns themselves carry their own gaps. */
   .sheet {
     max-width: 1140px;
     margin: 0 auto;
-    padding: clamp(1.5rem, 4vw, 3.25rem) clamp(1.1rem, 4vw, 2.5rem) 4rem;
+    padding: clamp(1.1rem, 2.5vw, 1.75rem) clamp(1.1rem, 4vw, 2.5rem) 2.5rem;
     display: flex;
     flex-direction: column;
-    gap: clamp(2.25rem, 4vw, 3.5rem);
+    gap: 1.25rem;
   }
 
   h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; }
@@ -90,13 +100,6 @@
   a:focus-visible { outline: 2px solid var(--tab); outline-offset: 3px; }
 
   code, .mono { font-family: var(--f-mono); font-size: .92em; }
-
-  code {
-    background: color-mix(in srgb, var(--tab) 10%, transparent);
-    color: var(--ink);
-    padding: .08em .34em;
-    border-radius: 2px;
-  }
 
   /* An eyebrow is a filing label: mono, spaced, small, in folder green. */
   .eyebrow {
@@ -109,144 +112,54 @@
   }
 
   /* --------------------------------------------------------------- masthead
-     One column, because there is one thing in it. It was a two-column grid with
-     the "nothing is sent" stamp on the right; that stamp was a rule stated on a
-     page whose job is to embody rules, so it went with the rest of the prose. The
-     guarantee is not weaker for being unwritten: there is no send tool. */
+     A name on the left, the day on the right, one rule under both.
+
+     The title used to stand alone at display size over a double rule and cost a
+     hand's width of the screen before the first number. It is the name of a page,
+     not its content, so it is set smaller and shares its line with the two things a
+     briefing opens with: what day it is, and how fresh the figures are. */
   .masthead {
-    padding-bottom: clamp(1rem, 2.5vw, 1.5rem);
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: .5rem 2rem;
+    padding-bottom: .85rem;
     border-bottom: 3px double var(--rule);
   }
 
   .masthead h1 {
-    font-size: var(--step-4);
+    font-size: var(--step-3);
     font-weight: 700;
     line-height: 1.02;
     letter-spacing: -.015em;
-    margin: .5rem 0 0;
+    margin: .25rem 0 0;
   }
 
-  /* ---------------------------------------------------------------- section */
-  .band { display: flex; flex-direction: column; gap: 1.35rem; }
+  .masthead-right {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: .3rem;
+    text-align: right;
+  }
 
-  .band-head { display: flex; flex-direction: column; gap: .4rem; }
-
-  .band-head h2 {
-    font-size: var(--step-2);
+  /* The date, written out. It arrives from the application in the language of the
+     page and off the same clock as the count, so "Donnerstag" cannot disagree with
+     the weekday Outlook was asked about. Empty until the first count: a date the page
+     worked out for itself would be the one calculation this page must not do. */
+  .masthead-right .today {
+    font-family: var(--f-display);
+    font-size: var(--step-1);
     font-weight: 600;
-    letter-spacing: -.01em;
-  }
-
-  /* :not(.eyebrow), because ".band-head p" outranks the bare ".eyebrow" class and would
-     quietly repaint the filing label in body grey. Excluding it is honest; raising the
-     other selector's specificity to win a fight it should not be in is not. */
-  .band-head p:not(.eyebrow) { max-width: 68ch; color: var(--ink-soft); }
-
-  /* ----------------------------------------------------------------- trays
-     The two trays that hold mail are stacked, not side by side.
-
-     Side by side they were columns of about 340 pixels, and a summary of a
-     mail is a sentence: it wrapped to three lines and then clipped, so the
-     one thing on a row that Shellvis contributes was the thing with the
-     least room. Stacked, each gets the full width of the window and a
-     sentence fits on one or two lines. It also puts them in the order they
-     are read in -- what needs answering first, what is worth knowing under
-     it -- rather than asking the eye to choose between two equal columns.
-
-     The third tray is a number and nothing else, so it sits beside the stack
-     in a narrow column and spans both rows. Stacking it too would spend a
-     third of the page's height on one figure. */
-  .trays {
-    display: grid;
-    grid-template-columns: 1fr minmax(150px, 0.3fr);
-    grid-template-rows: auto auto;
-    gap: 1rem;
-  }
-
-  .tray-answer { grid-column: 1; grid-row: 1; }
-  .tray-information { grid-column: 1; grid-row: 2; }
-  .tray-third { grid-column: 2; grid-row: 1 / span 2; }
-
-  .tray {
-    background: var(--card);
-    border: 1px solid var(--rule);
-    border-top: 3px solid var(--tab);
-    box-shadow: var(--shadow);
-    padding: 1.1rem 1.15rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: .7rem;
-
-    /* Load-bearing, and the cause of a real defect.
-       A grid item's automatic minimum size is its MIN-CONTENT width, and a
-       nowrap line of mono text has an enormous one -- so a single long subject
-       ("... LAN//61030//L000271884 - DE, Langen (Hessen)") pushed this track
-       wider than the window, took the whole page into horizontal scrolling and
-       squeezed the first tray until its heading broke one word per line. The
-       ellipsis was set and could not apply: there was always room, because the
-       track grew instead. Zero here is what lets it clip. */
-    min-width: 0;
-  }
-
-  .tray h3 { font-size: var(--step-1); font-weight: 600; }
-
-  .tray p { color: var(--ink-soft); font-size: var(--step--1); }
-
-  .tray ul {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: .5rem;
-    border-top: 1px solid var(--rule-soft);
-    padding-top: .7rem;
-  }
-
-  .tray li { display: flex; gap: .55rem; align-items: baseline; }
-
-  .tray li::before {
-    content: "";
-    flex: 0 0 auto;
-    width: .4rem;
-    height: .4rem;
-    background: var(--tab);
-    transform: translateY(-.15em);
-  }
-
-  .tray-third { justify-content: space-between; }
-
-  /* p.count, not .count: ".tray p" above is a class AND an element, so it outranks a
-     bare class and silently reset this to caption size. The number is the point of the
-     third tray -- it lost that fight once already. */
-  .tray p.count {
-    font-family: var(--f-mono);
-    font-size: var(--step-4);
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-    color: var(--tab);
-  }
-
-  .tray p.count-note {
-    font-size: var(--step--1);
-    color: var(--ink-faint);
-    border-top: 1px solid var(--rule-soft);
-    padding-top: .7rem;
+    color: var(--ink);
+    min-height: 1.4em;
   }
 
   /* ------------------------------------------------------------- freshness
-     The time of the count and the button that redoes it, on the heading's own
-     line. Both are here rather than in a corner because "is this current?" is
-     the first question anybody asks of a page full of numbers, and the answer
-     has to be where they are already looking. */
-  .head-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: .75rem 1.5rem;
-  }
-
+     The time of the count and the button that redoes it, under the date. "Is this
+     current?" is the first question anybody asks of a page full of figures, and the
+     answer sits where the eye lands after the date. */
   .freshness {
     display: flex;
     align-items: baseline;
@@ -281,41 +194,125 @@
   .freshness > button:disabled { color: var(--ink-faint); cursor: default; }
   .freshness > button[hidden] { display: none !important; }
 
+  /* ----------------------------------------------------------------- columns
+     Two columns, and what goes where is the order of a briefing.
+
+     The wide column is read top to bottom: the day first, because appointments are
+     the fixed points everything else is arranged around; then what needs an answer;
+     then what is worth knowing. The two mail trays are stacked rather than side by
+     side because a summary of a mail is a sentence, and at half the width it wrapped
+     to three lines and clipped -- the one thing on a row that Shellvis contributes was
+     the thing with the least room.
+
+     The narrow column holds what can be said in a line or a number: what is late,
+     what was set aside unread, and how much the count covered. It is narrow because
+     none of that needs a sentence. */
+  .trays {
+    display: grid;
+    grid-template-columns: 1fr minmax(240px, 0.36fr);
+    gap: 1rem;
+    align-items: start;
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+
+    /* Load-bearing, and the cause of a real defect: a grid item's automatic minimum
+       size is its MIN-CONTENT width, and a nowrap line of mono text has an enormous
+       one -- so a single long subject pushed a track wider than the window and took
+       the whole page into horizontal scrolling. Zero here is what lets it clip. */
+    min-width: 0;
+  }
+
+  .tray {
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-top: 3px solid var(--tab);
+    box-shadow: var(--shadow);
+    padding: .9rem 1.05rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    min-width: 0;
+  }
+
+  /* On a tray heading the count sits inline after the words and the badge after the
+     count, so the heading stays the heading. */
+  .tray h3 {
+    font-size: var(--step-1);
+    font-weight: 600;
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+  }
+
+  .tray h3 .tray-count {
+    font-family: var(--f-mono);
+    font-size: var(--step-0);
+    font-weight: 400;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-soft);
+  }
+
+  .tray p { color: var(--ink-soft); font-size: var(--step--1); }
+
+  .tray ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    border-top: 1px solid var(--rule-soft);
+    padding-top: .6rem;
+  }
+
+  .tray li { display: block; }
+
   /* --------------------------------------------------------- the answer tray
      The one tray that costs attention is the one that looks like it. Everything
      else on this page is the same weight on purpose; this is the exception, and
      it is the only accent spent on a tray. */
   .tray-answer { border-top-width: 5px; }
 
-  .desk-cell.answer > .desk-value { color: var(--tab); }
+  /* ----------------------------------------------------------- the late tray
+     The second colour, and it appears only when there is something to be late. An
+     empty tray under a red rule is a warning about nothing, and a warning about
+     nothing is how a colour stops meaning anything. */
+  .tray-overdue.has-late { border-top-color: var(--late); }
+  .tray-overdue.has-late h3 .tray-count { color: var(--late); }
 
-  /* ------------------------------------------------------------ live lists
-     The real entries. A label above them says what the list IS, because the
-     tray heading is a judgement ("braucht heute eine Antwort") and these are
-     facts: this arrived, from this person, at this time. Putting facts under a
-     judgement without saying so is how a count starts claiming to be a triage. */
-  .tray > p.list-label {
+  /* ----------------------------------------------------------- the third tray
+     A number and nothing else. What was set aside unread is not listed, because
+     listing it would spend the page on the one tray whose point is that nobody has
+     to look. */
+  .tray-third { justify-content: space-between; }
+
+  /* p.count, not .count: ".tray p" above is a class AND an element, so it outranks a
+     bare class and silently reset this to caption size. The number is the point of the
+     third tray -- it lost that fight once already. */
+  .tray p.count {
     font-family: var(--f-mono);
-    font-size: .66rem;
-    letter-spacing: .1em;
-    text-transform: uppercase;
+    font-size: var(--step-3);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--ink-soft);
+  }
+
+  .tray p.count-note {
+    font-size: var(--step--1);
     color: var(--ink-faint);
     border-top: 1px solid var(--rule-soft);
-    padding-top: .7rem;
+    padding-top: .6rem;
   }
 
-  .tray ul.live {
-    border-top: 0;
-    padding-top: 0;
-    gap: .55rem;
-  }
-
-  .tray ul.live > li { display: block; }
-
-  /* A row is a button, and it has to look like one you can press without shouting
+  /* ------------------------------------------------------------- the rows
+     A row is a button, and it has to look like one you can press without shouting
      about it: no fill until the pointer is over it, a hairline that appears then,
      and the accent only on keyboard focus. */
-  .tray ul.live button.row {
+  .tray ul button.row {
     display: flex;
     flex-direction: column;
     gap: .12rem;
@@ -330,25 +327,22 @@
     margin: 0 -.35rem;
     cursor: pointer;
 
-    /* Same reason as on .tray: this is a flex item, and without it a nowrap
+    /* Same reason as on .column: this is a flex item, and without it a nowrap
        child sets the floor for how narrow the row may be. */
     min-width: 0;
   }
 
-  .tray ul.live button.row:hover {
+  .tray ul button.row:hover {
     border-color: var(--rule);
     background: color-mix(in srgb, var(--tab) 5%, transparent);
   }
 
-  .tray ul.live button.row:focus-visible {
+  .tray ul button.row:focus-visible {
     outline: 2px solid var(--tab);
     outline-offset: 1px;
   }
 
-  /* No marker on a live row: the bullet belonged to a list of rules, and on real
-     entries it competes with the sender's name for the eye. */
-  .tray ul.live > li::before { content: none; }
-
+  /* -------------------------------------------------------------- mail rows */
   .tray ul.live .who {
     font-size: var(--step--1);
     color: var(--ink);
@@ -376,7 +370,7 @@
 
   /* The subject line: provenance, one line of it, clipped.
      min-width:0 is what makes the clip possible rather than nominal -- see the
-     note on .tray. Without it this span was the widest thing on the page. */
+     note on .column. Without it this span was the widest thing on the page. */
   .tray ul.live .what {
     font-family: var(--f-mono);
     font-size: .68rem;
@@ -404,11 +398,10 @@
        not a label: clipped to one line it says "Zwischenmeldung eines Ticket-Al…"
        and answers nothing.
 
-       Four lines, matched to what the store keeps. The summary is now one or two
+       Four lines, matched to what the store keeps. The summary is one or two
        sentences of up to about forty words and is stored to 400 characters; at
        the full width of a stacked tray a line holds roughly a hundred, so four
-       is the clamp that cannot cut a summary the store was willing to keep. It
-       was three, from when the prompt asked for twelve words.
+       is the clamp that cannot cut a summary the store was willing to keep.
 
        anywhere, because a ticket reference with no spaces in it is otherwise one
        unbreakable word as wide as it is long. */
@@ -420,8 +413,23 @@
     overflow: hidden;
   }
 
-  .tray ul.live > li.waiting,
-  .tray ul.live > li.empty {
+  /* The line under a row that points at what the desk already held about it. Mono and
+     small like the subject, in the accent because it can be followed, indented so it
+     reads as belonging to the row above rather than as a row of its own. */
+  .tray ul.live button.row.related {
+    display: block;
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    color: var(--tab);
+    padding: .1rem .35rem .15rem 1.1rem;
+    margin-top: -.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tray ul > li.waiting,
+  .tray ul > li.empty {
     font-size: var(--step--1);
     color: var(--ink-faint);
   }
@@ -439,64 +447,127 @@
     margin-top: .25rem;
   }
 
-  /* The remembering period is a SETTING and lives in the settings, not here.
-     It was a slider on this page first, and that was the wrong home: this page
-     reports what is on the desk, and a control that changes behaviour sitting
-     among figures that report it makes the reader wonder which of the numbers
-     they can also drag. What is left is one read-only line saying what the
-     period currently is. */
-  .remembering {
+  /* --------------------------------------------------------------- day rows
+     Time, title, room, and a word about where it stands. Three columns, because a
+     day list is read down the clock: the times line up, the titles follow, and the
+     note on the right says "vorbei", "läuft" or how long until it starts. */
+  .tray ul.agenda button.row.day {
+    display: grid;
+    grid-template-columns: 3.6rem minmax(0, 1fr) auto;
+    column-gap: .75rem;
+    align-items: baseline;
+    padding-left: .6rem;
+    border-left: 3px solid transparent;
+  }
+
+  .tray ul.agenda .when {
     font-family: var(--f-mono);
+    font-size: var(--step--1);
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+  }
+
+  .tray ul.agenda .title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+  }
+
+  .tray ul.agenda .room {
+    font-size: var(--step--1);
+    color: var(--ink-faint);
+    margin-left: .5rem;
+  }
+
+  .tray ul.agenda .note {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    color: var(--ink-faint);
+    white-space: nowrap;
+  }
+
+  /* What has been: kept, so the day has a shape, and dimmed so it does not compete. */
+  .tray ul.agenda button.row.day.past .when,
+  .tray ul.agenda button.row.day.past .title { color: var(--ink-faint); }
+
+  /* What is next: the one row with a mark on it, and its note in the accent. */
+  .tray ul.agenda button.row.day.next { border-left-color: var(--tab); }
+  .tray ul.agenda button.row.day.next .note { color: var(--tab); font-weight: 500; }
+
+  /* Meeting requests, under the day: a line, shown only when there are any. */
+  .tray p.requests {
+    font-size: var(--step--1);
+    color: var(--ink-soft);
+    border-top: 1px solid var(--rule-soft);
+    padding-top: .6rem;
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+  }
+
+  .tray p.requests[hidden] { display: none !important; }
+
+  /* --------------------------------------------------------------- due rows */
+  .tray ul.due button.row.late {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: .5rem;
+  }
+
+  .tray ul.due .task {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+    font-size: var(--step--1);
+  }
+
+  .tray ul.due .since {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    color: var(--late);
+    white-space: nowrap;
+  }
+
+  /* ---------------------------------------------------------------- ledger
+     Small print about the count itself: how much is unread in the folder, how much
+     the model has not judged yet, how far back the trays reach. None of it is a thing
+     to act on, which is why it is a line of caption text at the foot of the narrow
+     column rather than cells in a band across the top. */
+  .ledger {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    padding: 0 .2rem;
     font-size: var(--step--1);
     color: var(--ink-faint);
   }
 
-  /* -------------------------------------------------------------- the desk
-     The live numbers. Everything here is counted rather than judged, which is
-     why it sits in its own strip above the trays instead of inside them. */
-  /* Flex, not grid, and for one reason: seven cells in a grid of six columns leave the
-     seventh alone beside a bare strip of the container's own background, which reads as a
-     broken box. Flex-wrap lets the last row stretch to fill itself, so any number of
-     cells at any width comes out as a complete band. */
-  .desk {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1px;
-    background: var(--rule);
-    border: 1px solid var(--rule);
-  }
-
-  .desk-cell {
-    flex: 1 1 8rem;
-    background: var(--card);
-    padding: .7rem .8rem .75rem;
-    display: flex;
-    flex-direction: column;
-    gap: .15rem;
-  }
-
-  .desk-cell > .desk-label {
+  .ledger .figure {
     font-family: var(--f-mono);
-    font-size: .68rem;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    display: flex;
-    align-items: center;
-    gap: .4rem;
-  }
-
-  .desk-cell > .desk-value {
-    font-family: var(--f-mono);
-    font-size: var(--step-2);
     font-variant-numeric: tabular-nums;
-    line-height: 1.1;
-    color: var(--ink);
+    color: var(--ink-soft);
   }
 
-  .desk-cell > .desk-note {
+  .ledger p { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem; }
+
+  .remembering {
+    font-family: var(--f-mono);
     font-size: .7rem;
+    line-height: 1.5;
+  }
+
+  /* The caveat for the shared copy of this page, where there is no mailbox and every
+     figure is a dash. Hidden the moment real numbers arrive. */
+  .counted-not-sorted {
+    font-size: var(--step--1);
     color: var(--ink-faint);
+    border-top: 1px solid var(--rule-soft);
+    padding-top: .6rem;
   }
 
   /* A badge is what arrived, not what is there: "+3", never "12". A total that
@@ -516,34 +587,87 @@
 
   .badge[hidden] { display: none !important; }
 
-  /* On a tray heading the badge sits inline after the words, so the heading
-     stays the heading. */
-  .tray h3 {
+  /* ---------------------------------------------------------------- search
+     A field and a button in the middle of the masthead, between the name and the
+     date. Plain: it is a lookup, not a setting, and it should look like the search
+     box in every other program rather than like a control on the desk. */
+  .search {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
     gap: .5rem;
+    margin: 0;
+    flex: 1 1 320px;
+    max-width: 460px;
+    align-self: flex-end;
+    padding-bottom: .15rem;
   }
 
-  .tray p.tray-count {
-    font-family: var(--f-mono);
-    font-size: var(--step-1);
-    font-variant-numeric: tabular-nums;
-    color: var(--ink);
-  }
+  .search[hidden] { display: none !important; }
 
-  /* The caveat, and it is not decoration. These numbers are a count of what is
-     in the mailbox; the trays are a sorting somebody has to perform by reading.
-     Saying so here is what keeps the page honest. */
-  .counted-not-sorted {
+  .search > input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font: inherit;
     font-size: var(--step--1);
-    color: var(--ink-faint);
-    border-top: 1px solid var(--rule-soft);
-    padding-top: .8rem;
+    color: var(--ink);
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: .38rem .6rem;
+  }
+
+  .search > input::placeholder { color: var(--ink-faint); }
+
+  .search > input:focus-visible { outline: 2px solid var(--tab); outline-offset: 1px; }
+
+  .search > button {
+    font-family: var(--f-mono);
+    font-size: var(--step--1);
+    letter-spacing: .06em;
+    background: none;
+    border: 1px solid var(--rule);
+    color: var(--ink-soft);
+    padding: .18rem .7rem .22rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .search > button:hover:not(:disabled) { border-color: var(--tab); color: var(--ink); }
+  .search > button:focus-visible { outline: 2px solid var(--tab); outline-offset: 2px; }
+  .search > button:disabled { color: var(--ink-faint); cursor: default; }
+
+  .tray-search[hidden] { display: none !important; }
+
+  .tray-search h3 .tray-count {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .tray-search h3 .dismiss {
+    font: inherit;
+    font-size: var(--step--1);
+    background: none;
+    border: 1px solid var(--rule);
+    color: var(--ink-soft);
+    padding: .1rem .45rem .15rem;
+    cursor: pointer;
+  }
+
+  .tray-search h3 .dismiss:hover { border-color: var(--tab); color: var(--ink); }
+  .tray-search h3 .dismiss:focus-visible { outline: 2px solid var(--tab); outline-offset: 2px; }
+
+  /* A hit the desk already knew is drawn like a tray row; one only Outlook knew shows
+     the message's own first line instead of a sentence, and says so by being quieter. */
+  .tray ul.live .summary.preview {
+    color: var(--ink-soft);
+    -webkit-line-clamp: 2;
   }
 
   /* The update notice: shown when the numbers change while the page is open,
-     dismissible, and replaced rather than stacked. */
+     dismissible, and replaced rather than stacked. Directly under the masthead,
+     because "what changed since I last looked" is the first question on reopening. */
   .refreshed {
     display: flex;
     align-items: baseline;
@@ -551,7 +675,7 @@
     border: 1px solid var(--tab);
     border-left: 3px solid var(--tab);
     background: color-mix(in srgb, var(--tab) 8%, var(--card));
-    padding: .6rem .8rem .65rem;
+    padding: .55rem .8rem .6rem;
   }
 
   .refreshed[hidden] { display: none !important; }
@@ -582,135 +706,101 @@
 
   /* ------------------------------------------------------------------ narrow */
   @media (max-width: 900px) {
-    /* One column, and the explicit placements above have to be undone with it --
-       a grid-column: 2 in a single-column grid puts the tray in an implicit
-       second column and the page scrolls sideways again. */
     .trays { grid-template-columns: 1fr; }
 
-    .tray-answer,
-    .tray-information,
-    .tray-third {
-      grid-column: 1;
-      grid-row: auto;
-    }
+    .masthead-right { align-items: flex-start; text-align: left; }
+
+    .search { flex-basis: 100%; max-width: none; order: 3; }
   }
 </style>
 
 <div class="sheet">
 
-  <!-- A name and nothing else.
+  <!-- A name and the day, and nothing else.
        Everything that used to be here explained how a desk is kept: a lede, six
        rules with their sources, a worked morning, a list of what code decides.
        All of it true, none of it the desk. The rules are meant to SHAPE this page
-       -- three trays because sorting comes before speaking, a handful in each
-       because three things beat thirty, a count for the rest, an empty tray that
-       says so in words, no send button anywhere -- and a page that states them
-       instead has substituted a description for the thing. -->
+       -- the day first because it is fixed, then what needs an answer, then what
+       is late, a count for the rest, an empty tray that says so in words, no send
+       button anywhere -- and a page that states them instead has substituted a
+       description for the thing. -->
   <header class="masthead">
-    <p class="eyebrow">{{DeskEyebrow}}</p>
-    <h1>{{DeskTitle}}</h1>
+    <div class="masthead-left">
+      <p class="eyebrow">{{DeskEyebrow}}</p>
+      <h1>{{DeskTitle}}</h1>
+    </div>
+
+    <!-- The search. The trays show a handful and put the rest behind a count; this is
+         how the rest is reached. It asks two places at once -- what the desk remembers,
+         with the model's sentence where there is one, and Outlook's own search for
+         everything the desk never saw -- and the answer says which of them found what.
+         In the masthead rather than on a line of its own, because a line of its own cost
+         the height of an appointment row. Only where there is a mailbox: on a shared copy
+         of this page the form is not shown, because a search box that searches nothing is
+         a promise the page cannot keep. -->
+    <form class="search" id="search-form" hidden>
+      <input type="search" id="search-query" placeholder="{{SearchPlaceholder}}"
+             autocomplete="off" spellcheck="false" maxlength="120">
+      <button type="submit" id="search-go">{{SearchButton}}</button>
+    </form>
+
+    <div class="masthead-right">
+      <p class="today" id="today-date"></p>
+
+      <div class="freshness">
+        <span id="counted-at" class="stale">{{NotCountedYet}}</span>
+        <button type="button" id="refresh" hidden>{{CountNow}}</button>
+      </div>
+    </div>
   </header>
 
-  <!-- --------------------------------------------------------- the numbers -->
-  <section class="band">
-    <div class="band-head">
-      <p class="eyebrow">{{StandEyebrow}}</p>
+  <div class="refreshed" id="refreshed" hidden>
+    <strong>{{Refreshed}}</strong>
+    <span id="refreshed-what"></span>
+    <button type="button" id="refreshed-close">{{CloseWord}}</button>
+  </div>
 
-      <div class="head-row">
-        <h2>{{StandHeading}}</h2>
+  <!-- What the search found, in the same shape as the trays: who, when, the sentence,
+       the subject. Full width, above the columns, and gone again when closed -- a
+       result is an answer to a question, not a fixture of the desk. -->
+  <article class="tray tray-search" id="search-panel" hidden>
+    <h3>
+      <span>{{SearchHeading}}</span>
+      <span class="tray-count" id="search-terms"></span>
+      <button type="button" class="dismiss" id="search-close">{{CloseWord}}</button>
+    </h3>
+    <ul class="live" data-list="search"></ul>
+    <p class="count-note" id="search-where"></p>
+  </article>
 
-        <div class="freshness">
-          <span id="counted-at" class="stale">{{NotCountedYet}}</span>
-          <button type="button" id="refresh" hidden>{{CountNow}}</button>
-        </div>
-      </div>
+  <!-- ---------------------------------------------------------- the columns -->
+  <div class="trays">
 
-    </div>
+    <!-- The wide column: the day, then the mail, in the order they are read in. -->
+    <div class="column main">
 
-    <div class="refreshed" id="refreshed" hidden>
-      <strong>{{Refreshed}}</strong>
-      <span id="refreshed-what"></span>
-      <button type="button" id="refreshed-close">{{CloseWord}}</button>
-    </div>
-
-    <!-- What the model decided, then the facts nobody has to decide.
-         The old strip split the mail by SENDER -- von Menschen / automatisch --
-         and that was the wrong question: a colleague can send something that
-         needs no answer, and a system can send something that does. -->
-    <div class="desk">
-      <div class="desk-cell answer">
-        <span class="desk-label">{{NeedsAnswer}}
-          <span class="badge" data-badge="answer" hidden></span>
-        </span>
-        <span class="desk-value" data-count="answer">&mdash;</span>
-        <span class="desk-note">{{NeedsAnswerNote}}</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">{{JustInformation}}
-          <span class="badge" data-badge="information" hidden></span>
-        </span>
-        <span class="desk-value" data-count="information">&mdash;</span>
-        <span class="desk-note">{{JustInformationNote}}</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">{{NotWorthReading}}</span>
-        <span class="desk-value" data-count="ignore">&mdash;</span>
-        <span class="desk-note">{{NotWorthReadingNote}}</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">{{NotYetSorted}}</span>
-        <span class="desk-value" data-count="pending">&mdash;</span>
-        <span class="desk-note" data-note="pending">{{NotYetSortedNote}}</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">{{Unread}}
-          <span class="badge" data-badge="unread" hidden></span>
-        </span>
-        <span class="desk-value" data-count="unread">&mdash;</span>
-        <span class="desk-note" data-note="unread">{{UnreadNote}}</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">{{MeetingRequests}}
+      <!-- What is fixed. The appointments in order, with times: this is the shape of
+           the day and it comes first. Every value arrives worded from the application
+           -- "vorbei", "läuft", "in 40 Min." -- because working out which is which is
+           date arithmetic, and this page does none. -->
+      <article class="tray tray-today">
+        <h3>{{TrayToday}}
+          <span class="tray-count" data-count="today">&mdash;</span>
+        </h3>
+        <ul class="agenda" data-list="today">
+          <li class="waiting">{{NotCountedYet}}</li>
+        </ul>
+        <p class="requests" data-line="requests" hidden>
+          <span class="figure" data-count="requests">&mdash;</span>
+          <span>{{NameRequests}} &middot; {{MeetingRequestsNote}}</span>
           <span class="badge" data-badge="requests" hidden></span>
-        </span>
-        <span class="desk-value" data-count="requests">&mdash;</span>
-        <span class="desk-note">{{MeetingRequestsNote}}</span>
-      </div>
+        </p>
+      </article>
 
-      <div class="desk-cell">
-        <span class="desk-label">{{LeftToday}}</span>
-        <span class="desk-value" data-count="today">&mdash;</span>
-        <span class="desk-note" data-note="next">{{LeftTodayNote}}</span>
-      </div>
-
-      <div class="desk-cell">
-        <span class="desk-label">{{Overdue}}
-          <span class="badge" data-badge="overdue" hidden></span>
-        </span>
-        <span class="desk-value" data-count="overdue">&mdash;</span>
-        <span class="desk-note">{{OverdueNote}}</span>
-      </div>
-    </div>
-    <p class="remembering" id="remembering"></p>
-
-    <p class="counted-not-sorted" id="taken-at">{{NoMailboxNoNumbers}}</p>
-  </section>
-
-  <!-- ---------------------------------------------------------- the trays -->
-  <section class="band">
-    <div class="band-head">
-      <p class="eyebrow">{{SortedEyebrow}}</p>
-      <h2>{{SortedHeading}}</h2>
-    </div>
-
-    <div class="trays">
+      <!-- What the model decided needs something from the reader. -->
       <article class="tray tray-answer">
         <h3>{{TrayAnswer}}
+          <span class="tray-count" data-count="answer">&mdash;</span>
           <span class="badge" data-badge="answer" hidden></span>
         </h3>
         <ul class="live" data-list="answer">
@@ -720,20 +810,58 @@
 
       <article class="tray tray-information">
         <h3>{{TrayInformation}}
+          <span class="tray-count" data-count="information">&mdash;</span>
           <span class="badge" data-badge="information" hidden></span>
         </h3>
         <ul class="live" data-list="information">
           <li class="waiting">{{NotSortedYet}}</li>
         </ul>
       </article>
+    </div>
 
+    <!-- The narrow column: what can be said in a line or a number. -->
+    <aside class="column side">
+
+      <!-- What is late. Named, not merely counted: a number under "überfällig" says
+           that something was dropped and not what, and the rule this page is kept by
+           is that nothing is dropped. -->
+      <article class="tray tray-overdue">
+        <h3>{{TrayOverdue}}
+          <span class="tray-count" data-count="overdue">&mdash;</span>
+          <span class="badge" data-badge="overdue" hidden></span>
+        </h3>
+        <ul class="due" data-list="overdue">
+          <li class="waiting">{{NotCountedYet}}</li>
+        </ul>
+      </article>
+
+      <!-- The rest, behind a count. -->
       <article class="tray tray-third">
         <h3>{{TrayIgnore}}</h3>
         <p class="count" data-count="ignore">&mdash;</p>
         <p class="count-note">{{TrayIgnoreNote}}</p>
       </article>
-    </div>
-  </section>
+
+      <!-- What the count covered. Figures about the counting, not about the desk:
+           they were cells in a band of eight and every one of them looked as
+           important as "braucht Antwort". Small print is their size. -->
+      <div class="ledger">
+        <p>
+          <span class="figure" data-count="unread">&mdash;</span>
+          <span>{{NameUnread}}</span>
+          <span class="badge" data-badge="unread" hidden></span>
+          <span data-note="unread">{{UnreadNote}}</span>
+        </p>
+        <p>
+          <span class="figure" data-count="pending">&mdash;</span>
+          <span>{{NamePending}}</span>
+          <span data-note="pending">{{NotYetSortedNote}}</span>
+        </p>
+        <p class="remembering" id="remembering"></p>
+        <p class="counted-not-sorted" id="taken-at">{{NoMailboxNoNumbers}}</p>
+      </div>
+    </aside>
+  </div>
 </div>
 
 <script>
@@ -757,6 +885,16 @@
     var takenAt = document.getElementById("taken-at");
     var countedAt = document.getElementById("counted-at");
     var refresh = document.getElementById("refresh");
+    var todayDate = document.getElementById("today-date");
+    var requestsLine = document.querySelector('[data-line="requests"]');
+    var overdueTray = document.querySelector(".tray-overdue");
+
+    var searchForm = document.getElementById("search-form");
+    var searchQuery = document.getElementById("search-query");
+    var searchGo = document.getElementById("search-go");
+    var searchPanel = document.getElementById("search-panel");
+    var searchTerms = document.getElementById("search-terms");
+    var searchWhere = document.getElementById("search-where");
 
     /* The pending "counted" -> "count now" restore, so two counts in quick succession do
      * not race each other back. Named in English like the rest of the source: the words a
@@ -811,6 +949,32 @@
       }
     }
 
+    function clear(list) {
+      while (list.firstChild) {
+        list.removeChild(list.firstChild);
+      }
+    }
+
+    function emptyLine(list, text) {
+      var line = document.createElement("li");
+      line.className = "empty";
+      line.textContent = text;
+      list.appendChild(line);
+    }
+
+    /* A row is a button, not a div with a click handler. It is one: pressing it opens the
+     * thing in Outlook. Made properly it is reachable from the keyboard, announced as a
+     * control by a screen reader and focusable -- all of which a div would have to
+     * reimplement badly. */
+    function rowButton(id, extraClass) {
+      var open = document.createElement("button");
+      open.type = "button";
+      open.className = "row" + (extraClass ? " " + extraClass : "");
+      open.setAttribute("data-id", id || "");
+      open.title = "{{OpenInOutlook}}";
+      return open;
+    }
+
     /* The real entries.
      *
      * Built with createElement and textContent rather than by assembling HTML, and that is
@@ -824,19 +988,14 @@
 
       if (!list) { return; }
 
-      while (list.firstChild) {
-        list.removeChild(list.firstChild);
-      }
+      clear(list);
 
       var behind = older > 0
         ? "{{AndPrefix}}" + older + "{{MoreSuffix}}"
         : "";
 
       if (!rows || rows.length === 0) {
-        var nothing = document.createElement("li");
-        nothing.className = "empty";
-        nothing.textContent = "{{NothingOfThat}}";
-        list.appendChild(nothing);
+        emptyLine(list, "{{NothingOfThat}}");
         return;
       }
 
@@ -866,16 +1025,7 @@
         }
 
         var item = document.createElement("li");
-
-        /* A button, not a div with a click handler. It is one: pressing it opens the mail
-         * in Outlook. Made properly it is reachable from the keyboard, announced as a
-         * control by a screen reader and focusable -- all of which a div would have to
-         * reimplement badly. */
-        var open = document.createElement("button");
-        open.type = "button";
-        open.className = "row";
-        open.setAttribute("data-id", row.id || "");
-        open.title = "{{OpenInOutlook}}";
+        var open = rowButton(row.id, "");
 
         var who = document.createElement("span");
         who.className = "who";
@@ -912,14 +1062,182 @@
         open.appendChild(what);
 
         item.appendChild(open);
+
+        /* The earlier thing the sorting tied this to: the same request made before, the
+         * mail that confirmed the order this one asks about. Its own button under the row,
+         * because a button cannot sit inside a button and because it opens a DIFFERENT
+         * item -- the summary says "am 03.09." and this is where the 03.09. can be
+         * followed. Drawn only when the pass named one. */
+        if (row.relatedId && row.relatedLabel) {
+          var tied = rowButton(row.relatedId, "related");
+          tied.textContent = "↳ " + row.relatedLabel;
+          tied.title = row.relatedLabel;
+          item.appendChild(tied);
+        }
+
         list.appendChild(item);
       }
 
       if (behind) {
-        var rest = document.createElement("li");
-        rest.className = "empty";
-        rest.textContent = behind;
-        list.appendChild(rest);
+        emptyLine(list, behind);
+      }
+    }
+
+    /* What a search found.
+     *
+     * The same row as a tray -- who, when, the sentence, the subject -- because a hit is the
+     * same kind of thing as an entry, only asked for. A hit the desk remembered carries the
+     * model's sentence; one that only Outlook found carries the message's own first line,
+     * marked as a preview so it is not mistaken for a judgement. The note under the list
+     * arrives worded from the application and says which of the two found what and how far
+     * the mailbox was searched, so an empty list is an answer and not a shrug. */
+    function showSearch(found) {
+      var list = document.querySelector('[data-list="search"]');
+
+      if (!list || !searchPanel) { return; }
+
+      clear(list);
+
+      searchTerms.textContent = found.query ? "„" + found.query + "“" : "";
+      searchWhere.textContent = found.where || "";
+
+      var rows = found.rows || [];
+
+      if (rows.length === 0) {
+        emptyLine(list, "{{NothingFoundFor}}„" + (found.query || "") + "“");
+      }
+
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var item = document.createElement("li");
+        var open = rowButton(row.id, "");
+
+        var who = document.createElement("span");
+        who.className = "who";
+
+        var name = document.createElement("span");
+        name.textContent = row.who || "{{UnknownSender}}";
+
+        var when = document.createElement("time");
+        when.textContent = row.when || "";
+
+        who.appendChild(name);
+        who.appendChild(when);
+        open.appendChild(who);
+
+        if (row.why) {
+          var sentence = document.createElement("span");
+          sentence.className = "summary" + (row.preview ? " preview" : "");
+          sentence.textContent = row.why;
+          sentence.title = row.why;
+          open.appendChild(sentence);
+        }
+
+        var subject = document.createElement("span");
+        subject.className = "what";
+        subject.textContent = row.what || "{{NoSubject}}";
+        subject.title = row.what || "";
+        open.appendChild(subject);
+
+        item.appendChild(open);
+        list.appendChild(item);
+      }
+
+      if (found.more > 0) {
+        emptyLine(list, "{{AndPrefix}}" + found.more + "{{MoreSuffix}}");
+      }
+
+      searchPanel.hidden = false;
+      searchGo.disabled = false;
+      searchGo.textContent = "{{SearchButton}}";
+    }
+
+    /* The day.
+     *
+     * Every row arrives already worded: the time, the title, the room, and a note that
+     * says over, running, all day, or how long until it starts. The page only decides
+     * which class to paint it with, and it takes that from two flags rather than from
+     * comparing times -- see the note at the top. */
+    function fillDay(rows) {
+      var list = document.querySelector('[data-list="today"]');
+
+      if (!list) { return; }
+
+      clear(list);
+
+      if (!rows || rows.length === 0) {
+        emptyLine(list, "{{NoAppointmentsToday}}");
+        return;
+      }
+
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var item = document.createElement("li");
+        var open = rowButton(row.id, "day" + (row.past ? " past" : "") + (row.next ? " next" : ""));
+
+        var when = document.createElement("span");
+        when.className = "when";
+        when.textContent = row.when || "";
+
+        var title = document.createElement("span");
+        title.className = "title";
+        title.textContent = row.what || "{{NoSubject}}";
+        title.title = row.what || "";
+
+        if (row.where) {
+          var room = document.createElement("span");
+          room.className = "room";
+          room.textContent = row.where;
+          title.appendChild(room);
+        }
+
+        var note = document.createElement("span");
+        note.className = "note";
+        note.textContent = row.note || "";
+
+        open.appendChild(when);
+        open.appendChild(title);
+        open.appendChild(note);
+        item.appendChild(open);
+        list.appendChild(item);
+      }
+    }
+
+    /* What is late: the task and its date, longest overdue first, and a count of the rest. */
+    function fillDue(rows, older) {
+      var list = document.querySelector('[data-list="overdue"]');
+
+      if (!list) { return; }
+
+      clear(list);
+
+      if (!rows || rows.length === 0) {
+        emptyLine(list, "{{NothingOfThat}}");
+        return;
+      }
+
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var item = document.createElement("li");
+        var open = rowButton(row.id, "late");
+
+        var task = document.createElement("span");
+        task.className = "task";
+        task.textContent = row.what || "{{NoSubject}}";
+        task.title = row.what || "";
+
+        var since = document.createElement("span");
+        since.className = "since";
+        since.textContent = row.due || "";
+
+        open.appendChild(task);
+        open.appendChild(since);
+        item.appendChild(open);
+        list.appendChild(item);
+      }
+
+      if (older > 0) {
+        emptyLine(list, "{{AndPrefix}}" + older + "{{MoreSuffix}}");
       }
     }
 
@@ -960,8 +1278,26 @@
 
       var behind = desk.behind || {};
 
+      fillDay(desk.today);
       fill("answer", desk.answer, behind.answer || 0, behind.days || 0);
       fill("information", desk.information, behind.information || 0, behind.days || 0);
+      fillDue(desk.overdue, behind.overdue || 0);
+
+      /* The meeting requests: a line under the day, and only when there are any. A line
+       * reading "0 Terminanfragen" every morning is the kind of figure that teaches the
+       * eye to skip the tray it sits in. */
+      if (requestsLine) {
+        requestsLine.hidden = !(counts.requests > 0);
+      }
+
+      /* The second colour, and only when it is earned. */
+      if (overdueTray) {
+        overdueTray.classList.toggle("has-late", counts.overdue > 0);
+      }
+
+      if (desk.date) {
+        todayDate.textContent = desk.date;
+      }
 
       /* The watcher's own settings, so the sentence describing them cannot go stale. */
       if (desk.watch) {
@@ -971,32 +1307,24 @@
       }
 
       /* The period, stated rather than offered. It arrives already worded, so this page
-       * cannot disagree with the settings dialog about what 62 days is called. */
+       * cannot disagree with the settings dialog about what 62 days is called.
+       *
+       * Says what the period GOVERNS, not just what it is. Without that, "86 ungelesen"
+       * beside "1 sortiert" reads as a contradiction: the unread count is the whole
+       * folder, the verdicts cover the period. Sorting still covers everything unread
+       * whatever its age; what the period bounds is the trays and what "neulich" means. */
       if (desk.remembering) {
-        /* Says what the period GOVERNS, not just what it is. Without that, "86 ungelesen"
-         * beside "1 sortiert" reads as a contradiction: the unread count is the whole
-         * folder, the verdicts cover the period. */
-        /* What the period governs, now that it governs two things.
-         *
-         * Sorting still covers everything unread whatever its age -- bounding THAT by the
-         * period once left a backlog of unread mail permanently unjudged. What the period
-         * does bound is the lists below and what "neulich" means in a question, so both
-         * are named rather than left to be inferred from a slider. */
         remembering.textContent = "{{PeriodSentenceStart}}"
           + desk.remembering + "{{PeriodSentenceEnd}}";
       }
 
-      if (desk.nextAppointment) {
-        put("data-note", "next", desk.nextAppointment);
-      }
-
       if (desk.takenAt) {
         /* The line at the foot exists for the shared copy, where it explains the dashes.
-         * With real numbers on the page it is a second copy of the time already beside the
-         * heading plus a sentence nobody needs twice. */
+         * With real numbers on the page it is a second copy of the time already under the
+         * date plus a sentence nobody needs twice. */
         takenAt.hidden = true;
 
-        /* The same time next to the heading, which is where it is actually read. Without it
+        /* The same time under the date, which is where it is actually read. Without it
          * a page that refreshed and found nothing changed looks exactly like a page that
          * did not refresh at all -- and the two were indistinguishable until this line. */
         countedAt.textContent = "{{CountedAt}}" + desk.takenAt;
@@ -1018,7 +1346,7 @@
 
       if (asked) {
         asked = false;
-        refresh.textContent = "gezählt";
+        refresh.textContent = "{{Counted}}";
 
         restore = window.setTimeout(function () {
           refresh.textContent = "{{CountNow}}";
@@ -1048,8 +1376,35 @@
     if (window.chrome && window.chrome.webview) {
       /* The button exists only where it can do something. On a shared copy of this page
        * there is no mailbox to count, and a button that does nothing when pressed is worse
-       * than no button. */
+       * than no button. The same goes for the search. */
       refresh.hidden = false;
+      searchForm.hidden = false;
+
+      searchForm.addEventListener("submit", function (event) {
+        event.preventDefault();
+
+        var query = (searchQuery.value || "").trim();
+
+        if (query.length < 2) { return; }
+
+        searchGo.disabled = true;
+        searchGo.textContent = "{{Searching}}";
+
+        window.chrome.webview.postMessage("search:" + query);
+      });
+
+      document.getElementById("search-close").addEventListener("click", function () {
+        searchPanel.hidden = true;
+        searchQuery.value = "";
+        searchQuery.focus();
+      });
+
+      /* Escape in the field closes the answer as well as clearing the question. */
+      searchQuery.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          searchPanel.hidden = true;
+        }
+      });
 
       /* One handler for every row, on the container. Rows are rebuilt on every count, so
        * a listener per row would be attached and abandoned a few times a minute. */
@@ -1100,6 +1455,8 @@
 
           if (data && data.counts) {
             render(data);
+          } else if (data && data.search) {
+            showSearch(data.search);
           } else if (data && data.problem) {
             /* The count could not be taken. The button has to come back either way: a
              * control left saying "{{Counting}}" for ever is worse than one that says the
@@ -1107,7 +1464,7 @@
             countedAt.textContent = data.problem;
             countedAt.classList.add("stale");
             refresh.disabled = false;
-            refresh.textContent = "Nochmal";
+            refresh.textContent = "{{TryAgain}}";
           }
         } catch (ignored) {
           /* A malformed message leaves the page as it was. Rendering half a snapshot would

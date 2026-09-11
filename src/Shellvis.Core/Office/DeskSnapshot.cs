@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Shellvis.Core.Office;
 
 /// <summary>
@@ -65,32 +63,6 @@ public sealed record DeskSnapshot(
         ["today"] = AppointmentsToday,
         ["overdue"] = OverdueTasks,
     };
-
-    /// <summary>
-    /// When the next appointment starts, as a time somebody reads rather than a timestamp.
-    ///
-    /// Formatted here, in code, for the reason the skills give twice over: date arithmetic
-    /// is the thing this application has got wrong before, and a page that does its own
-    /// would be a third place for it to go wrong.
-    /// </summary>
-    [System.Text.Json.Serialization.JsonIgnore]
-    public string NextAppointmentLabel => NextAppointment is not { } next
-        ? "nichts mehr heute"
-        : next.ToString("HH:mm", CultureInfo.CurrentCulture)
-            + " (in " + Minutes(next - TakenAt) + ")";
-
-    private static string Minutes(TimeSpan until)
-    {
-        int minutes = (int)Math.Round(until.TotalMinutes);
-
-        if (minutes <= 0)
-            return "läuft";
-
-        return minutes < 60
-            ? minutes.ToString(CultureInfo.CurrentCulture) + " Min."
-            : (minutes / 60).ToString(CultureInfo.CurrentCulture) + " Std. "
-                + (minutes % 60).ToString(CultureInfo.CurrentCulture) + " Min.";
-    }
 
     /// <summary>
     /// Which counts have grown since <paramref name="before"/>, and by how much.

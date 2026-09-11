@@ -135,6 +135,13 @@ public sealed class DeskStore : IDisposable
             // longer what decides a re-read: a rule can change without the body changing,
             // and it has.
             ("verdict_rules", "INTEGER NOT NULL DEFAULT 0"),
+
+            // The earlier thing this one is about, when the sorting pass recognised one:
+            // the same request made a fortnight ago, an earlier mail on the same matter.
+            // A column rather than a link row, because it is part of the verdict -- written
+            // with it, overwritten with it, and shown beside it -- and a link table entry
+            // would outlive the verdict it explained.
+            ("related", "TEXT NULL"),
         });
 
         // The three questions this store is actually asked: what is recent, what is about
@@ -359,13 +366,19 @@ public sealed class DeskStore : IDisposable
     /// current one to decide what needs re-reading, so a rule change reaches the mail that
     /// is already judged instead of only the mail that arrives next.
     /// </param>
+    /// <param name="related">
+    /// The id of the earlier thing this one is about, when the pass recognised one among
+    /// the candidates it was shown; null clears it. Overwritten with the verdict, because
+    /// it is part of the verdict.
+    /// </param>
     public void Judge(
         string id,
         DeskVerdict verdict,
         string why,
         DateTime when,
         bool sawBody = false,
-        int rules = 0)
+        int rules = 0,
+        string? related = null)
     {
         using SqliteCommand command = _connection.CreateCommand();
 
@@ -375,7 +388,8 @@ public sealed class DeskStore : IDisposable
                 verdict_why = $why,
                 verdict_at = $at,
                 verdict_body = $body,
-                verdict_rules = $rules
+                verdict_rules = $rules,
+                related = $related
             WHERE id = $id;
             """;
 
@@ -385,6 +399,7 @@ public sealed class DeskStore : IDisposable
         command.Parameters.AddWithValue("$at", Text(when));
         command.Parameters.AddWithValue("$body", sawBody ? 1 : 0);
         command.Parameters.AddWithValue("$rules", rules);
+        command.Parameters.AddWithValue("$related", related is { Length: > 0 } ? related : DBNull.Value);
 
         command.ExecuteNonQuery();
     }
@@ -684,7 +699,7 @@ public sealed class DeskStore : IDisposable
         command.CommandText = """
             SELECT o.id, o.kind, o.subject, o.who_name, o.who_address, o.happened, o.due,
                    o.state, o.ticket_key, o.thread, o.entry_id, o.facts, o.enrichment,
-                   o.first_seen, o.last_seen, o.verdict, o.verdict_why
+                   o.first_seen, o.last_seen, o.verdict, o.verdict_why, o.related
             FROM objects_fts f
             JOIN objects o ON o.rowid = f.rowid
             WHERE objects_fts MATCH $query
@@ -702,6 +717,72 @@ public sealed class DeskStore : IDisposable
         command.Parameters.AddWithValue("$limit", limit);
 
         return ReadAll(command);
+    }
+
+    /// <summary>
+    /// What the desk already holds about the matter of one thing: the same request made
+    /// before, the mail that confirmed the order it asks about, the ticket it names.
+    /// </summary>
+    /// <remarks>
+    /// <b>By distinctive word, not by phrase.</b> <see cref="Search"/> treats a query as a
+    /// phrase, which is right for a person typing and wrong here: the earlier request was
+    /// worded differently, and the confirmation of an order shares only the order number
+    /// with the question about it. So each keyword of the subject is searched on its own and
+    /// the results are ranked by how many of the words they share, then by recency.
+    ///
+    /// <b>Not bounded to what came before.</b> "Earlier" is the desk's word for "already
+    /// held", and the mail that settles a question may have arrived after the question did:
+    /// an unread "wo bleibt meine Bestellung?" from Monday is answered by Tuesday's
+    /// confirmation, and a bound on time would hide exactly that row.
+    ///
+    /// The thing itself is never a candidate for itself. Everything else that shares a
+    /// word is, of any kind -- a task or an appointment about the same matter is as much
+    /// context as a mail.
+    /// </remarks>
+    /// <param name="imagined">
+    /// The document the model imagined would settle this thing -- HyDE, see
+    /// <see cref="DeskTriage.Imagine"/>. Its distinctive words are searched alongside the
+    /// subject's, and a row that shares a word with the imagined answer counts as much as
+    /// one that shares a word with the question. Optional: without it the subject alone
+    /// decides, which finds the same thread and not much else.
+    /// </param>
+    public IReadOnlyList<DeskObject> About(
+        DeskObject thing,
+        int limit = DeskTriage.EarlierShown,
+        string? imagined = null)
+    {
+        var words = new List<string>(DeskTriage.Keywords(thing.Subject));
+
+        foreach (string word in DeskTriage.Keywords(imagined, most: 8))
+        {
+            if (!words.Contains(word, StringComparer.OrdinalIgnoreCase))
+                words.Add(word);
+        }
+
+        if (words.Count == 0)
+            return [];
+
+        var seen = new Dictionary<string, (DeskObject Row, int Words)>(StringComparer.Ordinal);
+
+        foreach (string word in words)
+        {
+            foreach (DeskObject found in Search(word, since: null, limit: 12))
+            {
+                if (found.Id == thing.Id)
+                    continue;
+
+                seen[found.Id] = seen.TryGetValue(found.Id, out (DeskObject Row, int Words) had)
+                    ? (had.Row, had.Words + 1)
+                    : (found, 1);
+            }
+        }
+
+        return seen.Values
+            .OrderByDescending(v => v.Words)
+            .ThenByDescending(v => v.Row.When)
+            .Take(limit)
+            .Select(v => v.Row)
+            .ToList();
     }
 
     /// <summary>The most recent things, whatever they are.</summary>
@@ -766,7 +847,7 @@ public sealed class DeskStore : IDisposable
     private const string Select = """
         SELECT id, kind, subject, who_name, who_address, happened, due, state,
                ticket_key, thread, entry_id, facts, enrichment, first_seen, last_seen,
-               verdict, verdict_why
+               verdict, verdict_why, related
         FROM objects
         """;
 
@@ -799,7 +880,8 @@ public sealed class DeskStore : IDisposable
         FirstSeen: When(reader, 13) ?? DateTime.MinValue,
         LastSeen: When(reader, 14) ?? DateTime.MinValue,
         Verdict: reader.FieldCount > 15 && !reader.IsDBNull(15) ? Verdict(reader.GetString(15)) : null,
-        VerdictWhy: reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetString(16) : null);
+        VerdictWhy: reader.FieldCount > 16 && !reader.IsDBNull(16) ? reader.GetString(16) : null,
+        Related: reader.FieldCount > 17 && !reader.IsDBNull(17) ? reader.GetString(17) : null);
 
     /// <summary>A verdict as it was written, or null when it is a word nobody knows.</summary>
     private static DeskVerdict? Verdict(string said) => said switch

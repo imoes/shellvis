@@ -61,6 +61,7 @@ public sealed partial class PillWindow
             _vorzimmer.RefreshRequested += () => _ = CountTheDeskAsync(saveBaseline: false, thenSort: true);
             _vorzimmer.RememberDaysChanged += RememberOver;
             _vorzimmer.OpenRequested += OpenFromDesk;
+            _vorzimmer.SearchRequested += words => _ = SearchTheDeskAsync(words);
         }
 
         _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
@@ -190,13 +191,21 @@ public sealed partial class PillWindow
 
             AnnounceChange(reading.Counts, tally);
 
+            // The day and what is late come straight out of the walk, not out of the store:
+            // both are facts Outlook holds, nothing about them is judged, and the walk has
+            // just read them. The trays are the lookup; these are the reading.
+            IReadOnlyList<VorzimmerWindow.DayEntry> day = Day(reading, now);
+            IReadOnlyList<VorzimmerWindow.DueEntry> late = Late(reading);
+
             _vorzimmer?.Show(
                 reading.Counts,
                 _deskBaseline,
-                window.Describe(),
+                window.Describe(Words),
                 tally,
                 answers,
                 notes,
+                day,
+                late,
 
                 // What the four rows leave out, and where the line between fresh and older
                 // falls. A truncation count now, not an age count: the trays reach back on
@@ -204,6 +213,7 @@ public sealed partial class PillWindow
                 new VorzimmerWindow.Backlog(
                     Answer: Math.Max(0, tally.Answer - answers.Count),
                     Information: Math.Max(0, tally.Information - notes.Count),
+                    Overdue: Math.Max(0, reading.Counts.OverdueTasks - late.Count),
                     Days: window.Days),
 
                 // The watcher's own settings, from the same clamped values the timer uses.
@@ -249,7 +259,28 @@ public sealed partial class PillWindow
     /// </summary>
     private void OpenFromDesk(string id)
     {
-        if (_session?.Desk is not { } store || _session.Outlook is null)
+        if (_session?.Outlook is null)
+            return;
+
+        // A search hit the desk never saw. The page was given a token into the last
+        // result rather than the handle itself, and this is where the token is spent.
+        if (id.StartsWith(FoundPrefix, StringComparison.Ordinal))
+        {
+            if (int.TryParse(id.AsSpan(FoundPrefix.Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out int index)
+                && index >= 0
+                && index < _found.Count)
+            {
+                _ = OpenItAsync(_found[index].EntryId, _found[index].Subject);
+            }
+            else
+            {
+                AddRow(GlyphWarning, $"nothing to open for '{id}': the search it came from has been replaced", "desk", isWarning: true);
+            }
+
+            return;
+        }
+
+        if (_session.Desk is not { } store)
             return;
 
         DeskObject? thing = store.Get(id);
@@ -283,6 +314,298 @@ public sealed partial class PillWindow
             _ = CountTheDeskAsync(saveBaseline: false);
         }
     }
+
+    /// <summary>The prefix of a row id that points into the last search rather than the store.</summary>
+    private const string FoundPrefix = "found:";
+
+    /// <summary>How many hits the search panel shows before the rest is a count.</summary>
+    /// <remarks>
+    /// Ten. More than a tray, because a search is a question somebody asked and the answer
+    /// is allowed more room than a tray that is merely there; fewer than a listing, because
+    /// the page is still a desk and not a mail client. The count says how much more there is.
+    /// </remarks>
+    private const int HitsShown = 10;
+
+    /// <summary>
+    /// The messages the last search found that the desk did not already know, so a row
+    /// pressed on the page can be opened without the page ever holding the handle.
+    /// </summary>
+    private readonly List<MailSummary> _found = [];
+
+    /// <summary>
+    /// Answer a question typed into the page, from two places at once.
+    ///
+    /// <b>The desk first, then Outlook, and the two are merged rather than shown apart.</b>
+    /// The store holds three months of what the walk passed -- mail, tickets, tasks,
+    /// appointments -- and for the mail it holds the model's verdict and its sentence. That
+    /// is the part of the answer nothing else can give. Outlook's own search reaches
+    /// everything the desk never saw: older mail, filed mail, sent mail. A hit the desk knew
+    /// keeps its sentence; one only Outlook found gets the message's first line and is marked
+    /// as a preview, so the two are told apart on the page without being put in two lists.
+    ///
+    /// <b>The answer says where it came from.</b> How many the desk remembered, and whether
+    /// the rest came from the search index or from a walk of the newest messages. The mail
+    /// tools learned this the hard way: an empty result that does not say how hard it looked
+    /// is indistinguishable from a search that silently failed.
+    ///
+    /// <b>Nothing is written.</b> Searching does not touch the store and does not judge
+    /// anything; a hit that was never judged stays unjudged until the sorting pass reaches it.
+    /// </summary>
+    /// <summary>Which search is current, so a slow second phase cannot overwrite a newer answer.</summary>
+    private int _searchGeneration;
+
+    private async Task SearchTheDeskAsync(string words)
+    {
+        string query = words.Trim();
+
+        if (query.Length < 2)
+            return;
+
+        int generation = ++_searchGeneration;
+
+        // The two halves of the answer, kept apart until they are drawn: what the desk
+        // remembered, and what only Outlook found. Both grow across the two phases below
+        // and are published twice -- once with the direct hits, once with the imagined
+        // document's hits added -- so the reader sees something at once and more shortly.
+        var remembered = new List<DeskObject>();
+        var mails = new List<MailSummary>();
+        var said = new List<string>();
+
+        void Publish(string? alsoSearched)
+        {
+            if (generation != _searchGeneration)
+                return;
+
+            var hits = new List<(DateTime When, VorzimmerWindow.Hit Row)>();
+
+            foreach (DeskObject thing in remembered)
+            {
+                hits.Add((thing.When, new VorzimmerWindow.Hit(
+                    Id: thing.Id,
+                    Who: thing.WhoName is { Length: > 0 } name ? name
+                        : thing.WhoAddress is { Length: > 0 } address ? address
+                        : KindWord(thing.Kind),
+                    When: Stamp(thing.When),
+                    What: thing.Subject,
+                    Why: thing.VerdictWhy ?? string.Empty,
+                    Preview: false)));
+            }
+
+            _found.Clear();
+
+            foreach (MailSummary mail in mails)
+            {
+                _found.Add(mail);
+
+                hits.Add((mail.Received, new VorzimmerWindow.Hit(
+                    Id: FoundPrefix + (_found.Count - 1).ToString(CultureInfo.InvariantCulture),
+                    Who: mail.From,
+                    When: Stamp(mail.Received),
+                    What: mail.Subject,
+                    Why: Shorten(Oneline(mail.Preview), 220),
+                    Preview: true)));
+            }
+
+            hits.Sort((a, b) => b.When.CompareTo(a.When));
+
+            List<VorzimmerWindow.Hit> rows = hits.Take(HitsShown).Select(h => h.Row).ToList();
+
+            var parts = new List<string>(said);
+
+            if (remembered.Count > 0)
+                parts.Insert(0, remembered.Count.ToString(CultureInfo.CurrentCulture) + Words.FromMemory);
+
+            if (alsoSearched is { Length: > 0 })
+                parts.Add(Words.AlsoSearched + alsoSearched);
+
+            string where = hits.Count.ToString(CultureInfo.CurrentCulture) + Words.HitsWord
+                + (parts.Count > 0 ? " · " + string.Join(" · ", parts) : string.Empty);
+
+            _vorzimmer?.Found(new VorzimmerWindow.SearchOutcome(
+                Query: query,
+                Rows: rows,
+                More: Math.Max(0, hits.Count - rows.Count),
+                Where: where));
+        }
+
+        // Already on the desk: the store's row wins, because it carries the sentence and
+        // the id that survives filing. Matched on the handle first and on subject-and-minute
+        // second, since the handle goes stale.
+        bool Known(MailSummary mail) =>
+            remembered.Any(r =>
+                (r.EntryId is { Length: > 0 } handle && handle == mail.EntryId)
+                || (r.Subject == mail.Subject && Math.Abs((r.When - mail.Received).TotalMinutes) < 1))
+            || mails.Any(m => m.EntryId == mail.EntryId);
+
+        void AddRemembered(IEnumerable<DeskObject> found)
+        {
+            foreach (DeskObject thing in found)
+            {
+                if (!remembered.Any(r => r.Id == thing.Id))
+                    remembered.Add(thing);
+            }
+        }
+
+        // ------------------------------------------------------------ phase one: as typed
+        try
+        {
+            AddRemembered(_session?.Desk?.Search(query, since: null, limit: 40) ?? []);
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"the desk could not be searched: {ex.Message}", "desk", isWarning: true);
+        }
+
+        bool outlookAnswered = false;
+
+        if (_session?.Outlook is { } outlook)
+        {
+            try
+            {
+                MailSearchResult found = await outlook
+                    .SearchMailAsync(query, limit: 40)
+                    .ConfigureAwait(true);
+
+                foreach (MailSummary mail in found.Page.Messages)
+                {
+                    if (!Known(mail))
+                        mails.Add(mail);
+                }
+
+                said.Add(found.Path == MailSearchPath.Index
+                    ? Words.ViaIndex + found.Folders.ToString(CultureInfo.CurrentCulture) + Words.FoldersWord
+                    : Words.ViaWalkStart + found.Scanned.ToString(CultureInfo.CurrentCulture) + Words.ViaWalkEnd);
+
+                outlookAnswered = true;
+            }
+            catch (Exception ex)
+            {
+                // Outlook not running, or a store that refuses the query. The desk's half of
+                // the answer still stands, and the sentence says the other half is missing
+                // rather than letting an incomplete list pass for a complete one.
+                said.Add(Words.SearchFailed);
+                AddRow(GlyphWarning, $"mail search failed: {ex.Message}", "desk", isWarning: true);
+            }
+        }
+        else
+        {
+            said.Add(Words.OutlookUnreachable);
+        }
+
+        Publish(alsoSearched: null);
+
+        // ------------------------------------------------- phase two: as the answer reads
+        //
+        // HyDE. The model writes the document being looked for -- "Auftragsbestaetigung
+        // 4711, Lieferung KW 38" for "die Bestellung von Weber" -- and its distinctive words
+        // are searched as well. A question and its answer rarely share vocabulary, and the
+        // first phase can only find what shares the reader's words. Skipped while the model
+        // is answering the reader's own question: their turn wins, and the direct hits are
+        // already on the page.
+        if (_session is null || _session.IsBusy)
+            return;
+
+        string imagined;
+
+        try
+        {
+            var text = new System.Text.StringBuilder();
+
+            await _session.AskAsideAsync(
+                DeskTriage.ImagineOne(query, MailboxLanguage),
+                agentEvent =>
+                {
+                    if (agentEvent is Shellvis.Core.Agent.AgentEvent.AssistantMessage message)
+                        text.Append(message.Text);
+                },
+                CancellationToken.None,
+                withTools: false).ConfigureAwait(true);
+
+            imagined = text.ToString();
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"could not imagine the document being searched for: {ex.Message}", "desk", isWarning: true);
+            return;
+        }
+
+        if (generation != _searchGeneration)
+            return;
+
+        // Only the words the reader did not already type: the rest was phase one.
+        List<string> typed = [.. OutlookClient.Words(query)];
+
+        List<string> extra = DeskTriage.Keywords(imagined, most: 8)
+            .Where(w => !typed.Contains(w, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+
+        if (extra.Count == 0)
+            return;
+
+        try
+        {
+            foreach (string word in extra)
+                AddRemembered(_session.Desk?.Search(word, since: null, limit: 12) ?? []);
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"the desk could not be searched with the imagined words: {ex.Message}", "desk", isWarning: true);
+        }
+
+        // Outlook is asked with the numbers and names first, three words at most: every
+        // word is a search across every folder in scope, and the imagined document's most
+        // distinctive words are the ones that find the confirmation.
+        if (outlookAnswered && _session.Outlook is { } again)
+        {
+            foreach (string word in extra
+                .OrderByDescending(w => w.All(char.IsDigit))
+                .ThenByDescending(w => w.Length)
+                .Take(3))
+            {
+                try
+                {
+                    MailSearchResult found = await again
+                        .SearchMailAsync(word, limit: 15)
+                        .ConfigureAwait(true);
+
+                    foreach (MailSummary mail in found.Page.Messages)
+                    {
+                        if (!Known(mail))
+                            mails.Add(mail);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    AddRow(GlyphWarning, $"mail search for '{word}' failed: {ex.Message}", "desk", isWarning: true);
+                }
+            }
+        }
+
+        AddRow(GlyphTool, $"search widened with the imagined document: {string.Join(" ", extra)}", "desk");
+
+        Publish(alsoSearched: string.Join(" ", extra));
+    }
+
+    private static string KindWord(DeskKind kind) => kind switch
+    {
+        DeskKind.Task => Words.KindTask,
+        DeskKind.Appointment => Words.KindAppointment,
+        DeskKind.Ticket => Words.KindTicket,
+        _ => Words.UnknownSender,
+    };
+
+    /// <summary>
+    /// The time alone for today, the date as well for anything older. A column of
+    /// "04.09. 09:12" for mail that all arrived this morning spends the width on the half
+    /// that is the same in every row.
+    /// </summary>
+    private static string Stamp(DateTime when) =>
+        when.Date == DateTime.Now.Date
+            ? when.ToString("HH:mm", CultureInfo.CurrentCulture)
+            : when.ToString("dd.MM. HH:mm", CultureInfo.CurrentCulture);
+
+    private static string Shorten(string text, int most) =>
+        text.Length <= most ? text : text[..(most - 1)].TrimEnd() + "…";
 
     /// <summary>The desk as the previous count found it, for telling what changed.</summary>
     /// <remarks>
@@ -380,26 +703,156 @@ public sealed partial class PillWindow
         if (store is null)
             return [];
 
+        return store.Judged(verdict, since, EntriesPerTray)
+            .Select(t =>
+            {
+                // The earlier thing the sorting tied this to, looked up so the row can say
+                // what it is and open it. One Get per row that has one; most rows have none.
+                DeskObject? tied = t.Related is { Length: > 0 } relatedId ? store.Get(relatedId) : null;
+
+                return new VorzimmerWindow.DeskEntry(
+                    Id: t.Id,
+                    Who: t.WhoName is { Length: > 0 } name ? name : t.WhoAddress,
+                    When: Stamp(t.When),
+                    What: t.Subject,
+                    Why: t.VerdictWhy ?? string.Empty,
+
+                    // Marked rather than filtered. The rows are newest first, so the fresh ones
+                    // lead and the page can draw a line before the first of these.
+                    Old: t.When < fresh,
+
+                    RelatedId: tied?.Id,
+                    RelatedLabel: tied is null
+                        ? null
+                        : Words.SeeAlso
+                            + tied.When.ToString("dd.MM.yyyy", CultureInfo.CurrentCulture)
+                            + " · "
+                            + (tied.Subject is { Length: > 0 } about ? about : KindWord(tied.Kind)));
+            })
+            .ToList();
+    }
+
+    /// <summary>How many appointments the day list shows before it stops being a day.</summary>
+    /// <remarks>
+    /// Twelve, which is more than a working day has and fewer than a shared calendar can
+    /// hold. The list is the shape of the day and is meant to be complete, so the cap is a
+    /// guard against a calendar that is not one person's rather than a design figure.
+    /// </remarks>
+    private const int AppointmentsShown = 12;
+
+    /// <summary>
+    /// The day as the page lists it: every appointment of today in order, each knowing
+    /// whether it is over, running, next, or still to come.
+    /// </summary>
+    /// <remarks>
+    /// <b>The words are decided here, in code, not on the page.</b> "Vorbei", "läuft" and
+    /// "in 40 Min." are date arithmetic against the count's own clock, and date arithmetic
+    /// is the thing this application has got wrong before. The page receives the row already
+    /// worded and draws it.
+    ///
+    /// <b>The accent goes to one row.</b> The first appointment still to come is what a
+    /// person looks for on a day list, so it is the only one marked. An all-day entry never
+    /// takes it: "Urlaub Müller" is the day's background, not its next event.
+    /// </remarks>
+    private static IReadOnlyList<VorzimmerWindow.DayEntry> Day(DeskReading reading, DateTime now)
+    {
+        var rows = new List<VorzimmerWindow.DayEntry>();
+        bool nextFound = false;
+
+        foreach (DeskObject item in reading.Objects
+            .Where(o => o.Kind == DeskKind.Appointment)
+            .OrderBy(o => o.When)
+            .Take(AppointmentsShown))
+        {
+            AppointmentFacts? facts = FactsOf(item);
+
+            bool allDay = facts?.AllDay ?? false;
+            DateTime end = facts?.End ?? item.When;
+
+            bool past = !allDay && end <= now;
+            bool running = !allDay && item.When <= now && now < end;
+            bool next = !allDay && !past && !running && !nextFound;
+
+            if (next)
+                nextFound = true;
+
+            string note = allDay ? Words.AllDay
+                : past ? Words.Past
+                : running ? Words.Running
+                : next ? Until(item.When - now)
+                : string.Empty;
+
+            rows.Add(new VorzimmerWindow.DayEntry(
+                Id: item.Id,
+                When: allDay ? string.Empty : item.When.ToString("HH:mm", CultureInfo.CurrentCulture),
+                What: item.Subject,
+                Where: item.State,
+                Note: note,
+                Past: past,
+                Next: next));
+        }
+
+        return rows;
+    }
+
+    /// <summary>"in 40 Min.", "in 2 Std. 5 Min." -- how long until something starts.</summary>
+    private static string Until(TimeSpan until)
+    {
+        int minutes = (int)Math.Round(until.TotalMinutes);
+
+        if (minutes <= 0)
+            return Words.Running;
+
+        return minutes < 60
+            ? Words.InPrefix + minutes.ToString(CultureInfo.CurrentCulture) + Words.MinutesShort
+            : Words.InPrefix + (minutes / 60).ToString(CultureInfo.CurrentCulture) + Words.HoursShort
+                + (minutes % 60).ToString(CultureInfo.CurrentCulture) + Words.MinutesShort;
+    }
+
+    private static AppointmentFacts? FactsOf(DeskObject item)
+    {
+        if (item.Facts is not { Length: > 0 } json)
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<AppointmentFacts>(json);
+        }
+        catch (JsonException)
+        {
+            // A row written by an older build, or by a tool that stored something else
+            // here. Without the end the row is still a row; it just cannot say "vorbei".
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What is late, as rows: the overdue tasks, longest overdue first, four of them.
+    /// </summary>
+    /// <remarks>
+    /// Longest overdue first rather than newest, because that is the order in which they
+    /// embarrass: a task three weeks past its date is the one somebody is waiting on. The
+    /// date is written in the language of the page and short -- "fällig 09.09.", "due 9 Sep"
+    /// -- because the tray is narrow and the year is almost always this one. A task more
+    /// than a year late gets its year, since "09.09." would then be a lie by omission.
+    /// </remarks>
+    private static IReadOnlyList<VorzimmerWindow.DueEntry> Late(DeskReading reading)
+    {
+        var culture = new CultureInfo(Words.LanguageTag);
         DateTime today = DateTime.Now.Date;
 
-        return store.Judged(verdict, since, EntriesPerTray)
-            .Select(t => new VorzimmerWindow.DeskEntry(
-                Id: t.Id,
-                Who: t.WhoName is { Length: > 0 } name ? name : t.WhoAddress,
-
-                // The time alone for today, the date as well for anything older. A column of
-                // "04.09. 09:12" for mail that all arrived this morning spends the width on
-                // the half that is the same in every row.
-                When: t.When.Date == today
-                    ? t.When.ToString("HH:mm", CultureInfo.CurrentCulture)
-                    : t.When.ToString("dd.MM. HH:mm", CultureInfo.CurrentCulture),
-
-                What: t.Subject,
-                Why: t.VerdictWhy ?? string.Empty,
-
-                // Marked rather than filtered. The rows are newest first, so the fresh ones
-                // lead and the page can draw a line before the first of these.
-                Old: t.When < fresh))
+        return reading.Objects
+            .Where(o => o.Kind == DeskKind.Task && o.State == "overdue" && o.Due is not null)
+            .OrderBy(o => o.Due)
+            .Take(EntriesPerTray)
+            .Select(o => new VorzimmerWindow.DueEntry(
+                Id: o.Id,
+                What: o.Subject,
+                Due: Words.DuePrefix + (today - o.Due!.Value.Date).TotalDays switch
+                {
+                    > 365 => o.Due.Value.ToString("d", culture),
+                    _ => o.Due.Value.ToString(Words.DueFormat, culture),
+                }))
             .ToList();
     }
 
@@ -568,7 +1021,7 @@ public sealed partial class PillWindow
                     Value: now.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Min: DeskWindow.Least,
                     Max: DeskWindow.Most,
-                    Describe: days => new DeskWindow(days).Describe()),
+                    Describe: days => new DeskWindow(days).Describe(Words)),
             ],
             ["Save", "Cancel"]).ConfigureAwait(true);
 
@@ -608,7 +1061,7 @@ public sealed partial class PillWindow
 
             ConfigStore.Save(loaded.Config);
 
-            AddRow(GlyphTool, $"looking back over {window.Describe()}", "desk");
+            AddRow(GlyphTool, $"looking back over {window.Describe(Words)}", "desk");
         }
         catch (Exception ex)
         {

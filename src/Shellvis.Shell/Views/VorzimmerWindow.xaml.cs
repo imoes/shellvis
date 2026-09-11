@@ -27,10 +27,12 @@ namespace Shellvis.Shell.Views;
 /// happens to own .html on this machine, which is not a decision this application should be
 /// making on the user's behalf.
 ///
-/// <b>Why HTML at all, then.</b> Because the page is a layout: a masthead, three trays of
-/// deliberately unequal width, a threshold in two columns, six tabbed cards, a numbered
-/// sequence. Building that in XAML would be a week of panels to arrive at the same picture,
-/// and the picture is the point -- the whole page exists to be taken in at a glance.
+/// <b>Why HTML at all, then.</b> Because the page is a layout: a masthead with the date, the
+/// day as a list, two trays of mail under it, and a narrow column beside them for what is
+/// late, what was ignored and what the count covered. Building that in XAML would be a week
+/// of panels to arrive at the same picture, and the picture is the point -- the whole page
+/// exists to be taken in at a glance, in the order a briefing is given: what is fixed, what
+/// needs you, what is late, and the rest as a number.
 ///
 /// <b>What renders it.</b> The <c>WebView2</c> control that ships with WinUI, over the
 /// Evergreen runtime that is present on Windows 11. That runtime is the one thing this
@@ -248,6 +250,16 @@ public sealed partial class VorzimmerWindow : Window
                 return;
             }
 
+            // "search:<words>" -- somebody typed a question into the field. The words go up
+            // as typed; what is searched, and how, is the owner's decision, because it holds
+            // both the store and the Outlook client and this window holds neither.
+            if (message.StartsWith("search:", StringComparison.Ordinal)
+                && message.Length > "search:".Length)
+            {
+                SearchRequested?.Invoke(message["search:".Length..]);
+                return;
+            }
+
             // "remember:30" -- the slider settled on a new window. Parsed strictly and
             // ignored when it is not a number: a page can only send what this page's script
             // sends, but a message handler that trusts its input is a habit worth not having.
@@ -292,6 +304,50 @@ public sealed partial class VorzimmerWindow : Window
     /// <summary>Raised when a row was pressed, with the desk id of the thing to open.</summary>
     public event Action<string>? OpenRequested;
 
+    /// <summary>Raised when the search field was submitted, with the words as typed.</summary>
+    public event Action<string>? SearchRequested;
+
+    /// <summary>
+    /// Hand the page what a search found.
+    ///
+    /// Its own message rather than a field on the snapshot, for the same reason
+    /// <see cref="Sorting"/> is: a search is an answer to one question asked once, and
+    /// folding it into the count would redraw the whole desk to show eight rows.
+    /// </summary>
+    public void Found(SearchOutcome found) =>
+        Send(JsonSerializer.Serialize(new { search = found }, PayloadFormat));
+
+    /// <summary>
+    /// What a search produced, ready to draw.
+    /// </summary>
+    /// <param name="Query">The words, echoed so the panel can say what it answers.</param>
+    /// <param name="Rows">The hits, newest first, already cut to what the panel shows.</param>
+    /// <param name="More">How many matched beyond those rows.</param>
+    /// <param name="Where">
+    /// One sentence saying where the answer came from -- how many from the desk's own
+    /// memory, whether Outlook's index or a walk of the newest messages produced the rest,
+    /// and how wide it looked. An empty list without this sentence is indistinguishable
+    /// from a search that quietly failed, which is the failure the mail tools already name.
+    /// </param>
+    public sealed record SearchOutcome(
+        string Query, IReadOnlyList<Hit> Rows, int More, string Where);
+
+    /// <summary>
+    /// One search hit, in the shape of a tray row.
+    /// </summary>
+    /// <param name="Id">
+    /// A desk id when the desk remembered it; otherwise an opaque token the owner can
+    /// resolve. Never an Outlook handle -- see <see cref="DeskEntry"/> for why the page is
+    /// given nothing it could use on a mailbox.
+    /// </param>
+    /// <param name="Why">
+    /// The model's sentence when there is one; the message's own first line when there is
+    /// not. <paramref name="Preview"/> says which, so the page can draw the second quieter
+    /// and nobody mistakes a preview for a judgement.
+    /// </param>
+    public sealed record Hit(
+        string Id, string Who, string When, string What, string Why, bool Preview);
+
     /// <summary>
     /// Hand the page what is on the desk.
     ///
@@ -306,6 +362,8 @@ public sealed partial class VorzimmerWindow : Window
         DeskTally tally,
         IReadOnlyList<DeskEntry> answer,
         IReadOnlyList<DeskEntry> information,
+        IReadOnlyList<DayEntry> today,
+        IReadOnlyList<DueEntry> overdue,
         Backlog behind,
         WatchTiming watch)
     {
@@ -329,11 +387,18 @@ public sealed partial class VorzimmerWindow : Window
                 // same numbers -- so the button looked broken while working perfectly. The
                 // acknowledgement has to be finer-grained than the gesture it confirms.
                 TakenAt: now.TakenAt.ToString("HH:mm:ss", CultureInfo.CurrentCulture),
-                NextAppointment: now.NextAppointmentLabel,
+
+                // The day, written out, in the language of the page rather than of the
+                // machine: "Donnerstag" on a German page whatever the regional format says.
+                // A briefing starts with the date, and it comes from the count's own clock so
+                // it cannot disagree with the time beside it.
+                Date: now.TakenAt.ToString("D", new CultureInfo(_text.LanguageTag)),
                 ScannedNote: ScannedNote(now, _text),
                 Remembering: remembering,
                 Answer: answer,
                 Information: information,
+                Today: today,
+                Overdue: overdue,
                 Behind: behind,
                 Watch: watch),
             PayloadFormat);
@@ -407,11 +472,13 @@ public sealed partial class VorzimmerWindow : Window
         IReadOnlyDictionary<string, int> Counts,
         IReadOnlyDictionary<string, int> New,
         string TakenAt,
-        string NextAppointment,
+        string Date,
         string ScannedNote,
         string Remembering,
         IReadOnlyList<DeskEntry> Answer,
         IReadOnlyList<DeskEntry> Information,
+        IReadOnlyList<DayEntry> Today,
+        IReadOnlyList<DueEntry> Overdue,
         Backlog Behind,
         WatchTiming Watch);
 
@@ -431,8 +498,9 @@ public sealed partial class VorzimmerWindow : Window
     /// </remarks>
     /// <param name="Answer">Older than the window, needing an answer.</param>
     /// <param name="Information">Older than the window, worth knowing.</param>
+    /// <param name="Overdue">Overdue tasks past the rows the tray shows.</param>
     /// <param name="Days">How far back the trays reach, so the page can say it.</param>
-    public sealed record Backlog(int Answer, int Information, int Days);
+    public sealed record Backlog(int Answer, int Information, int Overdue, int Days);
 
     /// <summary>
     /// The watcher's three intervals, in minutes, so the page can describe them instead of
@@ -456,8 +524,37 @@ public sealed partial class VorzimmerWindow : Window
     /// lead with what is fresh and reach further back only when they would otherwise stand
     /// empty, and a row shown without saying it is three weeks old is a row that misleads.
     /// </param>
+    /// <param name="RelatedId">
+    /// The desk id of the earlier thing the sorting pass tied this to -- the same request
+    /// made before, the mail that confirmed the order this one asks about -- so the page
+    /// can open it. Null when nothing was tied.
+    /// </param>
+    /// <param name="RelatedLabel">
+    /// That thing in a few words, date first, already worded: "dazu: 03.09.2026 Bestellung
+    /// 4711 bestaetigt". The date is the point -- the summary says "am 03.09." and this is
+    /// where that date can be followed.
+    /// </param>
     public sealed record DeskEntry(
-        string Id, string Who, string When, string What, string Why, bool Old = false);
+        string Id,
+        string Who,
+        string When,
+        string What,
+        string Why,
+        bool Old = false,
+        string? RelatedId = null,
+        string? RelatedLabel = null);
+
+    /// <summary>
+    /// One appointment of the day, as the page lists it: the time, the title, the room, and a
+    /// word about where it stands -- over, running, or how long until it starts.
+    /// </summary>
+    /// <param name="Past">Its end has passed. Drawn in the faint grey, kept so the day has a shape.</param>
+    /// <param name="Next">The first one still to come. The one row on the page with an accent mark.</param>
+    public sealed record DayEntry(
+        string Id, string When, string What, string Where, string Note, bool Past, bool Next);
+
+    /// <summary>One overdue task: what it is and when it was due.</summary>
+    public sealed record DueEntry(string Id, string What, string Due);
 
     /// <summary>
     /// camelCase, because the script reads <c>counts</c> and <c>takenAt</c>.
@@ -511,7 +608,7 @@ public sealed partial class VorzimmerWindow : Window
         // dollar every rule in it would be read as an interpolation hole.
         return $$"""
             <!doctype html>
-            <html lang="de" data-theme="{{theme}}">
+            <html lang="{{text.LanguageTag}}" data-theme="{{theme}}">
             <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -589,12 +686,15 @@ public sealed partial class VorzimmerWindow : Window
 
         DisplayArea area = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Nearest);
 
-        // Wide enough for the three trays to sit side by side, which is where the page says
-        // something the words do not: the first is named, the second counted, the third is a
-        // number. Below about 900 CSS pixels they stack and that reading is lost. Clamped to
-        // the work area so a 1366x768 laptop still gets a whole window.
+        // Wide enough for the main column and the side column to sit beside each other,
+        // which is where the page says something the words do not: the day and the mail on
+        // the left, what is late and what was ignored on the right. Below about 900 CSS
+        // pixels they stack and that reading is lost. Tall enough that a morning with three
+        // appointments and four rows in each tray fits without scrolling -- a briefing is
+        // one screen, and one that has to be scrolled is two. Clamped to the work area so a
+        // 1366x768 laptop still gets a whole window.
         int width = Math.Min((int)Math.Round(1180 * scale), (int)(area.WorkArea.Width * 0.94));
-        int height = Math.Min((int)Math.Round(820 * scale), (int)(area.WorkArea.Height * 0.94));
+        int height = Math.Min((int)Math.Round(920 * scale), (int)(area.WorkArea.Height * 0.94));
 
         AppWindow.MoveAndResize(new RectInt32(
             area.WorkArea.X + ((area.WorkArea.Width - width) / 2),

@@ -160,7 +160,7 @@ internal static class TriageProbe
         Console.WriteLine($"answered in {clock.Elapsed.TotalSeconds:F1}s, "
             + $"{answer.Length} characters\n");
 
-        IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> verdicts =
+        IReadOnlyDictionary<string, DeskTriage.Judgement> verdicts =
             DeskTriage.Read(answer, batch);
 
         foreach (DeskObject one in batch)
@@ -186,8 +186,8 @@ internal static class TriageProbe
         {
             // sawBody records that this pass READS bodies, not that this message had one --
             // otherwise a notification with an empty body is re-read for ever.
-            foreach ((string id, (DeskVerdict verdict, string why)) in verdicts)
-                store.Judge(id, verdict, why, DateTime.Now, sawBody: true, rules: DeskTriage.RulesVersion);
+            foreach ((string id, DeskTriage.Judgement judged) in verdicts)
+                store.Judge(id, judged.Verdict, judged.Why, DateTime.Now, sawBody: true, rules: DeskTriage.RulesVersion, related: judged.Related);
 
             Console.WriteLine($"\nstored {verdicts.Count} verdict(s); "
                 + $"{store.StaleVerdictCount(since, DeskTriage.RulesVersion)} still to re-read");

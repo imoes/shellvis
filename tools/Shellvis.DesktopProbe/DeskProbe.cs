@@ -307,7 +307,7 @@ internal static class DeskProbe
                 asked.Contains("Most mail is INFORMATION", StringComparison.Ordinal),
                 "without it everything comes back as ANSWER, which is a tray nobody can use");
 
-            IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> read = DeskTriage.Read(
+            IReadOnlyDictionary<string, DeskTriage.Judgement> read = DeskTriage.Read(
                 """
                 1 | ANSWER | Weber wartet auf das Angebot
                 2 | IGNORE | Rundschreiben
@@ -356,6 +356,116 @@ internal static class DeskProbe
             Check("an empty answer yields nothing rather than throwing",
                 DeskTriage.Read(string.Empty, batch).Count == 0
                     && DeskTriage.Read(null, batch).Count == 0);
+
+            // ------------------------------------- what the desk already held about it
+            //
+            // "Die KI soll bei unklarer Informationslage die Suche benutzen": the same
+            // request made a fortnight ago, the confirmation of the order this mail asks
+            // about. The model is shown lettered candidates and names one; the letter has
+            // to come back as the right id, and only ever as one that was actually shown.
+            Console.WriteLine("\n-- the earlier things a message is shown, and naming one --");
+
+            IReadOnlyList<string> keywords = DeskTriage.Keywords("AW: Frage zur Bestellung 4711 - dringend");
+
+            Check("a subject boils down to its distinctive words",
+                keywords.Contains("Bestellung", StringComparer.Ordinal)
+                    && keywords.Contains("4711", StringComparer.Ordinal)
+                    && !keywords.Contains("AW", StringComparer.OrdinalIgnoreCase)
+                    && !keywords.Contains("Frage", StringComparer.OrdinalIgnoreCase)
+                    && !keywords.Contains("dringend", StringComparer.OrdinalIgnoreCase),
+                string.Join(" ", keywords) + "  (the order number is what finds the confirmation)");
+
+            var confirmation = Mail(DeskObject.MakeId(DeskKind.Mail, "c1@example.com"), "Bestellung 4711 bestätigt", now.AddDays(-2));
+            var sameAgain = Mail(DeskObject.MakeId(DeskKind.Mail, "c2@example.com"), "Angebot?", now.AddDays(-14));
+
+            var earlier = new Dictionary<string, IReadOnlyList<DeskObject>>(StringComparer.Ordinal)
+            {
+                [batch[0].Id] = [confirmation, sameAgain],
+            };
+
+            string withEarlier = DeskTriage.Ask(batch, earlier: earlier);
+
+            Check("the question shows what the desk already holds, lettered and dated",
+                withEarlier.Contains("earlier on this desk:", StringComparison.Ordinal)
+                    && withEarlier.Contains("a) " + now.AddDays(-2).ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture), StringComparison.Ordinal)
+                    && withEarlier.Contains("b) ", StringComparison.Ordinal)
+                    && withEarlier.Contains("Bestellung 4711 bestätigt", StringComparison.Ordinal),
+                "the date is what the summary is asked to repeat, so it has to be in view");
+
+            Check("and asks for the letter as a fourth field",
+                withEarlier.Contains("<letter or ->", StringComparison.Ordinal)
+                    && withEarlier.Contains("bereits bestaetigt", StringComparison.Ordinal),
+                "the confirmation of an order asked about is the worked example");
+
+            Check("a named letter comes back as the id of the thing shown",
+                DeskTriage.Read("1 | ANSWER | Weber fragt nach 4711; laut Mail vom 03.09. bereits bestaetigt | a", batch, earlier)
+                    [batch[0].Id].Related == confirmation.Id);
+
+            Check("the second letter too, and decoration does not hide it",
+                DeskTriage.Read("1 | ANSWER | dieselbe Anfrage kam schon | **b)**", batch, earlier)
+                    [batch[0].Id].Related == sameAgain.Id);
+
+            Check("a dash is nothing tied",
+                DeskTriage.Read("1 | ANSWER | wartet | -", batch, earlier)[batch[0].Id].Related is null);
+
+            Check("a letter nothing was shown for is dropped, not guessed",
+                DeskTriage.Read("1 | ANSWER | wartet | z", batch, earlier)[batch[0].Id].Related is null
+                    && DeskTriage.Read("2 | IGNORE | Werbung | a", batch, earlier)[batch[1].Id].Related is null,
+                "message 2 was shown no candidates, so its 'a' points at nothing");
+
+            Check("a sentence in the fourth field is not a letter",
+                DeskTriage.Read("1 | ANSWER | wartet | and more", batch, earlier)[batch[0].Id].Related is null);
+
+            // HyDE: before the desk is searched, the model writes the document that would
+            // settle each message, and the search runs on its words. The question and its
+            // answer rarely share vocabulary; the imagined answer and the real one do.
+            string imagine = DeskTriage.Imagine(batch);
+
+            Check("the imagining call asks for the counterpart document, one line a message",
+                imagine.Contains("imagine the OTHER document", StringComparison.Ordinal)
+                    && imagine.Contains("<number> | <the imagined document", StringComparison.Ordinal)
+                    && imagine.Contains("1. from:", StringComparison.Ordinal)
+                    && imagine.Contains("3. from:", StringComparison.Ordinal));
+
+            IReadOnlyDictionary<string, string> imagined = DeskTriage.ReadImagined(
+                "1 | Auftragsbestätigung 4711 von bestellung@lieferant.de, Lieferung KW 38\n"
+                    + "2 | -\n"
+                    + "7 | erfunden",
+                batch);
+
+            Check("imagined documents come back keyed by the message they are about",
+                imagined.TryGetValue(batch[0].Id, out string? doc)
+                    && doc.Contains("4711", StringComparison.Ordinal)
+                    && !imagined.ContainsKey(batch[2].Id),
+                "a number outside the list is dropped here too");
+
+            Check("and the imagined document's words widen what the desk is searched for",
+                DeskTriage.Keywords(doc, most: 8).Contains("Auftragsbestätigung", StringComparer.Ordinal)
+                    && DeskTriage.Keywords(doc, most: 8).Contains("4711", StringComparer.Ordinal),
+                "'wo bleibt meine Bestellung' shares no word with the confirmation; the imagined one does");
+
+            Check("a question typed by a person gets the same treatment",
+                DeskTriage.ImagineOne("die Bestellung von Weber").Contains("die Bestellung von Weber", StringComparison.Ordinal)
+                    && DeskTriage.ImagineOne("x").Contains("Imagine the document", StringComparison.Ordinal));
+
+            // The mailbox's language and English, both. A German desk gets German mail from
+            // people and English mail from vendors' systems, and a search in one language
+            // finds one half of it. On an English desk, English alone -- repeating English
+            // in English would be noise.
+            Check("the imagined document is asked for in the mailbox's language AND in English",
+                DeskTriage.Imagine(batch, language: "German").Contains("Write it in German", StringComparison.Ordinal)
+                    && DeskTriage.Imagine(batch, language: "German").Contains("in English", StringComparison.Ordinal)
+                    && DeskTriage.ImagineOne("x", "Finnish").Contains("Write it in Finnish", StringComparison.Ordinal)
+                    && DeskTriage.ImagineOne("x", "Finnish").Contains("in English", StringComparison.Ordinal),
+                "a colleague writes Auftragsbestaetigung; the vendor's system writes order confirmation");
+
+            Check("and on an English desk, English alone",
+                DeskTriage.LanguageRule("English").Contains("Write it in English", StringComparison.Ordinal)
+                    && !DeskTriage.LanguageRule("English").Contains("semicolon", StringComparison.Ordinal));
+
+            Check("without candidates the verdict still reads, three fields or four",
+                DeskTriage.Read("1 | ANSWER | wartet | a", batch)[batch[0].Id].Related is null
+                    && DeskTriage.Read("1 | ANSWER | wartet", batch, earlier)[batch[0].Id].Verdict == DeskVerdict.Answer);
 
             // ----------------------------------------------- the rules, in the question
             //

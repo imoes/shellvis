@@ -61,6 +61,12 @@ public enum DeskKind
 /// <param name="VerdictWhy">One line saying why, so a verdict can be disagreed with.</param>
 /// <param name="FirstSeen">When it first entered the cache.</param>
 /// <param name="LastSeen">When it was last confirmed to exist.</param>
+/// <param name="Related">
+/// The id of an earlier thing on the desk this one is about -- the same request made
+/// before, an earlier mail on the same matter. Written by the sorting pass when the model
+/// recognised one among the candidates it was shown, so the page can link the two and the
+/// sentence can say "already asked on the 4th". Null when nothing earlier was recognised.
+/// </param>
 public sealed record DeskObject(
     string Id,
     DeskKind Kind,
@@ -78,7 +84,8 @@ public sealed record DeskObject(
     DateTime FirstSeen,
     DateTime LastSeen,
     DeskVerdict? Verdict = null,
-    string? VerdictWhy = null)
+    string? VerdictWhy = null,
+    string? Related = null)
 {
     /// <summary>The prefix for a kind, which is also the first half of every id.</summary>
     public static string Prefix(DeskKind kind) => kind switch

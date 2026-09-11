@@ -46,6 +46,13 @@ running instances through COM: read the document that is open, export to PDF, li
 loaded. Outlook for mail, calendar, contacts and tasks — and Thunderbird through a native
 messaging bridge for the same mail operations.
 
+**Keeps your desk.** *Das Vorzimmer*, behind a button beside the answer, is one screen in
+the order a briefing is given: the day's appointments with times and what is next, then the
+mail that needs a reply and the mail worth knowing — each read and judged once by the model,
+with a sentence saying why — then the overdue tasks by name, and the rest as a number. A
+badge marks what has grown since you last looked, never the total. A click opens the item
+in Outlook. Nothing is sent from there, and nothing can be: there is no send tool.
+
 **Browses.** Chrome DevTools Protocol directly, no Node.js and no driver process. Pages come
 back as a reference tree rather than an HTML dump; clicks are dispatched as trusted input
 after a hit test, so a button behind a cookie banner is refused rather than clicked through.

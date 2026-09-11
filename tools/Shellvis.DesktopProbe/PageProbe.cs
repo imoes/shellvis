@@ -140,16 +140,45 @@ internal static class PageProbe
 
         foreach ((string rule, string shape) in new[]
         {
-            ("sorted before anything is said: three trays", "class=\"trays\""),
+            ("sorted before anything is said: trays in two columns", "class=\"trays\""),
             ("a handful rather than thirty: a list per tray", "data-list="),
             ("the rest behind a count", "data-count=\"ignore\""),
             ("an empty tray says so in words", Shellvis.Core.Ui.UiText.En.NothingOfThat),
-            ("look ahead: what is left today", "data-count=\"today\""),
-            ("nothing dropped: what is overdue", "data-count=\"overdue\""),
+            ("say what is fixed: the day as a list, not a number", "data-list=\"today\""),
+            ("nothing dropped: the overdue tasks, named", "data-list=\"overdue\""),
+            ("a briefing opens with the date", "id=\"today-date\""),
         })
         {
             Check(rule, html.Contains(shape, StringComparison.Ordinal), shape);
         }
+
+        // The order of a briefing is the order of the markup: what is fixed, then what needs
+        // an answer, then what is worth knowing. The skill says so in three numbered lines,
+        // and a page that put the mail above the day would have the numbers right and the
+        // shape wrong.
+        Check("the day comes before the mail",
+            html.IndexOf("data-list=\"today\"", StringComparison.Ordinal)
+                < html.IndexOf("data-list=\"answer\"", StringComparison.Ordinal),
+            "appointments are the fixed points the rest is arranged around");
+
+        Check("and what needs an answer comes before what is merely worth knowing",
+            html.IndexOf("data-list=\"answer\"", StringComparison.Ordinal)
+                < html.IndexOf("data-list=\"information\"", StringComparison.Ordinal));
+
+        // The words on the page are the words in UiText, all of them. Two German literals
+        // survived the translation inside the script -- the button said "gezählt" and
+        // "Nochmal" to an English reader -- because a string in JavaScript is not a token
+        // and nothing checked it. Rendered in English, no German may remain.
+        Check("no German survives on the English page",
+            !html.Contains("gezählt", StringComparison.Ordinal)
+                && !html.Contains("Nochmal", StringComparison.Ordinal)
+                && !html.Contains("nichts mehr heute", StringComparison.Ordinal),
+            "a literal inside the script is not a token, and is not translated");
+
+        Check("the document is stamped with the language it speaks, not with one language",
+            File.ReadAllText(view).Contains("lang=\"{{text.LanguageTag}}\"", StringComparison.Ordinal)
+                && !File.ReadAllText(view).Contains("lang=\"de\"", StringComparison.Ordinal),
+            "a German page marked lang=en is hyphenated and read aloud by the wrong rules");
 
         // The page is the visible half of files the model reads. If one of those goes, the
         // page becomes a description of something that is no longer there.
@@ -210,8 +239,19 @@ internal static class PageProbe
             "a zero claims the mailbox is empty; a dash says it was not measured");
 
         Check("the page admits what has not been judged yet",
-            html.Contains(Shellvis.Core.Ui.UiText.En.NotYetSorted, StringComparison.Ordinal),
+            html.Contains("data-count=\"pending\"", StringComparison.Ordinal)
+                && html.Contains(Shellvis.Core.Ui.UiText.En.NamePending, StringComparison.Ordinal),
             "judging costs a model call each, so a busy morning arrives faster than it is read");
+
+        // The two figures about the COUNT -- unread in the folder, not yet judged -- are
+        // small print, not cells. They were in a band of eight where every number had the
+        // same weight as "needs a reply", and a reader asked to weigh eight equal numbers
+        // weighs none. The band is gone; this keeps it gone.
+        Check("the numbers about the counting are small print, not a band of cells",
+            !html.Contains("class=\"desk\"", StringComparison.Ordinal)
+                && !html.Contains("desk-cell", StringComparison.Ordinal)
+                && html.Contains("class=\"ledger\"", StringComparison.Ordinal),
+            "eight equal cells above the trays made every figure look like a decision");
 
         Check("there is somewhere for the update notice to appear",
             html.Contains(@"id=""refreshed""", StringComparison.Ordinal));
@@ -300,6 +340,16 @@ internal static class PageProbe
                     .StartsWith("die letzten ", StringComparison.Ordinal)),
             "so 'auf dem Tisch liegen X' and \"neulich heißt X\" both work");
 
+        // And in English, because the page is bilingual and the period is the one phrase
+        // that is built rather than looked up. It read "On the desk is die letzten vier
+        // Wochen" until the phrase learned the second language.
+        Check("and the same in English, for the English page",
+            Enumerable
+                .Range(DeskWindow.Least, DeskWindow.Most - DeskWindow.Least + 1)
+                .All(days => new DeskWindow(days).Describe(Shellvis.Core.Ui.UiText.En)
+                    .StartsWith("the last ", StringComparison.Ordinal)),
+            "'On the desk is X' has to hold for every X");
+
         Check("the period the settings offer is the period the store keeps",
             DeskWindow.Most <= DeskStore.DefaultRetention.TotalDays,
             $"slider to {DeskWindow.Most} days, kept for {DeskStore.DefaultRetention.TotalDays:F0}");
@@ -307,7 +357,7 @@ internal static class PageProbe
         // ---------------------------------------------------------- the real entries
         Console.WriteLine("\n-- the trays show real entries, and ship none --");
 
-        foreach (string key in new[] { "answer", "information" })
+        foreach (string key in new[] { "today", "answer", "information", "overdue" })
         {
             Check($"there is a list for '{key}'",
                 html.Contains($@"data-list=""{key}""", StringComparison.Ordinal));
@@ -360,6 +410,31 @@ internal static class PageProbe
                 && html.Contains(Shellvis.Core.Ui.UiText.En.TrayInformation, StringComparison.Ordinal)
                 && html.Contains(Shellvis.Core.Ui.UiText.En.TrayIgnore, StringComparison.Ordinal));
 
+        // The day and the late tasks arrive worded from the application: "over", "running",
+        // "in 40 min", "due 9/9". The page paints them and compares nothing. A comparison
+        // of two times in the script would be the third place in this project for date
+        // arithmetic to go wrong, and the first two were enough.
+        Check("the day rows are painted from flags, not from times compared on the page",
+            html.Contains("row.past", StringComparison.Ordinal)
+                && html.Contains("row.next", StringComparison.Ordinal)
+                && !Regex.IsMatch(html, @"new Date\("),
+            "the page does no date arithmetic; the flags come from the count's own clock");
+
+        // The sorting can tie a mail to something the desk already held -- the same request
+        // made before, the confirmation of the order it asks about -- and the summary then
+        // says "am 03.09.". The date has to be followable, so the row carries a second
+        // button that opens THAT thing. A summary that names a date nobody can reach is a
+        // claim the reader has to take on trust.
+        Check("a row can point at the earlier thing it was tied to, and that opens too",
+            html.Contains("row.relatedId", StringComparison.Ordinal)
+                && html.Contains("rowButton(row.relatedId", StringComparison.Ordinal),
+            "the summary says 'bereits am 04.09.'; this is where the 04.09. can be opened");
+
+        Check("the late tray is coloured only when something is late",
+            html.Contains("has-late", StringComparison.Ordinal)
+                && html.Contains("counts.overdue > 0", StringComparison.Ordinal),
+            "a warning colour on an empty tray is a warning about nothing");
+
         // The summary is what Shellvis adds; the subject belongs to Outlook. It was the
         // last line of the row at two thirds of caption size in the faintest grey -- 13
         // pixels tall -- and it was reported as missing. The order in the markup is the
@@ -392,6 +467,43 @@ internal static class PageProbe
             html.Contains("data-id", StringComparison.Ordinal)
                 && !html.Contains("entryId", StringComparison.OrdinalIgnoreCase),
             "a web view has no business holding a live handle into a mailbox");
+
+        // ------------------------------------------------------------- the search
+        //
+        // The trays show a handful and put the rest behind a count; the search is how the
+        // rest is reached. It asks the desk's memory and Outlook at once, and a hit that only
+        // Outlook knew reaches the page as a token into the owner's last result -- never as
+        // the handle -- for the same reason the rows carry desk ids.
+        Console.WriteLine("\n-- the rest is reachable: a search, and it asks both places --");
+
+        Check("there is a search field, and it is a form so Enter submits it",
+            html.Contains(@"id=""search-form""", StringComparison.Ordinal)
+                && html.Contains(@"type=""search""", StringComparison.Ordinal));
+
+        Check("submitting it asks the host, which owns both the store and Outlook",
+            html.Contains("\"search:\" + query", StringComparison.Ordinal));
+
+        Check("the answer has a list and a sentence saying where it came from",
+            html.Contains(@"data-list=""search""", StringComparison.Ordinal)
+                && html.Contains(@"id=""search-where""", StringComparison.Ordinal),
+            "an empty list without the sentence looks exactly like a search that failed");
+
+        Check("a hit only Outlook knew is drawn as a preview, not as a judgement",
+            html.Contains("row.preview", StringComparison.Ordinal)
+                && html.Contains(".summary.preview", StringComparison.Ordinal));
+
+        string owner = File.ReadAllText(Path.Combine(
+            root, "src", "Shellvis.Shell", "Views", "PillWindow.Vorzimmer.cs"));
+
+        Check("and the owner resolves such a hit through a token, never a handle on the page",
+            owner.Contains("FoundPrefix", StringComparison.Ordinal)
+                && owner.Contains("_found", StringComparison.Ordinal),
+            "the page is given an index into the last result; the handle stays in the owner");
+
+        Check("the search form exists only where there is a mailbox",
+            html.Contains("searchForm.hidden = false", StringComparison.Ordinal)
+                && Regex.IsMatch(html, @"id=""search-form""[^>]*\bhidden\b"),
+            "a shared copy of the page has nothing to search, and says so by having no box");
 
 
         // The distinction moved with the control. Checked in the settings source rather

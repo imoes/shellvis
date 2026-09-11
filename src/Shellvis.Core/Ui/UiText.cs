@@ -22,45 +22,142 @@ namespace Shellvis.Core.Ui;
 /// </summary>
 public sealed class UiText
 {
+    /// <summary>
+    /// The two-letter code of this language, for the document's <c>lang</c> attribute and
+    /// for choosing the culture a date is written in.
+    ///
+    /// Here rather than looked up from the strings, because the page is handed a
+    /// <see cref="UiText"/> and nothing else, and a German page stamped <c>lang="en"</c> is
+    /// read aloud in the wrong accent by a screen reader and hyphenated by the wrong rules.
+    /// </summary>
+    public required string LanguageTag { get; init; }
+
     // ----------------------------------------------------------------- the page: masthead
     public required string DeskEyebrow { get; init; }
     public required string DeskTitle { get; init; }
 
     // ------------------------------------------------------------------- the page: status
-    public required string StandEyebrow { get; init; }
-    public required string StandHeading { get; init; }
     public required string NotCountedYet { get; init; }
     public required string CountNow { get; init; }
     public required string Counting { get; init; }
     public required string CountedAt { get; init; }
+
+    /// <summary>What the button says for a moment after a count somebody asked for.</summary>
+    public required string Counted { get; init; }
+
+    /// <summary>What the button says after a count that failed.</summary>
+    public required string TryAgain { get; init; }
+
     public required string NoMailboxNoNumbers { get; init; }
     public required string NoMailboxShort { get; init; }
 
-    // --------------------------------------------------------------------- the page: cells
-    public required string NeedsAnswer { get; init; }
-    public required string NeedsAnswerNote { get; init; }
-    public required string JustInformation { get; init; }
-    public required string JustInformationNote { get; init; }
-    public required string NotWorthReading { get; init; }
-    public required string NotWorthReadingNote { get; init; }
-    public required string NotYetSorted { get; init; }
-    public required string NotYetSortedNote { get; init; }
-    public required string Unread { get; init; }
-    public required string UnreadNote { get; init; }
-    public required string MeetingRequests { get; init; }
+    // ---------------------------------------------------------------- the page: the day
+    /// <summary>The heading over the day's appointments.</summary>
+    public required string TrayToday { get; init; }
+
+    /// <summary>Under the heading when the calendar has nothing at all today.</summary>
+    public required string NoAppointmentsToday { get; init; }
+
+    /// <summary>Beside an appointment whose end has passed.</summary>
+    public required string Past { get; init; }
+
+    /// <summary>Beside an appointment that has started and not ended.</summary>
+    public required string Running { get; init; }
+
+    /// <summary>"in " -- opens the time-until phrase beside the next appointment.</summary>
+    public required string InPrefix { get; init; }
+
+    /// <summary>" Min." / " min" -- closes a minute count.</summary>
+    public required string MinutesShort { get; init; }
+
+    /// <summary>" Std. " / " h " -- between an hour count and the minutes that follow it.</summary>
+    public required string HoursShort { get; init; }
+
+    /// <summary>Beside an all-day entry, which has no time to show.</summary>
+    public required string AllDay { get; init; }
+
+    /// <summary>Beside the meeting-request count in the day tray.</summary>
     public required string MeetingRequestsNote { get; init; }
-    public required string LeftToday { get; init; }
-    public required string LeftTodayNote { get; init; }
-    public required string Overdue { get; init; }
-    public required string OverdueNote { get; init; }
+
+    // ------------------------------------------------------------- the page: the search
+    //
+    // The trays show a handful and put the rest behind a count. The search is how the rest
+    // is reached: what the desk remembers about a subject, with the model's sentence where
+    // there is one, and what Outlook's own search finds beyond that.
+    public required string SearchPlaceholder { get; init; }
+    public required string SearchButton { get; init; }
+    public required string SearchHeading { get; init; }
+    public required string Searching { get; init; }
+
+    /// <summary>"nichts gefunden für " -- takes the query.</summary>
+    public required string NothingFoundFor { get; init; }
+
+    /// <summary>" Treffer" / " hit(s)" -- after the count.</summary>
+    public required string HitsWord { get; init; }
+
+    /// <summary>"über den Suchindex in " -- before the folder count.</summary>
+    public required string ViaIndex { get; init; }
+
+    /// <summary>" Ordnern" / " folders" -- after it.</summary>
+    public required string FoldersWord { get; init; }
+
+    /// <summary>"die neuesten " / "the newest " -- before the scanned count, when the index had nothing.</summary>
+    public required string ViaWalkStart { get; init; }
+
+    /// <summary>" Nachrichten gelesen" / " messages read" -- after it.</summary>
+    public required string ViaWalkEnd { get; init; }
+
+    /// <summary>" aus dem Gedächtnis" -- the part of the result the desk already knew.</summary>
+    public required string FromMemory { get; init; }
+
+    /// <summary>What the panel says when Outlook could not be asked.</summary>
+    public required string SearchFailed { get; init; }
+
+    /// <summary>
+    /// "auch gesucht nach: " -- before the words the model imagined the answer would
+    /// contain, so the reader can see why a hit without their word in it is a hit.
+    /// </summary>
+    public required string AlsoSearched { get; init; }
+
+    /// <summary>
+    /// "dazu: " / "see: " -- opens the line under a summary that points at the earlier
+    /// thing the sorting tied this mail to.
+    /// </summary>
+    public required string SeeAlso { get; init; }
+
+    /// <summary>What stands where the sender would, on a hit that has no sender.</summary>
+    public required string KindTask { get; init; }
+    public required string KindAppointment { get; init; }
+    public required string KindTicket { get; init; }
+
+    // -------------------------------------------------------------- the page: the ledger
+    //
+    // The two figures that describe the COUNT rather than the desk: how much is unread in
+    // the folder, and how much of it the model has not judged yet. They used to be cells in
+    // a band of eight; they are a line of small print now, because neither one is something
+    // to act on.
+    public required string UnreadNote { get; init; }
+    public required string NotYetSortedNote { get; init; }
 
     // --------------------------------------------------------------------- the page: trays
-    public required string SortedEyebrow { get; init; }
-    public required string SortedHeading { get; init; }
     public required string TrayAnswer { get; init; }
     public required string TrayInformation { get; init; }
     public required string TrayIgnore { get; init; }
     public required string TrayIgnoreNote { get; init; }
+
+    /// <summary>The heading over the overdue tasks.</summary>
+    public required string TrayOverdue { get; init; }
+
+    /// <summary>"fällig " / "due " -- before a task's date.</summary>
+    public required string DuePrefix { get; init; }
+
+    /// <summary>
+    /// How that date is written: "dd.MM." / "d MMM". Short on purpose -- the tray is
+    /// narrow, the year is almost always this one, and "fällig 09.09.2026" pushed the
+    /// task's own name into an ellipsis.
+    /// </summary>
+    public required string DueFormat { get; init; }
+
     public required string NotSortedYet { get; init; }
     public required string NothingOfThat { get; init; }
     public required string NoSubject { get; init; }
@@ -95,6 +192,19 @@ public sealed class UiText
     /// <summary>The period line. Takes the period phrase in the middle.</summary>
     public required string PeriodSentenceStart { get; init; }
     public required string PeriodSentenceEnd { get; init; }
+
+    // ------------------------------------------------------ the remembering period, named
+    //
+    // Every phrase is a plural noun phrase that can stand as the subject of "liegen" /
+    // "are on the desk" -- see DeskWindow.Describe for why that is a constraint and not a
+    // preference. PeriodDays takes a number between its two halves.
+    public required string PeriodTwoDays { get; init; }
+    public required string PeriodDaysStart { get; init; }
+    public required string PeriodDaysEnd { get; init; }
+    public required string PeriodTwoWeeks { get; init; }
+    public required string PeriodFourWeeks { get; init; }
+    public required string PeriodTwoMonths { get; init; }
+    public required string PeriodThreeMonths { get; init; }
 
     /// <summary>Shown in the unsorted cell while a pass runs. Takes a count.</summary>
     public required string JudgingOne { get; init; }
@@ -183,41 +293,58 @@ public sealed class UiText
     /// <summary>English.</summary>
     public static UiText En { get; } = new()
     {
+        LanguageTag = "en",
+
         DeskEyebrow = "Shellvis &middot; Front office",
         DeskTitle = "The Front Office",
 
-        StandEyebrow = "State",
-        StandHeading = "What is on the desk right now",
         NotCountedYet = "Not counted yet",
         CountNow = "Count now",
         Counting = "counting ...",
         CountedAt = "counted at ",
+        Counted = "counted",
+        TryAgain = "Try again",
         NoMailboxNoNumbers = "No mailbox, no numbers.",
         NoMailboxShort = "no mailbox, no numbers",
 
-        NeedsAnswer = "Needs a reply",
-        NeedsAnswerNote = "somebody is waiting",
-        JustInformation = "Information only",
-        JustInformationNote = "worth knowing, nothing to send",
-        NotWorthReading = "Not worth reading",
-        NotWorthReadingNote = "circulars, duplicates",
-        NotYetSorted = "Not yet sorted",
-        NotYetSortedNote = "judged one after another",
-        Unread = "Unread",
-        UnreadNote = "in the inbox",
-        MeetingRequests = "Meeting requests",
+        TrayToday = "Today",
+        NoAppointmentsToday = "no appointments today",
+        Past = "over",
+        Running = "running",
+        InPrefix = "in ",
+        MinutesShort = " min",
+        HoursShort = " h ",
+        AllDay = "all day",
         MeetingRequestsNote = "check for a clash",
-        LeftToday = "Left today",
-        LeftTodayNote = "appointments",
-        Overdue = "Overdue",
-        OverdueNote = "the date has passed",
 
-        SortedEyebrow = "Sorted",
-        SortedHeading = "The sorted post",
+        SearchPlaceholder = "Search the mailbox and the desk",
+        SearchButton = "Search",
+        SearchHeading = "Search",
+        Searching = "searching ...",
+        NothingFoundFor = "nothing found for ",
+        HitsWord = " hit(s)",
+        ViaIndex = "via the search index in ",
+        FoldersWord = " folders",
+        ViaWalkStart = "the newest ",
+        ViaWalkEnd = " messages read, the index had none",
+        FromMemory = " from the desk's memory",
+        SearchFailed = "Outlook could not be searched",
+        AlsoSearched = "also searched for: ",
+        SeeAlso = "see: ",
+        KindTask = "Task",
+        KindAppointment = "Appointment",
+        KindTicket = "Ticket",
+
+        UnreadNote = "in the inbox",
+        NotYetSortedNote = "judged one after another",
+
         TrayAnswer = "Needs a reply",
         TrayInformation = "Worth knowing",
         TrayIgnore = "Not worth reading",
         TrayIgnoreNote = "not listed",
+        TrayOverdue = "Overdue",
+        DuePrefix = "due ",
+        DueFormat = "d MMM",
         NotSortedYet = "not sorted yet",
         NothingOfThat = "none of that",
         NoSubject = "(no subject)",
@@ -234,6 +361,13 @@ public sealed class UiText
         FromThePeriod = "the period",
         PeriodSentenceStart = "Everything unread is sorted. On the desk is ",
         PeriodSentenceEnd = " — older is counted only. Changeable in the settings.",
+        PeriodTwoDays = "the last two days",
+        PeriodDaysStart = "the last ",
+        PeriodDaysEnd = " days",
+        PeriodTwoWeeks = "the last two weeks",
+        PeriodFourWeeks = "the last four weeks",
+        PeriodTwoMonths = "the last two months",
+        PeriodThreeMonths = "the last three months",
         JudgingOne = "judging one message ...",
         JudgingManyStart = "judging ",
         JudgingManyEnd = " messages ...",
@@ -289,41 +423,58 @@ public sealed class UiText
     /// <summary>German.</summary>
     public static UiText De { get; } = new()
     {
+        LanguageTag = "de",
+
         DeskEyebrow = "Shellvis &middot; Sekretariat",
         DeskTitle = "Das Vorzimmer",
 
-        StandEyebrow = "Stand",
-        StandHeading = "Was gerade auf dem Schreibtisch liegt",
         NotCountedYet = "Noch nicht gezählt",
         CountNow = "Jetzt zählen",
         Counting = "zählt ...",
         CountedAt = "gezählt um ",
+        Counted = "gezählt",
+        TryAgain = "Nochmal",
         NoMailboxNoNumbers = "Ohne Postfach keine Zahlen.",
         NoMailboxShort = "ohne Postfach keine Zahlen",
 
-        NeedsAnswer = "Braucht Antwort",
-        NeedsAnswerNote = "jemand wartet",
-        JustInformation = "Nur Information",
-        JustInformationNote = "wissen, nicht antworten",
-        NotWorthReading = "Nicht lesenswert",
-        NotWorthReadingNote = "Rundschreiben, Dubletten",
-        NotYetSorted = "Noch unsortiert",
-        NotYetSortedNote = "wird der Reihe nach beurteilt",
-        Unread = "Ungelesen",
-        UnreadNote = "im Posteingang",
-        MeetingRequests = "Terminanfragen",
+        TrayToday = "Heute",
+        NoAppointmentsToday = "keine Termine heute",
+        Past = "vorbei",
+        Running = "läuft",
+        InPrefix = "in ",
+        MinutesShort = " Min.",
+        HoursShort = " Std. ",
+        AllDay = "ganztägig",
         MeetingRequestsNote = "auf Kollision prüfen",
-        LeftToday = "Heute noch",
-        LeftTodayNote = "Termine",
-        Overdue = "Überfällig",
-        OverdueNote = "Datum liegt in der Vergangenheit",
 
-        SortedEyebrow = "Sortiert",
-        SortedHeading = "Die sortierte Post",
+        SearchPlaceholder = "Postfach und Schreibtisch durchsuchen",
+        SearchButton = "Suchen",
+        SearchHeading = "Suche",
+        Searching = "sucht ...",
+        NothingFoundFor = "nichts gefunden für ",
+        HitsWord = " Treffer",
+        ViaIndex = "über den Suchindex in ",
+        FoldersWord = " Ordnern",
+        ViaWalkStart = "die neuesten ",
+        ViaWalkEnd = " Nachrichten gelesen, der Index hatte nichts",
+        FromMemory = " aus dem Gedächtnis des Schreibtischs",
+        SearchFailed = "Outlook konnte nicht durchsucht werden",
+        AlsoSearched = "auch gesucht nach: ",
+        SeeAlso = "dazu: ",
+        KindTask = "Aufgabe",
+        KindAppointment = "Termin",
+        KindTicket = "Ticket",
+
+        UnreadNote = "im Posteingang",
+        NotYetSortedNote = "wird der Reihe nach beurteilt",
+
         TrayAnswer = "Braucht eine Antwort",
         TrayInformation = "Muss man wissen",
         TrayIgnore = "Nicht lesenswert",
         TrayIgnoreNote = "nicht aufgezählt",
+        TrayOverdue = "Überfällig",
+        DuePrefix = "fällig ",
+        DueFormat = "dd.MM.",
         NotSortedYet = "noch nicht sortiert",
         NothingOfThat = "nichts davon",
         NoSubject = "(kein Betreff)",
@@ -340,6 +491,13 @@ public sealed class UiText
         FromThePeriod = "dem Zeitraum",
         PeriodSentenceStart = "Sortiert wird alles Ungelesene. Auf dem Tisch liegen ",
         PeriodSentenceEnd = " — Älteres wird nur gezählt. Änderbar in den Einstellungen.",
+        PeriodTwoDays = "die letzten zwei Tage",
+        PeriodDaysStart = "die letzten ",
+        PeriodDaysEnd = " Tage",
+        PeriodTwoWeeks = "die letzten zwei Wochen",
+        PeriodFourWeeks = "die letzten vier Wochen",
+        PeriodTwoMonths = "die letzten zwei Monate",
+        PeriodThreeMonths = "die letzten drei Monate",
         JudgingOne = "beurteilt gerade eine Nachricht ...",
         JudgingManyStart = "beurteilt gerade ",
         JudgingManyEnd = " Nachrichten ...",

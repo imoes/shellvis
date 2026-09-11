@@ -96,7 +96,7 @@ jobs:
                                'providers','endpoint','reflect','hooks','cron','thunderbird',
                                'stream','mcp','hass','broker','topmost','speech','whisper',
                                'clarify','markdown','glyphs','notes','teams','process','agenda','connectors','notify','schedule',
-                               'dates','watch') {
+                               'dates','watch','page') {
             Write-Host "--- $harness"
 
             # Captured as well as printed, so the reason can be put in an annotation. Run logs

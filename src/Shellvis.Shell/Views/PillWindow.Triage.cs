@@ -150,10 +150,48 @@ public sealed partial class PillWindow
                 ? $"{me.Name} <{me.Address}>"
                 : me.Name;
 
+            // What the desk already knows about each message's matter, so the model does
+            // not judge every mail as if it were the first of its kind. Asked for in as
+            // many words: "die KI soll bei unklarer Informationslage die Suche benutzen" --
+            // the same request that came a fortnight ago, the confirmation of the order
+            // this mail asks about. Three candidates a message, found by the distinctive
+            // words of its subject, lettered in the prompt so the model can name the one
+            // it means and the page can link it.
+            var earlier = new Dictionary<string, IReadOnlyList<DeskObject>>(StringComparer.Ordinal);
+
+            // HyDE first: the model writes, per message, the document that would settle it
+            // -- the confirmation, the earlier request -- and the desk is searched with THAT
+            // as well as with the subject. Searching with the question alone finds the
+            // question's own thread; "wo bleibt Bestellung 4711" and "Auftragsbestaetigung
+            // 4711 Lieferung KW 38" share one word, and it is the imagined document that
+            // puts it in the query. A short call, subjects and openings only, before the
+            // long one; a model that answers in prose costs the context and nothing else.
+            IReadOnlyDictionary<string, string> imagined = await ImagineAsync(batch, facing)
+                .ConfigureAwait(true);
+
+            foreach (DeskObject one in batch)
+            {
+                try
+                {
+                    IReadOnlyList<DeskObject> about = store.About(
+                        one,
+                        imagined: imagined.TryGetValue(one.Id, out string? document) ? document : null);
+
+                    if (about.Count > 0)
+                        earlier[one.Id] = about;
+                }
+                catch (Exception ex)
+                {
+                    // The candidates are context, not the question. A search that fails
+                    // costs this message its context and nothing else.
+                    AddRow(GlyphWarning, $"could not look up what the desk knows about '{one.Subject}': {ex.Message}", "desk", isWarning: true);
+                }
+            }
+
             var answer = new System.Text.StringBuilder();
 
             await _session.AskAsideAsync(
-                DeskTriage.Ask(batch, facing, owner),
+                DeskTriage.Ask(batch, facing, owner, earlier),
                 agentEvent =>
                 {
                     // Nothing is rendered. This is not a conversation and its answer is a
@@ -172,18 +210,19 @@ public sealed partial class PillWindow
                 // processing before the model could start, then was abandoned as stalled.
                 withTools: false).ConfigureAwait(true);
 
-            IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> verdicts =
-                DeskTriage.Read(answer.ToString(), batch);
+            IReadOnlyDictionary<string, DeskTriage.Judgement> verdicts =
+                DeskTriage.Read(answer.ToString(), batch, earlier);
 
             // Both flags record what the PASS could do, not what this message happened to
             // have. A notification with an empty body would otherwise come up as needing a
             // re-read on every pass, for ever.
-            foreach ((string id, (DeskVerdict verdict, string why)) in verdicts)
+            foreach ((string id, DeskTriage.Judgement judged) in verdicts)
             {
                 store.Judge(
-                    id, verdict, why, DateTime.Now,
+                    id, judged.Verdict, judged.Why, DateTime.Now,
                     sawBody: true,
-                    rules: DeskTriage.RulesVersion);
+                    rules: DeskTriage.RulesVersion,
+                    related: judged.Related);
             }
 
             // Said plainly, including when it comes to nothing. A pass that read no verdicts
@@ -232,15 +271,83 @@ public sealed partial class PillWindow
             _ = JudgeSomeMailAsync();
     }
 
+    /// <summary>
+    /// The imagined counterpart of each message, or nothing when the model could not be
+    /// asked. Never throws: this is context for the judging call, and the judging call
+    /// runs whether or not the context arrived.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, string>> ImagineAsync(
+        IReadOnlyList<DeskObject> batch,
+        IReadOnlyDictionary<string, Shellvis.Core.Office.MailFacing> facing)
+    {
+        if (_session is null)
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+
+        var said = new System.Text.StringBuilder();
+
+        try
+        {
+            await _session.AskAsideAsync(
+                DeskTriage.Imagine(batch, facing, MailboxLanguage),
+                agentEvent =>
+                {
+                    if (agentEvent is AgentEvent.AssistantMessage message)
+                        said.Append(message.Text);
+                },
+                CancellationToken.None,
+                withTools: false).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"could not imagine the counterparts: {ex.Message}; judging without them", "desk", isWarning: true);
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        IReadOnlyDictionary<string, string> imagined = DeskTriage.ReadImagined(said.ToString(), batch);
+
+        if (imagined.Count > 0)
+            AddRow(GlyphTool, $"imagined the counterpart of {imagined.Count} message(s) to search the desk with", "desk");
+
+        return imagined;
+    }
+
+    /// <summary>
+    /// The language this mailbox is read in, by its English name -- "German", "English",
+    /// "Finnish" -- for the imagining prompts.
+    /// </summary>
+    /// <remarks>
+    /// The MACHINE's display language, not the interface setting. Somebody may run the
+    /// interface in English on a German desk; their mail is still German, and the words
+    /// the search needs are the words the mail is written in. <c>Parent</c> drops the
+    /// region: "German (Germany)" is a region, "German" is a language, and it is the
+    /// language the model is told about.
+    /// </remarks>
+    private static string MailboxLanguage
+    {
+        get
+        {
+            System.Globalization.CultureInfo culture = System.Globalization.CultureInfo.CurrentUICulture;
+
+            while (!culture.IsNeutralCulture && !culture.Equals(System.Globalization.CultureInfo.InvariantCulture))
+                culture = culture.Parent;
+
+            return culture.EnglishName is { Length: > 0 } name && !culture.Equals(System.Globalization.CultureInfo.InvariantCulture)
+                ? name
+                : "English";
+        }
+    }
+
     /// <summary>What the batch came to, in one line.</summary>
     private static string Summarise(
-        IReadOnlyDictionary<string, (DeskVerdict Verdict, string Why)> verdicts)
+        IReadOnlyDictionary<string, DeskTriage.Judgement> verdicts)
     {
         int answer = verdicts.Values.Count(v => v.Verdict == DeskVerdict.Answer);
         int information = verdicts.Values.Count(v => v.Verdict == DeskVerdict.Information);
         int ignore = verdicts.Values.Count(v => v.Verdict == DeskVerdict.Ignore);
+        int related = verdicts.Values.Count(v => v.Related is not null);
 
         return $"sorted {verdicts.Count}: {answer} need an answer, "
-            + $"{information} to know about, {ignore} not worth reading";
+            + $"{information} to know about, {ignore} not worth reading"
+            + (related > 0 ? $", {related} tied to something the desk already held" : string.Empty);
     }
 }

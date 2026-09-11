@@ -1,10 +1,22 @@
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 using Shellvis.Core.Desk;
 
 namespace Shellvis.Core.Office;
+
+/// <summary>
+/// What the walk knows about an appointment beyond the columns a <see cref="DeskObject"/>
+/// has: when it ends, and whether it is an all-day entry.
+/// </summary>
+/// <remarks>
+/// Carried in <c>Facts</c> as JSON rather than as two more columns, because that field exists
+/// so a new fact does not need a migration. Named so the writer and the reader share one
+/// shape and a renamed property breaks the build rather than the page.
+/// </remarks>
+public sealed record AppointmentFacts(DateTime End, bool AllDay);
 
 public sealed partial class OutlookClient
 {
@@ -256,6 +268,14 @@ public sealed partial class OutlookClient
     }
 
     /// <summary>What is still to come today, and when the next one starts.</summary>
+    /// <remarks>
+    /// <b>The walk covers the whole day; the count covers the rest of it.</b> The page shows
+    /// the day as a list, and a list that begins at "now" has lost its shape: a 14:00 meeting
+    /// reads differently after a morning of three than after an empty one. So every
+    /// appointment of the day is remembered, with its end in <c>Facts</c> so the page can say
+    /// which have passed and which is running -- while <c>Left</c> and <c>Next</c> keep
+    /// counting from now, because that is what the badge and the change notice compare.
+    /// </remarks>
     private static (int Left, DateTime? Next) CountToday(
         dynamic session,
         DateTime now,
@@ -279,7 +299,7 @@ public sealed partial class OutlookClient
             // CurrentCulture on purpose. Outlook's bracket syntax reads the date in the
             // user's own short format, and an invariant string is read as a different day
             // on this machine: 02.09. became 9 February, silently, in two tools.
-            string from = now.ToString("g", CultureInfo.CurrentCulture);
+            string from = now.Date.ToString("g", CultureInfo.CurrentCulture);
             string to = now.Date.AddDays(1).ToString("g", CultureInfo.CurrentCulture);
 
             restricted = items.Restrict($"[Start] >= \"{from}\" AND [Start] < \"{to}\"");
@@ -302,8 +322,14 @@ public sealed partial class OutlookClient
                     if (start == DateTime.MinValue)
                         continue;
 
-                    left++;
-                    next ??= start;
+                    if (start >= now)
+                    {
+                        left++;
+                        next ??= start;
+                    }
+
+                    DateTime end = Date(() => item.End);
+                    bool allDay = Flag(() => item.AllDayEvent);
 
                     // GlobalAppointmentID, not EntryID: one occurrence of a series shares it
                     // with the series, which is what makes "the Monday meeting" one thing to
@@ -325,7 +351,14 @@ public sealed partial class OutlookClient
                         TicketKey: null,
                         Thread: null,
                         EntryId: entry,
-                        Facts: null,
+
+                        // The end and whether it is an all-day entry, as JSON in the field
+                        // that exists for exactly this: a fact the row has and the record
+                        // has no column for. Read back by the page's owner, which is where
+                        // "vorbei" and "läuft" are decided.
+                        Facts: end == DateTime.MinValue
+                            ? null
+                            : JsonSerializer.Serialize(new AppointmentFacts(end, allDay)),
                         Enrichment: null,
                         FirstSeen: now,
                         LastSeen: now));

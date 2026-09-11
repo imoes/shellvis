@@ -420,14 +420,35 @@
      choice. */
   .tray ul.live .entry { min-width: 0; }
 
-  .tray ul.live .entry-head {
+  .tray ul .entry-head {
     display: flex;
     align-items: flex-start;
     gap: .25rem;
     min-width: 0;
   }
 
-  .tray ul.live .entry-head > button.row { flex: 1 1 auto; }
+  .tray ul .entry-head > button.row { flex: 1 1 auto; min-width: 0; }
+
+  /* The join button on a Teams meeting: the one control on the day list that does
+     something other people see, so it looks like a button and not like a link -- a
+     hairline in the accent, the word in mono, aligned with the row's baseline. */
+  .tray ul.agenda button.join {
+    flex: 0 0 auto;
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    letter-spacing: .06em;
+    background: none;
+    border: 1px solid var(--tab);
+    color: var(--tab);
+    padding: .18rem .55rem .22rem;
+    margin-top: .3rem;
+    border-radius: 2px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .tray ul.agenda button.join:hover { background: var(--tab); color: var(--tab-ink); }
+  .tray ul.agenda button.join:focus-visible { outline: 2px solid var(--tab); outline-offset: 2px; }
 
   .tray ul.live button.more {
     flex: 0 0 auto;
@@ -1441,7 +1462,26 @@
         open.appendChild(when);
         open.appendChild(title);
         open.appendChild(note);
-        item.appendChild(open);
+
+        /* A Teams meeting offers to be joined, from a button beside the row rather than
+         * inside it: the row opens the entry in Outlook, the button opens the meeting, and
+         * the two must not be one press. The page knows only that there IS a link; the
+         * link itself stays with the application and is opened there. */
+        var head = document.createElement("div");
+        head.className = "entry-head";
+        head.appendChild(open);
+
+        if (row.teams) {
+          var join = document.createElement("button");
+          join.type = "button";
+          join.className = "join";
+          join.setAttribute("data-join", row.id);
+          join.title = "{{JoinMeetingTip}}";
+          join.textContent = "{{JoinMeeting}}";
+          head.appendChild(join);
+        }
+
+        item.appendChild(head);
 
         /* What came in about this meeting since it was booked: the count, and the newest
          * of it, as a button that opens that mail. Drawn only when something was found --
@@ -1711,6 +1751,15 @@
 
           showDigest({ id: moreId, state: "reading", text: "", note: "{{ReadingThread}}" });
           window.chrome.webview.postMessage("expand:" + moreId);
+          return;
+        }
+
+        /* The join button on an appointment. Explicit: a press, and nothing else, opens
+         * a meeting other people can see somebody enter. */
+        var join = target.closest("button.join");
+
+        if (join) {
+          window.chrome.webview.postMessage("join:" + join.getAttribute("data-join"));
           return;
         }
 

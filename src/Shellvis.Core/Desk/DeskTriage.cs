@@ -31,14 +31,16 @@ public static class DeskTriage
 {
     /// <summary>How many messages one question covers.</summary>
     /// <remarks>
-    /// Five. It was ten while the answer was one line a message; now every message comes
-    /// back with its long form as well -- four blocks, a dozen lines -- and ten of those in
-    /// one answer is where a model starts labelling by rhythm and where the stream is
-    /// abandoned as stalled before it ends. Five keeps each answer under a page. "Ein
-    /// LLM-Call pro Mail sollte reichen" was the brief; five a call is the same cost with
-    /// less prompt repeated.
+    /// Ten. Enough that a busy morning is worked through in a few passes, few enough that
+    /// the model still has each subject in view when it writes the last line -- a list of
+    /// forty comes back with the first ten judged and the rest labelled by rhythm.
+    ///
+    /// Not lowered for the second part of the analysis, and that was asked for in as many
+    /// words. The second part is a memory aid -- a few dated lines for somebody who has
+    /// lost the thread of a mail -- not a report, and a few lines a message keeps ten in
+    /// one answer where they were.
     /// </remarks>
-    public const int PerBatch = 5;
+    public const int PerBatch = 10;
 
     /// <summary>
     /// How much message text one question may carry, in characters.
@@ -119,9 +121,9 @@ public static class DeskTriage
     /// request made a fortnight ago went unmentioned, and a question about an order the
     /// desk had already seen confirmed was summarised as an open question.</item>
     /// <item>5 -- the analysis has two parts and comes from one call: the sentence for the
-    /// tray and the long form for the row that unfolds. Before that the long form was
-    /// written on demand, and the row said "liest den Verlauf ..." to somebody who had
-    /// asked to read it now.</item>
+    /// tray and, for the row that unfolds, a memory aid of six to eight dated lines for
+    /// somebody who has lost the thread. Before that the long form was written on demand,
+    /// and the row said "liest den Verlauf ..." to somebody who had asked to read it now.</item>
     /// </list>
     ///
     /// Not a timestamp comparison, deliberately. "Judged before this build" needs a build
@@ -301,17 +303,18 @@ public static class DeskTriage
     /// reads instead of scrolling the thread.
     /// </summary>
     /// <remarks>
-    /// <b>One call, one thread, on demand.</b> The sentence beside the verdict is written
-    /// for every unread mail because it is what the tray shows. This is written only when
-    /// somebody opens the row, because it is what they see instead of the thread -- and a
-    /// thread is read in full by a person once, not by a timer every few minutes.
+    /// <b>The fallback, not the rule.</b> The sorting pass writes the memory aid with the
+    /// verdict, in the same call, for every mail it judges. This is asked only for a row
+    /// that has none yet -- judged before the analysis had two parts -- and for "Read
+    /// again", so it asks for the same thing in the same shape.
     ///
-    /// <b>Shape, not prose.</b> Four headed blocks, because they answer the four questions a
-    /// person asks of a thread they did not follow: what it is about, what was said in what
-    /// order, what is still open, and what is expected of them. The dates in the second
-    /// block are the point of it -- "am 04.09. fragte Schwarz, am 08.09. antwortete Weber"
-    /// is a history; without the dates it is a plot summary. The owner's own messages are
-    /// marked so the model can tell what was already answered from this desk.
+    /// <b>A memory aid, not a report.</b> Four short headed blocks, because they answer the
+    /// four questions somebody asks when they have lost the thread of a mail: what it is
+    /// about, what was said in what order, what is still open, and what is expected of
+    /// them. Six to eight lines in all. The dates in the second block are the point of it
+    /// -- "am 04.09. fragte Schwarz, am 08.09. antwortete Weber" is a history; without the
+    /// dates it is a plot summary. The owner's own messages are marked so the model can
+    /// tell what was already answered from this desk.
     /// </remarks>
     public static string Digest(
         DeskObject mail,
@@ -325,30 +328,30 @@ public static class DeskTriage
             sb.Append("This desk belongs to: ").AppendLine(owner).AppendLine();
 
         sb.AppendLine("""
-            Below is one mail conversation, oldest message first. Write the OVERVIEW a person
-            reads instead of the thread: everything they need to know about it in under a
-            minute, and nothing they do not.
+            Below is one mail conversation, oldest message first. Write the MEMORY AID a
+            person reads when they have lost the thread of it: what they need to have it
+            back in ten seconds, and nothing more. Six to eight lines in all, never a report.
 
-            Write in the language the conversation is in. Plain text, no markdown, no bullets
-            other than the dash shown. Exactly these four blocks, each headed by its label on
-            its own line, in this order:
+            Write in the language the conversation is in. Plain text, no markdown, no
+            bullets. Exactly these four blocks, each headed by its label on its own line, in
+            this order:
 
             WORUM ES GEHT (or in the conversation's language: ABOUT)
-              Two or three sentences: the matter, who is involved, where it stands now.
+              One sentence: the matter and who is involved.
 
             VERLAUF (HISTORY)
               One line per message that changed something, oldest first, each beginning
               with its date as dd.MM. and the person's name: "04.09. Schwarz fragt nach der
-              Freigabe für das Kernel-Update." Skip messages that only say thanks or repeat.
-              Messages marked "own:" were written from this desk -- say so ("04.09. Sie
-              haben ... zugesagt").
+              Freigabe für das Kernel-Update." Three to five lines; skip messages that only
+              say thanks or repeat. Messages marked "own:" were written from this desk --
+              say so ("04.09. Sie haben ... zugesagt").
 
             OFFEN (OPEN)
-              What has been asked and not answered, promised and not delivered, decided and
-              not done. With who owes it. "Nichts" if nothing is open.
+              One line: what is still asked, promised or undecided, and who owes it.
+              "Nichts" if nothing is open.
 
             ZU TUN (TO DO)
-              What the owner of this desk has to do, if anything, and by when if a date was
+              One line: what the owner of this desk has to do, and by when if a date was
               named. "Nichts" if nothing.
 
             Name people, dates, numbers, systems, tickets and documents as they appear. Do
@@ -664,25 +667,28 @@ public static class DeskTriage
 
                 <number> | <ANSWER|INFORMATION|IGNORE> | <summary> | <letter or ->
                 WORUM ES GEHT
-                <two or three sentences>
+                <one sentence: the matter and who is involved>
                 VERLAUF
-                <one line per message that changed something, oldest first, each
-                 beginning with its date as dd.MM. and the person's name>
+                <one line per message that changed something, oldest first, each beginning
+                 with its date as dd.MM. and the person's name; three to five lines>
                 OFFEN
-                <what is asked and not answered, promised and not delivered; "Nichts" if nothing>
+                <one line: what is still asked, promised or undecided, and who owes it;
+                 "Nichts" if nothing>
                 ZU TUN
-                <what the owner of this desk has to do, by when if a date was named; "Nichts" if nothing>
+                <one line: what the owner of this desk has to do, by when if a date was
+                 named; "Nichts" if nothing>
 
             The first line is the SHORT part: the tray shows it instead of the mail. The
-            four blocks are the LONG part: the row unfolds to show them instead of the
-            thread, so they must stand on their own for somebody who did not follow it.
-            The four labels are written exactly as above when the mail is German, and as
-            ABOUT / HISTORY / OPEN / TO DO when it is English. Each block's text is plain
-            lines, no markdown, no bullets. Messages marked "own:" under "conversation so
-            far" were written from this desk; say so in VERLAUF ("02.09. Sie haben ...
-            zugesagt") and let ZU TUN reflect what was already answered. A notification
-            from a system gets the same four blocks, short: what happened, what state it
-            is in, nothing open unless the mail says so.
+            four blocks are a MEMORY AID: somebody who has lost the thread of this mail
+            unfolds the row to get it back in ten seconds. So they are short -- six to eight
+            lines in all, never a report -- and they must stand on their own. The labels
+            are written exactly as above when the mail is German, and when it is English as
+            ABOUT / HISTORY / OPEN / TO DO. Plain lines, no markdown, no bullets. Messages
+            marked "own:" under "conversation so far" were written from this desk; say so
+            in VERLAUF ("02.09. Sie haben ... zugesagt") and let ZU TUN reflect what was
+            already answered. A notification from a system gets the same four labels in
+            four lines: what happened, when, what state it is in, nothing to do unless the
+            mail says so.
 
             SOME MESSAGES COME WITH "earlier on this desk:" LINES. Those are things this
             desk already holds that share words with the message -- an earlier mail, a

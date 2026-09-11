@@ -63,6 +63,7 @@ public sealed partial class PillWindow
             _vorzimmer.OpenRequested += OpenFromDesk;
             _vorzimmer.SearchRequested += words => _ = SearchTheDeskAsync(words);
             _vorzimmer.ExpandRequested += (id, again) => _ = ExpandAsync(id, again);
+            _vorzimmer.JoinRequested += id => _ = JoinAsync(id);
         }
 
         _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
@@ -242,9 +243,14 @@ public sealed partial class PillWindow
             // The look-ahead: what came in about the meetings that have not happened yet.
             // Only when somebody is looking at the page -- the page opened, or the button
             // pressed -- because it is a model call and a search, and neither belongs on a
-            // three-minute timer for a window nobody has open.
+            // three-minute timer for a window nobody has open. The Teams check rides along:
+            // it reads each remaining appointment's body once for the join link, which is
+            // the one thing on the day list somebody presses five minutes before the hour.
             if (thenSort)
+            {
+                _ = MarkTeamsAsync(reading, now);
                 _ = LookAheadAsync(reading, now);
+            }
 
             if (thenSort)
                 _ = JudgeSomeMailAsync();
@@ -717,19 +723,148 @@ public sealed partial class PillWindow
     private static string Label(string who, string what) =>
         (who is { Length: > 0 } ? Oneline(who) + " · " : string.Empty) + Shorten(Oneline(what), 110);
 
-    /// <summary>The day list with whatever the look-ahead has found so far folded into it.</summary>
+    /// <summary>
+    /// The day list with whatever has been learned about each appointment folded into it:
+    /// the mail found about it, and whether it is a Teams meeting.
+    /// </summary>
     private IReadOnlyList<VorzimmerWindow.DayEntry> WithAbout(
         IReadOnlyList<VorzimmerWindow.DayEntry> day) =>
         day
-            .Select(row => _dayAbout.TryGetValue(row.Id, out VorzimmerWindow.DayEntry? about)
-                ? row with
+            .Select(row =>
+            {
+                if (_dayAbout.TryGetValue(row.Id, out VorzimmerWindow.DayEntry? about))
                 {
-                    AboutCount = about.AboutCount,
-                    AboutId = about.AboutId,
-                    AboutLabel = about.AboutLabel,
+                    row = row with
+                    {
+                        AboutCount = about.AboutCount,
+                        AboutId = about.AboutId,
+                        AboutLabel = about.AboutLabel,
+                    };
                 }
-                : row)
+
+                if (_dayJoin.TryGetValue(row.Id, out string? join) && join is { Length: > 0 })
+                    row = row with { Teams = true };
+
+                return row;
+            })
             .ToList();
+
+    /// <summary>
+    /// The Teams join link of each appointment, keyed by desk id; null for one that was
+    /// read and has none. Kept for the day like the mail about it.
+    /// </summary>
+    private readonly Dictionary<string, string?> _dayJoin = new(StringComparer.Ordinal);
+
+    private DateTime _dayJoinFor = DateTime.MinValue;
+
+    private bool _markingTeams;
+
+    /// <summary>
+    /// Find out which of today's remaining appointments are Teams meetings, so their rows
+    /// can offer to join.
+    /// </summary>
+    /// <remarks>
+    /// <b>Out of Outlook, through COM, and nothing else.</b> Teams has no automation
+    /// interface of its own; what it does have is a join link that it writes into the body
+    /// of the calendar entry when the meeting is created. The body is tens of thousands of
+    /// characters, which is why the walk does not read it for every appointment on every
+    /// tick -- this reads it once per remaining appointment, when the page is opened, and
+    /// remembers the answer for the day.
+    ///
+    /// <b>The link never reaches the page.</b> The row learns a yes or a no; the URL stays
+    /// here and is opened here when the row asks, through the same launcher every other
+    /// deep link goes through -- which refuses a scheme Windows has no handler for instead
+    /// of raising a "choose an app" dialog on a machine without Teams.
+    /// </remarks>
+    private async Task MarkTeamsAsync(DeskReading reading, DateTime now)
+    {
+        if (_vorzimmer is null || _markingTeams || _session?.Outlook is not { } outlook)
+            return;
+
+        if (_dayJoinFor != now.Date)
+        {
+            _dayJoin.Clear();
+            _dayJoinFor = now.Date;
+        }
+
+        List<DeskObject> remaining = reading.Objects
+            .Where(o => o.Kind == DeskKind.Appointment)
+            .Where(o => (FactsOf(o)?.End ?? o.When) > now && !(FactsOf(o)?.AllDay ?? false))
+            .Where(o => o.EntryId is { Length: > 0 })
+            .Where(o => !_dayJoin.ContainsKey(o.Id))
+            .OrderBy(o => o.When)
+            .Take(AppointmentsShown)
+            .ToList();
+
+        if (remaining.Count == 0)
+            return;
+
+        _markingTeams = true;
+
+        try
+        {
+            foreach (DeskObject meeting in remaining)
+            {
+                try
+                {
+                    _dayJoin[meeting.Id] = await outlook
+                        .JoinUrlAsync(meeting.EntryId!)
+                        .ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    // Not remembered as "no link": an entry that would not open is asked
+                    // again on the next look rather than shown as a room meeting for the day.
+                    AddRow(GlyphWarning, $"could not read the appointment '{meeting.Subject}' for a join link: {ex.Message}", "desk", isWarning: true);
+                }
+            }
+
+            int teams = remaining.Count(m => _dayJoin.TryGetValue(m.Id, out string? link) && link is { Length: > 0 });
+
+            if (teams > 0)
+                AddRow(GlyphTool, $"{teams} of today's remaining meeting(s) are Teams meetings", "desk");
+
+            _vorzimmer?.Day(WithAbout(_dayToday));
+        }
+        finally
+        {
+            _markingTeams = false;
+        }
+    }
+
+    /// <summary>
+    /// Join the Teams meeting behind one appointment row.
+    ///
+    /// Explicit, and only explicit: a press on the row's own button, never on a timer and
+    /// never because the meeting is about to start. Joining is the one thing this page can
+    /// do that other people see happen, and the tool that does the same thing for the model
+    /// carries the same rule.
+    /// </summary>
+    private async Task JoinAsync(string id)
+    {
+        if (!_dayJoin.TryGetValue(id, out string? link) || link is not { Length: > 0 })
+        {
+            AddRow(GlyphWarning, $"no Teams link is known for '{id}'", "desk", isWarning: true);
+            return;
+        }
+
+        try
+        {
+            Shellvis.Core.Desktop.LaunchResult result = await Shellvis.Core.Desktop.ProgramLauncher
+                .LaunchAsync(Shellvis.Core.Teams.TeamsLinks.Meeting(link), waitForWindow: false)
+                .ConfigureAwait(true);
+
+            AddRow(
+                result.Succeeded ? GlyphTool : GlyphWarning,
+                result.Succeeded ? "opened the Teams meeting" : $"the meeting link could not be opened: {result.Detail}",
+                "desk",
+                isWarning: !result.Succeeded);
+        }
+        catch (Exception ex)
+        {
+            AddRow(GlyphWarning, $"the meeting link could not be opened: {ex.Message}", "desk", isWarning: true);
+        }
+    }
 
     /// <summary>
     /// The imagined mail for each meeting, or nothing when the model could not be asked.

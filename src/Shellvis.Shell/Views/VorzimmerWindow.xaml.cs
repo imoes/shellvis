@@ -250,6 +250,16 @@ public sealed partial class VorzimmerWindow : Window
                 return;
             }
 
+            // "join:<desk-id>" -- the join button on an appointment was pressed. Explicit
+            // by construction: only a press sends it, and joining is the one thing on this
+            // page other people can see happen.
+            if (message.StartsWith("join:", StringComparison.Ordinal)
+                && message.Length > "join:".Length)
+            {
+                JoinRequested?.Invoke(message["join:".Length..]);
+                return;
+            }
+
             // "expand:<desk-id>" -- a row was opened, and the page wants the long form of
             // it. "reread:<desk-id>" is the same with the kept digest set aside, for a
             // reader who does not believe it any more.
@@ -323,6 +333,9 @@ public sealed partial class VorzimmerWindow : Window
 
     /// <summary>Raised when the search field was submitted, with the words as typed.</summary>
     public event Action<string>? SearchRequested;
+
+    /// <summary>Raised when the join button on an appointment was pressed, with its desk id.</summary>
+    public event Action<string>? JoinRequested;
 
     /// <summary>
     /// Raised when a row was opened for its long form: the desk id, and whether the kept
@@ -615,6 +628,11 @@ public sealed partial class VorzimmerWindow : Window
     /// </param>
     /// <param name="AboutId">The newest of those mails, so the line can be pressed.</param>
     /// <param name="AboutLabel">Who it is from and what it says, in a few words.</param>
+    /// <param name="Teams">
+    /// The appointment carries a Teams join link, so the row offers to join. The link
+    /// itself stays with the owner: the page says "join this one" by id, and the owner
+    /// opens the URL it read out of the calendar entry.
+    /// </param>
     public sealed record DayEntry(
         string Id,
         string When,
@@ -625,7 +643,8 @@ public sealed partial class VorzimmerWindow : Window
         bool Next,
         int AboutCount = 0,
         string? AboutId = null,
-        string? AboutLabel = null);
+        string? AboutLabel = null,
+        bool Teams = false);
 
     /// <summary>One overdue task: what it is and when it was due.</summary>
     public sealed record DueEntry(string Id, string What, string Due);

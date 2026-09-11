@@ -461,6 +461,16 @@ internal static class PageProbe
                 && html.Contains(Shellvis.Core.Ui.UiText.En.OneMailAbout, StringComparison.Ordinal),
             "searching the meeting's own title finds the invitation and nothing else");
 
+        // Teams, through Outlook and nothing else: the join link is in the calendar entry's
+        // body, the row learns a yes or a no, and the link is opened by the owner on a
+        // press. Never on a timer -- joining is the one thing here other people see.
+        Check("a Teams meeting offers to be joined, by a press, with the link kept off the page",
+            html.Contains("row.teams", StringComparison.Ordinal)
+                && html.Contains("\"join:\" + join.getAttribute(\"data-join\")", StringComparison.Ordinal)
+                && !html.Contains("meetup-join", StringComparison.Ordinal)
+                && html.Contains(Shellvis.Core.Ui.UiText.En.JoinMeeting, StringComparison.Ordinal),
+            "the page says which one; the owner holds the URL and opens it");
+
         Check("and the day can be redrawn alone once that look-up finishes",
             html.Contains("data.day", StringComparison.Ordinal)
                 && html.Contains("fillDay(data.day)", StringComparison.Ordinal),

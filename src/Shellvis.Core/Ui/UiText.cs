@@ -88,6 +88,10 @@ public sealed class UiText
     /// <summary>What the day tray says while the mail about each appointment is being looked up.</summary>
     public required string LookingAhead { get; init; }
 
+    /// <summary>The button on an appointment that is a Teams meeting.</summary>
+    public required string JoinMeeting { get; init; }
+    public required string JoinMeetingTip { get; init; }
+
     // ---------------------------------------------------------- the page: the long form
     //
     // A row opens. Under the sentence the sorting wrote appears the whole conversation as
@@ -344,6 +348,8 @@ public sealed class UiText
         OneMailAbout = "1 mail about it",
         MailsAbout = " mails about it",
         LookingAhead = "looking for mail about today's meetings ...",
+        JoinMeeting = "Join",
+        JoinMeetingTip = "Join the Teams meeting",
 
         UnfoldTip = "Show the whole conversation as an overview",
         FoldTip = "Fold it away",
@@ -485,6 +491,8 @@ public sealed class UiText
         OneMailAbout = "1 Mail dazu",
         MailsAbout = " Mails dazu",
         LookingAhead = "sucht Post zu den heutigen Terminen ...",
+        JoinMeeting = "Beitreten",
+        JoinMeetingTip = "Der Teams-Besprechung beitreten",
 
         UnfoldTip = "Den ganzen Verlauf als Übersicht zeigen",
         FoldTip = "Wieder zuklappen",

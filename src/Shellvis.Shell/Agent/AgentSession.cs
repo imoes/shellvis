@@ -383,6 +383,7 @@ internal sealed partial class AgentSession : IDisposable
             ModelName = model ?? profile.DefaultModel,
             _requestTimeoutSeconds = settings.Agent.RequestTimeoutSeconds,
             _stallTimeoutSeconds = settings.Agent.StallTimeoutSeconds,
+            _asideTimeoutSeconds = settings.Agent.AsideTimeoutSeconds,
             _skills = skills,
             _memory = memory,
             _notes = notes,
@@ -402,9 +403,14 @@ internal sealed partial class AgentSession : IDisposable
 
         // Held separately from the loop so a scheduled run is not affected by an
         // interactive model switch mid-flight.
-        session._cronClient = client;
+        // Their own clients, not the loop's: the aside calls are legitimately long -- a
+        // sorting batch is minutes of prompt processing before the first token -- so they
+        // get the aside timeout, and no retries, because a retry of a five-minute request
+        // is another five minutes of the same. See AsideTimeoutSeconds.
+        session._cronClient = ChatClientFactory.Create(
+            profile, model, apiKey: null, settings.Agent.AsideTimeoutSeconds, maxRetries: 0);
         session._quickClient = TryQuickClient(
-            profile, model, settings.Agent.RequestTimeoutSeconds);
+            profile, model, settings.Agent.AsideTimeoutSeconds);
 
         // The window size: what is configured, or what the endpoint says.
         //
@@ -470,6 +476,12 @@ internal sealed partial class AgentSession : IDisposable
     private int _stallTimeoutSeconds = 300;
 
     /// <summary>
+    /// The network timeout for the aside clients, kept so a model switch rebuilds them with
+    /// the same generous limit rather than the loop's. See <c>AsideTimeoutSeconds</c>.
+    /// </summary>
+    private int _asideTimeoutSeconds = 1800;
+
+    /// <summary>
     /// A second client to the same model, with the reasoning switched off, or null when
     /// this provider has no way to switch it off.
     /// </summary>
@@ -484,7 +496,7 @@ internal sealed partial class AgentSession : IDisposable
         try
         {
             return ChatClientFactory.Create(
-                profile, model, apiKey: null, requestTimeoutSeconds, thinking: false);
+                profile, model, apiKey: null, requestTimeoutSeconds, thinking: false, maxRetries: 0);
         }
         catch (Exception)
         {
@@ -700,12 +712,13 @@ internal sealed partial class AgentSession : IDisposable
                 profile, wanted, apiKey: null, _requestTimeoutSeconds);
 
             _loop.Client = replacement;
-            _cronClient = replacement;
+            _cronClient = ChatClientFactory.Create(
+                profile, wanted, apiKey: null, _asideTimeoutSeconds, maxRetries: 0);
 
             // Follows the switch. Left behind, the sorting pass would go on talking to the
             // model somebody has just moved away from -- which is the same staleness the
             // remembering window was built to avoid, one layer down.
-            _quickClient = TryQuickClient(profile, wanted, _requestTimeoutSeconds);
+            _quickClient = TryQuickClient(profile, wanted, _asideTimeoutSeconds);
             Provider = profile;
             ModelName = wanted;
             ProviderLabel = $"{profile.DisplayName} / {wanted}";

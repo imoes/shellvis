@@ -86,6 +86,21 @@ public sealed class AgentSection
     public int RequestTimeoutSeconds { get; set; } = 300;
 
     /// <summary>
+    /// Seconds one of the ASIDE calls may take in total: sorting a batch of mail, imagining
+    /// the counterpart of a message, writing the long form of a thread.
+    ///
+    /// Separate from <see cref="RequestTimeoutSeconds"/>, and much longer, because those
+    /// calls are legitimately long: a batch of five messages with their threads is ten
+    /// thousand tokens of prompt at 88 tokens a second, and the answer is five short
+    /// analyses at ten tokens a second. That is five to six minutes when everything works,
+    /// and the network timeout of five minutes cut it off -- "the operation was cancelled
+    /// because it exceeded the configured timeout of 0:05:00" -- while the stall watchdog,
+    /// which is the guard that actually tells a dead stream from a slow one, never had a
+    /// say. A person waiting for an answer is a different case and keeps the shorter limit.
+    /// </summary>
+    public int AsideTimeoutSeconds { get; set; } = 1800;
+
+    /// <summary>
     /// Whether to ask, after each finished turn, if anything was learned worth keeping as a
     /// skill.
     ///

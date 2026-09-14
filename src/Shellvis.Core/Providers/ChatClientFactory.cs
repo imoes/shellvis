@@ -32,22 +32,29 @@ public static class ChatClientFactory
     /// that is worth and why it is a body rewrite. Only the OpenAI-compatible transport
     /// honours it; the others ignore it rather than pretending.
     /// </param>
+    /// <param name="maxRetries">
+    /// How often the pipeline may retry a failed request on its own, or null for the
+    /// library default of three. Zero for the aside calls: a retry of a request that took
+    /// five minutes to fail is another five minutes of the same, and the failure that
+    /// prompted this read "Retry failed after 2 tries" over exactly that.
+    /// </param>
     public static IChatClient Create(
         ProviderProfile profile,
         string? model = null,
         string? apiKey = null,
         int requestTimeoutSeconds = 300,
-        bool thinking = true)
+        bool thinking = true,
+        int? maxRetries = null)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
         return profile.Transport switch
         {
             ChatTransport.OpenAiChatCompletions =>
-                CreateOpenAiCompatible(profile, model, apiKey, requestTimeoutSeconds, thinking),
+                CreateOpenAiCompatible(profile, model, apiKey, requestTimeoutSeconds, thinking, maxRetries),
 
             ChatTransport.OpenAiResponses =>
-                CreateResponses(profile, model, apiKey, requestTimeoutSeconds),
+                CreateResponses(profile, model, apiKey, requestTimeoutSeconds, maxRetries),
 
             // Anthropic and Gemini are reachable today through their OpenAI-compatible
             // endpoints, which is what the catalog entries use. These two enum values
@@ -75,11 +82,15 @@ public static class ChatClientFactory
         string? model,
         string? apiKey,
         int requestTimeoutSeconds,
-        bool thinking = true)
+        bool thinking = true,
+        int? maxRetries = null)
     {
         string key = apiKey ?? ResolveKey(profile);
 
         var options = new OpenAIClientOptions();
+
+        if (maxRetries is { } retries)
+            options.RetryPolicy = new ClientRetryPolicy(Math.Max(0, retries));
 
         // Set explicitly, because the library's own default is about a hundred seconds
         // and that is not enough for a local model. Leaving it unset cut long answers off
@@ -117,7 +128,7 @@ public static class ChatClientFactory
     /// cannot tell the difference.
     /// </summary>
     private static IChatClient CreateResponses(
-        ProviderProfile profile, string? model, string? apiKey, int requestTimeoutSeconds)
+        ProviderProfile profile, string? model, string? apiKey, int requestTimeoutSeconds, int? maxRetries = null)
     {
         string key = apiKey ?? ResolveKey(profile);
 
@@ -125,6 +136,9 @@ public static class ChatClientFactory
         {
             NetworkTimeout = TimeSpan.FromSeconds(Math.Clamp(requestTimeoutSeconds, 10, 3600)),
         };
+
+        if (maxRetries is { } retries)
+            options.RetryPolicy = new ClientRetryPolicy(Math.Max(0, retries));
 
         if (profile.BaseUrl is { Length: > 0 } baseUrl)
             options.Endpoint = new Uri(baseUrl);

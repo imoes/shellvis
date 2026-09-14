@@ -260,6 +260,8 @@ public sealed partial class PillWindow
                     // the mail they are about.
                     if (agentEvent is AgentEvent.AssistantMessage message)
                         answer.Append(message.Text);
+                    else if (agentEvent is AgentEvent.Cost cost)
+                        NoteAsideCost("sorting", cost.Spent);
                 },
                 CancellationToken.None,
 
@@ -359,6 +361,8 @@ public sealed partial class PillWindow
                 {
                     if (agentEvent is AgentEvent.AssistantMessage message)
                         said.Append(message.Text);
+                    else if (agentEvent is AgentEvent.Cost cost)
+                        NoteAsideCost("imagining", cost.Spent);
                 },
                 CancellationToken.None,
                 withTools: false).ConfigureAwait(true);

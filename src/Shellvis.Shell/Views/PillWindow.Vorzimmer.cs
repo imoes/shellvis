@@ -461,6 +461,8 @@ public sealed partial class PillWindow
                 {
                     if (agentEvent is Shellvis.Core.Agent.AgentEvent.AssistantMessage message)
                         said.Append(message.Text);
+                    else if (agentEvent is Shellvis.Core.Agent.AgentEvent.Cost cost)
+                        NoteAsideCost("long form", cost.Spent);
                 },
                 CancellationToken.None,
                 withTools: false).ConfigureAwait(true);
@@ -886,6 +888,8 @@ public sealed partial class PillWindow
                 {
                     if (agentEvent is Shellvis.Core.Agent.AgentEvent.AssistantMessage message)
                         said.Append(message.Text);
+                    else if (agentEvent is Shellvis.Core.Agent.AgentEvent.Cost cost)
+                        NoteAsideCost("looking ahead", cost.Spent);
                 },
                 CancellationToken.None,
                 withTools: false).ConfigureAwait(true);
@@ -1084,6 +1088,8 @@ public sealed partial class PillWindow
                 {
                     if (agentEvent is Shellvis.Core.Agent.AgentEvent.AssistantMessage message)
                         text.Append(message.Text);
+                    else if (agentEvent is Shellvis.Core.Agent.AgentEvent.Cost cost)
+                        NoteAsideCost("search", cost.Spent);
                 },
                 CancellationToken.None,
                 withTools: false).ConfigureAwait(true);

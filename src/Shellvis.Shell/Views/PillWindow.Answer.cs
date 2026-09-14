@@ -92,6 +92,27 @@ public sealed partial class PillWindow
     }
 
     /// <summary>
+    /// What an ASIDE call cost -- a sorting batch, an imagined counterpart, a long form, a
+    /// widened search -- as one console line, named for what it was.
+    /// </summary>
+    /// <remarks>
+    /// The console only, never the header. The header says where the CONVERSATION stands,
+    /// and a sorting pass that ran while nobody was asking anything is not the conversation;
+    /// its figure in the header would tell the reader their own context had jumped to ten
+    /// thousand tokens. The console is the record, and these are the calls that cost the
+    /// most -- a batch is minutes of prompt processing -- so they are exactly the ones whose
+    /// figures were missing when the token line was reported as not being read from the
+    /// stream. It was read; the aside callers threw the event away.
+    /// </remarks>
+    private void NoteAsideCost(string what, TurnCost spent)
+    {
+        string line = (spent with { ContextTokens = _session?.ContextTokens }).Line();
+
+        if (line.Length > 0)
+            AddRow(GlyphStopwatch, what + ": " + line, "tokens");
+    }
+
+    /// <summary>
     /// Put a scheduled run's report into the conversation.
     ///
     /// <b>Why it belongs here and not only in the log.</b> A desktop alert has to open

@@ -593,7 +593,7 @@ public sealed partial class PillWindow
 
             foreach (DeskObject meeting in ahead)
             {
-                var hits = new List<(DateTime When, string Id, string Label)>();
+                var hits = new List<(DateTime When, string Id, string Who, string What)>();
 
                 // The desk's own memory first: it carries the sentence the model wrote about
                 // each mail, which is a better label than a subject line.
@@ -607,9 +607,11 @@ public sealed partial class PillWindow
                         if (known.Kind != DeskKind.Mail)
                             continue;
 
-                        hits.Add((known.When, known.Id, Label(
-                            known.WhoName is { Length: > 0 } name ? name : known.WhoAddress,
-                            known.VerdictWhy is { Length: > 0 } why ? why : known.Subject)));
+                        hits.Add((
+                            known.When,
+                            known.Id,
+                            Oneline(known.WhoName is { Length: > 0 } name ? name : known.WhoAddress),
+                            Shorten(Oneline(known.VerdictWhy is { Length: > 0 } why ? why : known.Subject), 400)));
                     }
                 }
                 catch (Exception ex)
@@ -632,7 +634,7 @@ public sealed partial class PillWindow
 
                         foreach (MailSummary mail in found.Page.Messages)
                         {
-                            if (hits.Any(h => h.Label.Contains(mail.Subject, StringComparison.OrdinalIgnoreCase)))
+                            if (hits.Any(h => h.What.Contains(mail.Subject, StringComparison.OrdinalIgnoreCase)))
                                 continue;
 
                             if (_dayFound.Any(m => m.EntryId == mail.EntryId))
@@ -643,7 +645,8 @@ public sealed partial class PillWindow
                             hits.Add((
                                 mail.Received,
                                 DayFoundPrefix + (_dayFound.Count - 1).ToString(CultureInfo.InvariantCulture),
-                                Label(mail.From, mail.Subject)));
+                                Oneline(mail.From),
+                                Shorten(Oneline(mail.Subject), 400)));
                         }
                     }
                     catch (Exception ex)
@@ -665,8 +668,19 @@ public sealed partial class PillWindow
                     Past: false,
                     Next: false,
                     AboutCount: hits.Count,
-                    AboutId: hits.Count > 0 ? hits[0].Id : null,
-                    AboutLabel: hits.Count > 0 ? hits[0].Label : null);
+
+                    // Oldest first, which is what makes it a history rather than a pile:
+                    // what was asked, what was answered, what is still open. The list is
+                    // sorted newest-first above because the newest is what changes the
+                    // meeting; the timeline reverses that for reading.
+                    About: hits
+                        .OrderBy(h => h.When)
+                        .Select(h => new VorzimmerWindow.AboutEntry(
+                            Id: h.Id,
+                            When: h.When.ToString("dd.MM.", CultureInfo.CurrentCulture),
+                            Who: h.Who,
+                            What: h.What))
+                        .ToList());
 
                 // Published per meeting rather than at the end: the first one is the next
                 // one, and it is the row somebody is waiting to see.
@@ -721,10 +735,6 @@ public sealed partial class PillWindow
             yield return string.Join(" ", extra);
     }
 
-    /// <summary>Who it is from and what it says, on one short line.</summary>
-    private static string Label(string who, string what) =>
-        (who is { Length: > 0 } ? Oneline(who) + " · " : string.Empty) + Shorten(Oneline(what), 110);
-
     /// <summary>
     /// The day list with whatever has been learned about each appointment folded into it:
     /// the mail found about it, and whether it is a Teams meeting.
@@ -739,8 +749,7 @@ public sealed partial class PillWindow
                     row = row with
                     {
                         AboutCount = about.AboutCount,
-                        AboutId = about.AboutId,
-                        AboutLabel = about.AboutLabel,
+                        About = about.About,
                     };
                 }
 
@@ -1273,13 +1282,21 @@ public sealed partial class PillWindow
         NoteQuietly(headline, "desk", isProblem: false, headline: headline, opens: NoticeOpens.Vorzimmer);
     }
 
-    /// <summary>How many real entries a tray shows before it is a list rather than a hint.</summary>
+    /// <summary>How many real entries a tray shows.</summary>
     /// <remarks>
-    /// Four. The tray is beside a rule about not listing thirty things, and a page that
-    /// then lists thirty things has argued with itself. Four is enough to recognise what is
-    /// waiting; the count above says how much more there is.
+    /// <b>All of them, and the tray scrolls.</b> It was four, beside a rule about not
+    /// listing thirty things -- and four was right while a tray was a hint. It is not one
+    /// any more: every row carries a sentence and unfolds into the whole conversation, so a
+    /// row the tray hides is an analysis that was paid for and thrown away. Asked for in as
+    /// many words: "es sollen nicht nur vier mails angezeigt werden sondern alle, einfach
+    /// scrollen ist okay."
+    ///
+    /// The number is a guard rather than a design figure. Two hundred is what the mailbox
+    /// walk itself looks at (<c>OutlookClient.DeskScan</c>), so nothing judged can fall
+    /// outside it, and it bounds the page against a store that has somehow grown past what
+    /// anybody would scroll.
     /// </remarks>
-    private const int EntriesPerTray = 4;
+    private const int EntriesPerTray = 200;
 
     /// <summary>
     /// One tray, as the page shows it: what the model put under this verdict.

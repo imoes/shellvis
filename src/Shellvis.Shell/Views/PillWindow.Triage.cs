@@ -278,20 +278,52 @@ public sealed partial class PillWindow
             // Both flags record what the PASS could do, not what this message happened to
             // have. A notification with an empty body would otherwise come up as needing a
             // re-read on every pass, for ever.
+            int thin = 0;
+
             foreach ((string id, DeskTriage.Judgement judged) in verdicts)
             {
                 // The long form covered the message itself plus what the thread listing
                 // returned, which is the count a later opening compares against.
                 int covered = 1 + (conversation.TryGetValue(id, out IReadOnlyList<DeskTriage.ThreadMessage>? t) ? t.Count : 0);
 
+                // AN ANALYSIS IS TWO PARTS, AND HALF OF ONE IS NOT A FINISHED ANALYSIS.
+                //
+                // Measured on the real desk: a batch of Jira notifications came back with
+                // the first and the last message properly read and the three in between
+                // reduced to a label -- "Jira-Kommentar zu KTLNXTM-12", "Jira-Aktualisierung
+                // KTLNXTM-12" -- with no four blocks at all. That is a model running out of
+                // care halfway down a list, not a message with nothing to say, and the
+                // report was the plain one: not all the Jira mail is being analysed.
+                //
+                // It is stored anyway, because a label beats an empty row -- but stamped as
+                // made under the OLDEST rules, which is the machinery that already exists
+                // for exactly this. Nothing new is judged twice; when the queue of unread
+                // mail runs dry, these come back round in a pass that is by then shorter,
+                // and a shorter pass is where the model has the care to spare.
+                bool whole = judged.Digest is { Length: > 80 } && Sentence(judged.Why);
+
+                if (!whole)
+                    thin++;
+
                 store.Judge(
                     id, judged.Verdict, judged.Why, DateTime.Now,
                     sawBody: true,
-                    rules: DeskTriage.RulesVersion,
+                    rules: whole ? DeskTriage.RulesVersion : 0,
                     related: judged.Related,
                     digest: judged.Digest,
                     digestMessages: covered);
             }
+
+            if (thin > 0)
+            {
+                AddRow(
+                    GlyphWarning,
+                    $"{thin} of {verdicts.Count} came back as a label rather than an analysis "
+                        + "-- kept, and queued to be read again when there is nothing new",
+                    "desk",
+                    isWarning: true);
+            }
+
 
             // Said plainly, including when it comes to nothing. A pass that read no verdicts
             // out of a full answer is a broken format, not a quiet mailbox, and the two must
@@ -406,6 +438,20 @@ public sealed partial class PillWindow
                 : "English";
         }
     }
+
+    /// <summary>
+    /// Whether a summary is a sentence about the message or merely a label for it.
+    /// </summary>
+    /// <remarks>
+    /// Six words. "Jira-Kommentar zu KTLNXTM-12" is three and says nothing the subject line
+    /// did not; "Kruschwitz weist darauf hin, dass neben FTP auch CentOS 7 aktualisiert
+    /// werden muss" is fourteen and is the row's whole worth. A count of words rather than
+    /// of characters, because a long word is not a thought -- and six rather than ten, so a
+    /// genuinely terse answer about a genuinely small message still passes.
+    /// </remarks>
+    private static bool Sentence(string? why) =>
+        why is { Length: > 0 }
+        && why.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Length >= 6;
 
     /// <summary>What the batch came to, in one line.</summary>
     private static string Summarise(

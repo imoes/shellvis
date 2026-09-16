@@ -73,6 +73,15 @@ internal static class PageProbe
         string html = Shellvis.Core.Ui.UiText.En.Tokens
             .Aggregate(source, (acc, t) => acc.Replace("{{" + t.Key + "}}", t.Value, StringComparison.Ordinal));
 
+        // The two sources behind the page: the owner that fills it, and the notice channel
+        // it is announced through. Read once, here, because checks all the way down this
+        // file ask things of them.
+        string owner = File.ReadAllText(Path.Combine(
+            root, "src", "Shellvis.Shell", "Views", "PillWindow.Vorzimmer.cs"));
+
+        string quiet = File.ReadAllText(Path.Combine(
+            root, "src", "Shellvis.Shell", "Views", "PillWindow.Quiet.cs"));
+
         // ------------------------------------------------------------------ it ships
         Console.WriteLine("-- it is in the build --");
 
@@ -453,13 +462,22 @@ internal static class PageProbe
 
         // The look-ahead: "before an appointment, what came in about it since it was
         // booked". A reminder after the meeting is worthless, so the mail about a meeting
-        // belongs on the meeting's own row -- and it has to be openable, because the count
-        // is only useful if the mail behind it can be read.
-        Check("an appointment carries the mail found about it, and that opens",
+        // belongs on the meeting's own row -- as a TIMELINE, not a tally. The count alone
+        // was what this drew first and it was reported as a number that says nothing:
+        // knowing three mails exist about a meeting ten minutes away is not knowing
+        // anything, and opening them one at a time is the work the desk was meant to have
+        // done.
+        Check("an appointment carries the mail found about it, as dated lines that open",
             html.Contains("row.aboutCount", StringComparison.Ordinal)
-                && html.Contains("rowButton(row.aboutId", StringComparison.Ordinal)
+                && html.Contains("rowButton(about[a].id", StringComparison.Ordinal)
+                && html.Contains("about-when", StringComparison.Ordinal)
+                && html.Contains("about-what", StringComparison.Ordinal)
                 && html.Contains(Shellvis.Core.Ui.UiText.En.OneMailAbout, StringComparison.Ordinal),
-            "searching the meeting's own title finds the invitation and nothing else");
+            "a count is not a briefing; the sentence beside each date is");
+
+        Check("and the desk's own sentence is what those lines carry",
+            owner.Contains("known.VerdictWhy is { Length: > 0 } why ? why : known.Subject", StringComparison.Ordinal),
+            "a subject line is something the reader could have got from Outlook themselves");
 
         // Teams, through Outlook and nothing else: the join link is in the calendar entry's
         // body, the row learns a yes or a no, and the link is opened by the owner on a
@@ -542,12 +560,6 @@ internal static class PageProbe
         Check("a hit only Outlook knew is drawn as a preview, not as a judgement",
             html.Contains("row.preview", StringComparison.Ordinal)
                 && html.Contains(".summary.preview", StringComparison.Ordinal));
-
-        string owner = File.ReadAllText(Path.Combine(
-            root, "src", "Shellvis.Shell", "Views", "PillWindow.Vorzimmer.cs"));
-
-        string quiet = File.ReadAllText(Path.Combine(
-            root, "src", "Shellvis.Shell", "Views", "PillWindow.Quiet.cs"));
 
         Check("and the owner resolves such a hit through a token, never a handle on the page",
             owner.Contains("FoundPrefix", StringComparison.Ordinal)

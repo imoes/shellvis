@@ -626,8 +626,14 @@ public sealed partial class VorzimmerWindow : Window
     /// Mails dazu" under every appointment is the kind of figure that teaches the eye to
     /// skip the row it sits in.
     /// </param>
-    /// <param name="AboutId">The newest of those mails, so the line can be pressed.</param>
-    /// <param name="AboutLabel">Who it is from and what it says, in a few words.</param>
+    /// <param name="About">
+    /// That mail as a timeline, oldest first: when it came, who from, and the sentence the
+    /// analysis wrote about it. The count alone was reported as a number that says nothing
+    /// -- knowing three mails exist about the meeting you are walking into in ten minutes
+    /// is not knowing anything, and opening them one at a time is the work the desk is
+    /// supposed to have done. Oldest first because that is what makes it a history: what
+    /// was asked, what was answered, what is still open.
+    /// </param>
     /// <param name="Teams">
     /// The appointment carries a Teams join link, so the row offers to join. The link
     /// itself stays with the owner: the page says "join this one" by id, and the owner
@@ -642,9 +648,24 @@ public sealed partial class VorzimmerWindow : Window
         bool Past,
         bool Next,
         int AboutCount = 0,
-        string? AboutId = null,
-        string? AboutLabel = null,
+        IReadOnlyList<AboutEntry>? About = null,
         bool Teams = false);
+
+    /// <summary>
+    /// One thing that came in about a meeting: when, who from, and what it said.
+    /// </summary>
+    /// <param name="Id">
+    /// The desk id, or a token into the owner's last look-ahead for a mail the desk never
+    /// walked past. Pressing the line opens it, like every other row on the page.
+    /// </param>
+    /// <param name="When">The date it arrived, already worded -- "16.09." or "16.09. 10:32".</param>
+    /// <param name="Who">Who it is from.</param>
+    /// <param name="What">
+    /// The sentence the sorting pass wrote about it, or its subject when the desk never
+    /// judged it. The sentence is the point: it is what the desk contributes over a list of
+    /// subject lines somebody could have read in Outlook.
+    /// </param>
+    public sealed record AboutEntry(string Id, string When, string Who, string What);
 
     /// <summary>One overdue task: what it is and when it was due.</summary>
     public sealed record DueEntry(string Id, string What, string Due);

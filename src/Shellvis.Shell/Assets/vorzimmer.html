@@ -342,6 +342,25 @@
     outline-offset: 1px;
   }
 
+  /* The lists scroll rather than being cut short.
+     
+     A tray shows everything it holds, so a busy morning is a tray taller than the window.
+     Capped here and scrolled inside the tray rather than left to grow: the page is a
+     briefing and its shape -- the day, then what needs an answer, then what is worth
+     knowing, with the late column beside it -- is what makes it readable at a glance.
+     Letting one tray push the rest off the screen would trade that shape for a list.
+     No scrollbar appears until it is needed. */
+  .tray ul.live,
+  .tray ul.due {
+    max-height: 34vh;
+    overflow-y: auto;
+
+    /* Room for the scrollbar so the rows do not shift sideways when one appears, and a
+       thin one because this is a document rather than a pane. */
+    scrollbar-width: thin;
+    scrollbar-gutter: stable;
+  }
+
   /* -------------------------------------------------------------- mail rows */
   .tray ul.live .who {
     font-size: var(--step--1);
@@ -607,38 +626,61 @@
   .tray ul.agenda button.row.day.next { border-left-color: var(--tab); }
   .tray ul.agenda button.row.day.next .note { color: var(--tab); font-weight: 500; }
 
-  /* What came in about a meeting. Under its row, indented to belong to it, in the accent
-     because it can be pressed: the count in mono so it scans down the column, the newest
-     mail's sender and sentence after it in the quiet grey of a subject line. */
-  .tray ul.agenda button.row.about {
-    display: flex;
-
-    /* Row, explicitly. `button.row` is a column by default -- a mail row stacks sender,
-       summary and subject -- and without this the count and the mail it counts sat on two
-       lines and doubled the height of every appointment. */
-    flex-direction: row;
-    align-items: baseline;
-    gap: .5rem;
-    padding: .1rem .35rem .2rem 4.35rem;
-    margin-top: -.2rem;
-    min-width: 0;
-  }
-
+  /* What came in about a meeting: a count, then a timeline of lines under its row.
+     Indented to belong to the appointment above, each line pressable because it opens
+     that mail. The date in mono so the column scans, the sender after it, and the
+     sentence the analysis wrote in the quiet grey a subject line gets -- the sentence is
+     what the desk contributes over a list somebody could have read in Outlook. */
   .tray ul.agenda .how-many {
     font-family: var(--f-mono);
     font-size: .68rem;
     color: var(--tab);
+    padding: .15rem .35rem 0 4.35rem;
+  }
+
+  .tray ul.agenda button.row.about {
+    display: grid;
+
+    /* Grid, explicitly, and three tracks. `button.row` is a column by default -- a mail
+       row stacks sender, summary and subject -- and without this the date, the sender and
+       the sentence sat on three lines and tripled the height of every appointment. */
+    grid-template-columns: 3rem minmax(0, 11rem) minmax(0, 1fr);
+    column-gap: .5rem;
+    align-items: baseline;
+    padding: .05rem .35rem .1rem 4.35rem;
+    margin-top: 0;
+    min-width: 0;
+  }
+
+  .tray ul.agenda .about-when {
+    font-family: var(--f-mono);
+    font-size: .68rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-faint);
     white-space: nowrap;
   }
 
-  .tray ul.agenda .newest {
-    font-family: var(--f-mono);
-    font-size: .68rem;
-    color: var(--ink-faint);
+  .tray ul.agenda .about-who {
+    font-size: .7rem;
+    color: var(--ink);
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Two lines, not one. The sentence is the point of the line, and clipped to one it says
+     "Schwarz bittet um Freigabe fuer das Kernel-Upd..." and answers nothing. */
+  .tray ul.agenda .about-what {
+    font-size: .7rem;
+    color: var(--ink-soft);
+    line-height: 1.35;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
   }
 
   /* Meeting requests, under the day: a line, shown only when there are any. */
@@ -1483,28 +1525,48 @@
 
         item.appendChild(head);
 
-        /* What came in about this meeting since it was booked: the count, and the newest
-         * of it, as a button that opens that mail. Drawn only when something was found --
-         * a line reading "0 Mails dazu" under every appointment is the kind of figure that
-         * teaches the eye to skip the tray it sits in. The count arrives after the page is
-         * drawn, because finding it costs a model call and a mailbox search. */
-        if (row.aboutCount > 0 && row.aboutId) {
-          var about = rowButton(row.aboutId, "about");
-
-          var howMany = document.createElement("span");
+        /* What came in about this meeting since it was booked, as a timeline: the count,
+         * then one line per thing -- when it came, who from, and the sentence the analysis
+         * wrote about it. Each line opens that mail.
+         *
+         * The count alone was what this drew first, and it was reported as a number that
+         * says nothing: knowing three mails exist about the meeting you walk into in ten
+         * minutes is not knowing anything, and opening them one at a time is the work the
+         * desk was supposed to have done. Drawn only when something was found -- a line
+         * reading "0 Mails dazu" under every appointment teaches the eye to skip the tray
+         * it sits in. It arrives after the page is drawn, because finding it costs a model
+         * call and a mailbox search. */
+        if (row.aboutCount > 0) {
+          var howMany = document.createElement("p");
           howMany.className = "how-many";
           howMany.textContent = row.aboutCount === 1
             ? "{{OneMailAbout}}"
             : row.aboutCount + "{{MailsAbout}}";
+          item.appendChild(howMany);
 
-          var newest = document.createElement("span");
-          newest.className = "newest";
-          newest.textContent = row.aboutLabel || "";
+          var about = row.about || [];
 
-          about.appendChild(howMany);
-          about.appendChild(newest);
-          about.title = row.aboutLabel || "";
-          item.appendChild(about);
+          for (var a = 0; a < about.length; a++) {
+            var line = rowButton(about[a].id, "about");
+
+            var day = document.createElement("span");
+            day.className = "about-when";
+            day.textContent = about[a].when || "";
+
+            var from = document.createElement("span");
+            from.className = "about-who";
+            from.textContent = about[a].who || "{{UnknownSender}}";
+
+            var said = document.createElement("span");
+            said.className = "about-what";
+            said.textContent = about[a].what || "";
+
+            line.appendChild(day);
+            line.appendChild(from);
+            line.appendChild(said);
+            line.title = about[a].what || "";
+            item.appendChild(line);
+          }
         }
 
         list.appendChild(item);

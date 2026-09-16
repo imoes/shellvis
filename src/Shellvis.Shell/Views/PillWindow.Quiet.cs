@@ -30,6 +30,26 @@ namespace Shellvis.Shell.Views;
 /// noticed by the wrong people and forgotten by the right one. The items are kept and the
 /// mark appears when the moment passes.
 /// </summary>
+/// <summary>
+/// What a called-out notice points at, so pressing it lands where the thing it announced
+/// actually is.
+/// </summary>
+/// <remarks>
+/// Every alert used to open the conversation, because every alert used to BE a conversation
+/// -- a scheduled run wrote its report there and the click was the reading. The desk
+/// announcement is not written there: what it announces is on the front office page, and a
+/// click that opened an unrelated conversation instead was reported as the notification not
+/// working.
+/// </remarks>
+internal enum NoticeOpens
+{
+    /// <summary>The message window, where a scheduled run wrote its report.</summary>
+    Conversation,
+
+    /// <summary>Das Vorzimmer, where the desk's own news is.</summary>
+    Vorzimmer,
+}
+
 public sealed partial class PillWindow
 {
     /// <summary>How often the held items are offered again.</summary>
@@ -50,7 +70,10 @@ public sealed partial class PillWindow
     /// them would make every scheduled run pop up a panel, which is the behaviour that makes
     /// people turn notifications off.
     /// </summary>
-    private readonly List<string> _announcements = [];
+    private readonly List<(string Headline, NoticeOpens Opens)> _announcements = [];
+
+    /// <summary>What the alert currently on screen should open when it is pressed.</summary>
+    private NoticeOpens _toastOpens = NoticeOpens.Conversation;
 
     private ToastWindow? _toast;
 
@@ -69,7 +92,12 @@ public sealed partial class PillWindow
     /// that touched the machine invisibly is what this whole console exists to prevent. What
     /// is gated is only the MARK, which is the part the user notices.
     /// </summary>
-    private void NoteQuietly(string text, string trailing, bool isProblem, string? headline = null)
+    private void NoteQuietly(
+        string text,
+        string trailing,
+        bool isProblem,
+        string? headline = null,
+        NoticeOpens opens = NoticeOpens.Conversation)
     {
         AddRow(isProblem ? GlyphWarning : GlyphTool, text, trailing, isWarning: isProblem);
 
@@ -78,7 +106,7 @@ public sealed partial class PillWindow
         // at the bottom of it, and "you are due in ten minutes" is not a thing to leave to
         // whether they happened to be scrolled down.
         if (headline is { Length: > 0 })
-            _announcements.Add(headline);
+            _announcements.Add((headline, opens));
 
         // Seen already: the console is open in front of them, so a dot saying "there is
         // something in the console" would be pointing at what they are reading. An
@@ -147,13 +175,19 @@ public sealed partial class PillWindow
 
         // The newest, because it is the one that just happened. The others are still in the
         // console and still counted in the source line.
-        string headline = _announcements[^1];
+        (string headline, NoticeOpens opens) = _announcements[^1];
 
         string source = _announcements.Count == 1
             ? "Shellvis"
             : $"Shellvis - {_announcements.Count} new";
 
         _announcements.Clear();
+
+        // Where a press lands, held in a field rather than handed to the window: the
+        // handler is wired once during the pill's own activation -- see PrepareToast for
+        // why it cannot be built at the moment news arrives -- so the target has to be
+        // something that handler can read when it fires.
+        _toastOpens = opens;
 
         _toast?.Show(headline, source);
     }
@@ -189,13 +223,19 @@ public sealed partial class PillWindow
     {
         _toast = new ToastWindow
         {
-            // Clicking opens the conversation, which is where the report itself was written,
-            // and marks everything read, because the user has now been shown it. Outlook's
-            // alert works the same way: the click is the reading.
+            // Clicking opens WHAT THE NOTICE WAS ABOUT, and marks everything read, because
+            // the user has now been shown it. Outlook's alert works the same way: the click
+            // is the reading. A scheduled run's report is in the conversation; the desk's
+            // news is on the front office page, and sending both to the conversation made
+            // the desk alert look like a control that did nothing.
             OnOpen = () =>
             {
                 MarkRead();
-                OnShowAnswer();
+
+                if (_toastOpens == NoticeOpens.Vorzimmer)
+                    ShowVorzimmer();
+                else
+                    OnShowAnswer();
             },
         };
 

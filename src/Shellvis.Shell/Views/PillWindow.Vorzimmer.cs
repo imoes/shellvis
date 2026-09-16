@@ -1193,7 +1193,17 @@ public sealed partial class PillWindow
     private DeskTally? _tallyLast;
 
     /// <summary>
-    /// Say something when the desk has changed, once per look.
+    /// Say something when the ANALYSIS has found something, once per look.
+    ///
+    /// <b>What the alert is for, and what it is not for.</b> It used to fire on the counted
+    /// figures as well -- unread, meeting requests, overdue -- and those are facts the walk
+    /// has seconds after a message lands, long before anything has read it. So every mail
+    /// that arrived raised an alert saying a mail had arrived, which the mailbox already
+    /// does and which is the behaviour that teaches somebody to dismiss the next one
+    /// unread. The alert now waits for the sorting pass: it is raised when the model has
+    /// judged that something needs an answer, which is the one thing here that costs
+    /// attention and the one thing the mailbox cannot say by itself. What merely arrived
+    /// still goes to the console, because the console is the record.
     ///
     /// <b>Once per look, not once per message.</b> A morning's synchronisation brought in
     /// three hundred and eighty messages on this mailbox; a notification each would be three
@@ -1223,27 +1233,44 @@ public sealed partial class PillWindow
         if (before is null || wasTally is null)
             return;
 
-        var said = new List<string>();
-
-        // The one that costs attention, first and in its own words.
-        if (tally.Answer > wasTally.Answer)
-            said.Add($"{tally.Answer - wasTally.Answer}{Words.NoticeNeedsAnswer}");
+        // What merely ARRIVED: the console and no further. A line in the record, no mark on
+        // the bar and no alert, because none of it has been read by anything yet.
+        var counted = new List<string>();
 
         if (now.Unread > before.Unread)
-            said.Add($"{now.Unread - before.Unread}{Words.NoticeNewUnread}");
+            counted.Add($"{now.Unread - before.Unread}{Words.NoticeNewUnread}");
 
         if (now.MeetingRequests > before.MeetingRequests)
-            said.Add($"{now.MeetingRequests - before.MeetingRequests}{Words.NoticeMeetingRequests}");
+            counted.Add($"{now.MeetingRequests - before.MeetingRequests}{Words.NoticeMeetingRequests}");
 
         if (now.OverdueTasks > before.OverdueTasks)
-            said.Add($"{now.OverdueTasks - before.OverdueTasks}{Words.NoticeOverdue}");
+            counted.Add($"{now.OverdueTasks - before.OverdueTasks}{Words.NoticeOverdue}");
 
-        if (said.Count == 0)
+        if (counted.Count > 0)
+            AddRow(GlyphTool, "desk: " + string.Join(", ", counted), "desk");
+
+        // And what the ANALYSIS decided: this, and only this, is worth interrupting for.
+        // The sorting pass ends in a fresh count, so by the time the verdict count has
+        // grown the reading is done and the tray behind the alert is already filled in.
+        if (tally.Answer <= wasTally.Answer)
             return;
+
+        var said = new List<string>
+        {
+            $"{tally.Answer - wasTally.Answer}{Words.NoticeNeedsAnswer}",
+        };
+
+        // The counted figures ride along as context when there are any, because "3 brauchen
+        // eine Antwort" out of eleven new messages is a different morning from three out of
+        // three. They never raise the alert on their own.
+        said.AddRange(counted);
 
         string headline = "Vorzimmer: " + string.Join(", ", said);
 
-        NoteQuietly(headline, "desk", isProblem: false, headline: headline);
+        // Pressing it opens the front office page, where the three are listed with the
+        // sentence saying what each one wants -- not the conversation, which knows nothing
+        // about any of this.
+        NoteQuietly(headline, "desk", isProblem: false, headline: headline, opens: NoticeOpens.Vorzimmer);
     }
 
     /// <summary>How many real entries a tray shows before it is a list rather than a hint.</summary>

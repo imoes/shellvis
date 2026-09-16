@@ -546,6 +546,9 @@ internal static class PageProbe
         string owner = File.ReadAllText(Path.Combine(
             root, "src", "Shellvis.Shell", "Views", "PillWindow.Vorzimmer.cs"));
 
+        string quiet = File.ReadAllText(Path.Combine(
+            root, "src", "Shellvis.Shell", "Views", "PillWindow.Quiet.cs"));
+
         Check("and the owner resolves such a hit through a token, never a handle on the page",
             owner.Contains("FoundPrefix", StringComparison.Ordinal)
                 && owner.Contains("_found", StringComparison.Ordinal),
@@ -570,6 +573,34 @@ internal static class PageProbe
                 && File.ReadAllText(settings)
                     .Contains("does not change what is kept", StringComparison.Ordinal),
             "keeping three months and consulting three months are different things");
+
+        // ------------------------------------------------------------ the alert
+        //
+        // Two reports, one section. The alert fired on the counted figures, so every mail
+        // that landed raised one saying a mail had landed -- which the mailbox already does
+        // -- and pressing it opened the conversation, which knows nothing about the desk.
+        Console.WriteLine();
+        Console.WriteLine("-- the alert waits for the analysis, and opens what it is about --");
+
+        Check("what merely arrived goes to the console and raises nothing",
+            owner.Contains("counted.Add", StringComparison.Ordinal)
+                && owner.Contains("if (counted.Count > 0)", StringComparison.Ordinal)
+                && !owner.Contains("said.Add($\"{now.Unread", StringComparison.Ordinal),
+            "unread is a fact the walk has seconds after a message lands, read by nothing");
+
+        Check("and the alert is raised by the verdict instead",
+            owner.Contains("if (tally.Answer <= wasTally.Answer)", StringComparison.Ordinal),
+            "the model deciding somebody is waiting is the one thing worth interrupting for");
+
+        Check("pressing it opens the front office page",
+            owner.Contains("opens: NoticeOpens.Vorzimmer", StringComparison.Ordinal)
+                && quiet.Contains("_toastOpens == NoticeOpens.Vorzimmer", StringComparison.Ordinal)
+                && quiet.Contains("ShowVorzimmer()", StringComparison.Ordinal),
+            "a scheduled run's report is in the conversation; the desk's news is on the page");
+
+        Check("and a notice that says nothing about where it points still opens the conversation",
+            quiet.Contains("NoticeOpens opens = NoticeOpens.Conversation", StringComparison.Ordinal),
+            "the cron report and the reminder are unchanged by this");
 
         // ------------------------------------------------- every tool it names is real
         //

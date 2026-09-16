@@ -477,6 +477,21 @@ internal static class DeskProbe
                     && !keywords.Contains("dringend", StringComparer.OrdinalIgnoreCase),
                 string.Join(" ", keywords) + "  (the order number is what finds the confirmation)");
 
+            // The real meeting that made this a bug: "Kurze Vorbesprechung Migration
+            // KMS-Server VMware --> Proxmox" queried on the FIRST five words, so "Kurze"
+            // went into the search and "Proxmox" -- the one word in it that names anything
+            // -- did not. What came back under that meeting was an Atlassian cloud
+            // migration and a Jira ticket.
+            IReadOnlyList<string> named = DeskTriage.Keywords(
+                "Kurze Vorbesprechung Migration KMS-Server VMware --> Proxmox");
+
+            Check("the distinctive words win the five places, not the first five",
+                named.Contains("Proxmox", StringComparer.Ordinal)
+                    && named.Contains("KMS-Server", StringComparer.Ordinal)
+                    && named.Contains("VMware", StringComparer.Ordinal)
+                    && !named.Contains("Kurze", StringComparer.OrdinalIgnoreCase),
+                string.Join(" ", named));
+
             var confirmation = Mail(DeskObject.MakeId(DeskKind.Mail, "c1@example.com"), "Bestellung 4711 bestätigt", now.AddDays(-2));
             var sameAgain = Mail(DeskObject.MakeId(DeskKind.Mail, "c2@example.com"), "Angebot?", now.AddDays(-14));
 

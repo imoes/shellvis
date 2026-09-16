@@ -124,12 +124,18 @@ public static class DeskTriage
     /// tray and, for the row that unfolds, a memory aid of six to eight dated lines for
     /// somebody who has lost the thread. Before that the long form was written on demand,
     /// and the row said "liest den Verlauf ..." to somebody who had asked to read it now.</item>
+    /// <item>6 -- the words a thing is looked up by are its most distinctive ones rather
+    /// than its first, and a candidate has to share two of them. Before that, "Kurze
+    /// Vorbesprechung Migration KMS-Server VMware --> Proxmox" was searched for as "Kurze"
+    /// and four others with "Proxmox" left out, and what came back beside it was an
+    /// Atlassian cloud migration -- so the earlier things a message was shown, and the ones
+    /// it was tied to, were the wrong ones.</item>
     /// </list>
     ///
     /// Not a timestamp comparison, deliberately. "Judged before this build" needs a build
     /// date that nothing records, and a clock that nobody set wrong.
     /// </remarks>
-    public const int RulesVersion = 6;
+    public const int RulesVersion = 7;
 
     /// <summary>How many earlier things one message is shown beside it.</summary>
     /// <remarks>
@@ -190,13 +196,38 @@ public static class DeskTriage
 
             if (!words.Contains(word, StringComparer.OrdinalIgnoreCase))
                 words.Add(word);
-
-            if (words.Count == most)
-                break;
         }
 
-        return words;
+        // THE MOST DISTINCTIVE FIVE, not the first five.
+        //
+        // It was the first five, and that put "Kurze" into the query for "Kurze
+        // Vorbesprechung Migration KMS-Server VMware --> Proxmox" while pushing "Proxmox"
+        // -- the one word in it that names anything -- out of the query altogether. What
+        // came back under that meeting was an Atlassian cloud migration and a Jira ticket,
+        // which share the word "Migration" with it and nothing else.
+        return words
+            .OrderByDescending(Distinctive)
+            .ThenByDescending(w => w.Length)
+            .Take(most)
+            .ToList();
     }
+
+    /// <summary>
+    /// How much a word narrows a search, in three coarse bands.
+    /// </summary>
+    /// <remarks>
+    /// Guessed from the shape of the word rather than counted against the store, and that
+    /// is deliberate: counting how often a word occurs here would call a much-discussed
+    /// project common and drop the one word that names it, which is the opposite of what is
+    /// wanted. A ticket key or an order number narrows a search to almost nothing; a name
+    /// with a hyphen or a capital inside it -- KMS-Server, VMware, OpenShift -- is a proper
+    /// noun somebody coined; everything else is a word out of the language, and among those
+    /// the longer one is the more particular.
+    /// </remarks>
+    private static int Distinctive(string word) =>
+        word.Any(char.IsDigit) ? 3
+        : word.Contains('-', StringComparison.Ordinal) || word.Skip(1).Any(char.IsUpper) ? 2
+        : 1;
 
     /// <summary>
     /// Ask the model to imagine, for each message, the earlier thing on this desk that

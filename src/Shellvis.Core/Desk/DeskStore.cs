@@ -827,7 +827,24 @@ public sealed class DeskStore : IDisposable
             }
         }
 
+        // ONE SHARED WORD IS A COINCIDENCE.
+        //
+        // It used to be enough, and what that put under "Kurze Vorbesprechung Migration
+        // KMS-Server VMware --> Proxmox" was an Atlassian cloud migration announcement and
+        // a Jira ticket -- both of which share the word "Migration" with it and nothing
+        // else. Two words have to agree, or every word there was when the thing is named in
+        // fewer than two.
+        int needed = Math.Min(2, words.Count);
+
+        int best = seen.Values.Count > 0 ? seen.Values.Max(v => v.Words) : 0;
+
+        // And a match has to be in the same league as the best one. A self-calibrating
+        // rule, which a fixed threshold is not: five words agreeing makes two look like
+        // noise, while two agreeing out of a possible two is the whole of what was asked.
+        int league = Math.Max(needed, (best + 1) / 2);
+
         return seen.Values
+            .Where(v => v.Words >= league)
             .OrderByDescending(v => v.Words)
             .ThenByDescending(v => v.Row.When)
             .Take(limit)

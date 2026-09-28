@@ -35,7 +35,7 @@ public sealed partial class PillWindow
             var item = new MenuFlyoutItem
             {
                 Text = profile.Id == currentId
-                    ? $"{profile.DisplayName}  (current)"
+                    ? $"{profile.DisplayName}  {L("(current)", "(aktuell)")}"
                     : profile.DisplayName,
                 Tag = profile,
             };
@@ -66,7 +66,7 @@ public sealed partial class PillWindow
 
         // For the case the provider list no longer covers: the endpoint is already set up
         // and only the model changes.
-        var models = new MenuFlyoutItem { Text = $"Models on {_session.Provider.DisplayName}..." };
+        var models = new MenuFlyoutItem { Text = L($"Models on {_session.Provider.DisplayName}...", $"Modelle bei {_session.Provider.DisplayName}…") };
 
         models.Click += (_, args) =>
         {
@@ -76,7 +76,7 @@ public sealed partial class PillWindow
 
         flyout.Items.Add(models);
 
-        var add = new MenuFlyoutItem { Text = "Add a provider..." };
+        var add = new MenuFlyoutItem { Text = L("Add a provider...", "Anbieter hinzufügen…") };
         add.Click += (_, args) => _ = ConfigureProviderAsync(null);
         flyout.Items.Add(add);
 
@@ -109,7 +109,7 @@ public sealed partial class PillWindow
         // to be right for this provider even when the endpoint would not talk.
         var fallback = new MenuFlyoutItem
         {
-            Text = $"default  ({profile.DefaultModel})",
+            Text = L($"default  ({profile.DefaultModel})", $"Standard  ({profile.DefaultModel})"),
             Tag = profile.DefaultModel,
         };
 

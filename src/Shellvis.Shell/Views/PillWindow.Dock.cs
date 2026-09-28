@@ -69,6 +69,7 @@ public sealed partial class PillWindow
         // a request at length, which is not what a taskbar field is for, and minimise is
         // replaced by the expand arrow that undoes it.
         AttachButton.Visibility = Visibility.Collapsed;
+        ContextBadge.Visibility = Visibility.Collapsed;
         ModeButton.Visibility = Visibility.Collapsed;
         SparkleButton.Visibility = Visibility.Collapsed;
 
@@ -199,6 +200,7 @@ public sealed partial class PillWindow
         _docked = false;
 
         AttachButton.Visibility = Visibility.Visible;
+        ContextBadge.Visibility = _documentContext is null ? Visibility.Collapsed : Visibility.Visible;
         HistoryButton.Visibility = Visibility.Visible;
         ConsoleToggleButton.Visibility = Visibility.Visible;
         ModeButton.Visibility = Visibility.Visible;

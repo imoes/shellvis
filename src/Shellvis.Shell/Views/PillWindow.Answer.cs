@@ -157,6 +157,7 @@ public sealed partial class PillWindow
         _conversation.Clear();
         AnswerButton.IsEnabled = false;
         _answerWindow?.Hide();
+        _vorzimmer?.ShowConversation(string.Empty, streaming: false);
     }
 
     /// <summary>
@@ -171,6 +172,16 @@ public sealed partial class PillWindow
     {
         if (_conversation.IsEmpty)
             return;
+
+        if (_vorzimmer?.IsVisible == true)
+        {
+            _vorzimmer.ShowConversation(_conversation.ToMarkdown(), streaming);
+            if (reveal)
+                _vorzimmer.ShowSection("conversation");
+            _answerWindow?.Hide();
+            AnswerButton.IsEnabled = true;
+            return;
+        }
 
         AnswerWindow window = Answer();
 
@@ -201,10 +212,13 @@ public sealed partial class PillWindow
     /// </summary>
     private void OnShowAnswer()
     {
-        if (_answerWindow is null)
+        if (_conversation.IsEmpty)
             return;
 
-        Answer().Reveal();
+        AnswerWindow window = Answer();
+        window.ShowAnswer(_conversation.ToMarkdown(), "Conversation");
+        window.ShowCost(_spent);
+        window.Reveal();
     }
 
     /// <summary>Close the answer window when the pill closes, or the process outlives it.</summary>

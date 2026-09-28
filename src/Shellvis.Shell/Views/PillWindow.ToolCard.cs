@@ -72,6 +72,7 @@ public sealed partial class PillWindow
     /// <summary>Put a running tool on screen.</summary>
     private void StartToolCard(string tool, string preview)
     {
+        RememberActivity($"→ {tool}: {preview}");
         var card = BuildCard(tool, preview);
 
         _runningCard = card;
@@ -88,6 +89,7 @@ public sealed partial class PillWindow
     /// <summary>Finish the running card, or add a finished one if it went missing.</summary>
     private void FinishToolCard(bool succeeded, string result, string timing)
     {
+        RememberActivity($"{(succeeded ? "✓" : "✕")} {FirstLine(result ?? string.Empty)} ({timing})");
         ToolCard card = _runningCard ?? BuildCardIntoTranscript("tool", string.Empty);
         _runningCard = null;
 

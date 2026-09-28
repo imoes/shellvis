@@ -4,6 +4,12 @@ New features and systemic changes only. Fixes, refactors and test work are in th
 history, where they are recorded in full — repeating them here would stop this being a
 readable summary of what changed for you.
 
+## 0.20.0
+
+- The Vorzimmer opens as a resizable workbench with Today, conversation, documents, activity and history. The floating bar and workbench share one agent session.
+- DOCX, XLSX and PPTX files and open Office documents can be selected as visible, bounded context for the next question. Four office starters prepare prompts without running them.
+- Workbench fonts ship locally, and settings and history controls have German and English labels.
+
 ## 0.15.0
 
 - **Das Vorzimmer is laid out in the order a briefing is given.** The date at the top, then

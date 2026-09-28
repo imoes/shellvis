@@ -47,7 +47,7 @@ public sealed partial class PillWindow
         // says so instead. Switching back restores the model rather than a fixed word,
         // because that slot is also the model picker.
         if (_historyVisible)
-            SetModelButtonText("History");
+            SetModelButtonText(L("History", "Verlauf"));
         else
             RefreshModelLabel();
 
@@ -66,7 +66,7 @@ public sealed partial class PillWindow
 
         if (_session is null)
         {
-            SessionList.Items.Add(Muted("history is not available yet."));
+            SessionList.Items.Add(Muted(L("history is not available yet.", "Der Verlauf ist noch nicht verfügbar.")));
             return;
         }
 
@@ -77,8 +77,8 @@ public sealed partial class PillWindow
         {
             SessionList.Items.Add(Muted(
                 search is null
-                    ? "no conversations recorded yet."
-                    : $"nothing matches \"{search}\"."));
+                    ? L("no conversations recorded yet.", "Noch keine Unterhaltungen gespeichert.")
+                    : L($"nothing matches \"{search}\".", $"Kein Treffer für \"{search}\".")));
             return;
         }
 
@@ -133,10 +133,10 @@ public sealed partial class PillWindow
             Foreground = ThemeBrush("ConsoleTextBrush"),
         });
 
-        string detail = $"{info.StartedAt:dd.MM. HH:mm}  ·  {info.MessageCount} msg"
-            + (info.ToolCallCount > 0 ? $"  ·  {info.ToolCallCount} calls" : string.Empty)
-            + (row.Depth > 0 ? "  ·  continued" : string.Empty)
-            + (row.IsCurrent ? "  ·  current" : string.Empty);
+        string detail = $"{info.StartedAt:dd.MM. HH:mm}  ·  {info.MessageCount} " + L("msg", "Nachrichten")
+            + (info.ToolCallCount > 0 ? $"  ·  {info.ToolCallCount} " + L("calls", "Aufrufe") : string.Empty)
+            + (row.Depth > 0 ? L("  ·  continued", "  ·  fortgesetzt") : string.Empty)
+            + (row.IsCurrent ? L("  ·  current", "  ·  aktuell") : string.Empty);
 
         label.Children.Add(new TextBlock
         {
@@ -149,7 +149,7 @@ public sealed partial class PillWindow
         Grid.SetColumn(label, 0);
         grid.Children.Add(label);
 
-        Button resume = IconButton(GlyphResume, "Resume this conversation");
+        Button resume = IconButton(GlyphResume, L("Resume this conversation", "Unterhaltung fortsetzen"));
         resume.IsEnabled = !row.IsCurrent;
         resume.Click += (_, _) => OnResume(info);
         resume.Tapped += (_, e) => e.Handled = true;
@@ -157,8 +157,8 @@ public sealed partial class PillWindow
         grid.Children.Add(resume);
 
         Button delete = IconButton(GlyphDelete, row.IsCurrent
-            ? "Delete this conversation (a new one will be started)"
-            : "Delete this conversation");
+            ? L("Delete this conversation (a new one will be started)", "Unterhaltung löschen (eine neue wird begonnen)")
+            : L("Delete this conversation", "Unterhaltung löschen"));
 
         // Enabled for the current conversation too. It was disabled because the store
         // refuses to delete the live session -- correctly, since the agent would be writing
@@ -186,23 +186,36 @@ public sealed partial class PillWindow
         //
         // The buttons keep working and take precedence: a click that lands on Delete
         // must not also resume. Tapped bubbles, so the handlers below mark it handled.
-        if (!row.IsCurrent)
+        //
+        // THE CURRENT ONE OPENS TOO. It did nothing, on the reasoning that there was
+        // nothing to resume -- and with a single conversation on record the whole list
+        // was one row that did nothing, which was reported as the list not being shown at
+        // all and "only the last message opening". It opens the conversation already on
+        // screen, wherever that lives, rather than reloading it from storage.
+        //
+        // Background rather than none, or the gaps between the label and the buttons are
+        // not part of the row for hit-testing purposes and the click falls through.
+        // Transparent still receives input; null does not.
+        grid.Background = new SolidColorBrush(Colors.Transparent);
+
+        grid.Tapped += (_, e) =>
         {
-            // Background rather than none, or the gaps between the label and the buttons
-            // are not part of the row for hit-testing purposes and the click falls
-            // through. Transparent still receives input; null does not.
-            grid.Background = new SolidColorBrush(Colors.Transparent);
+            e.Handled = true;
 
-            grid.Tapped += (_, e) =>
+            if (!row.IsCurrent)
             {
-                e.Handled = true;
                 OnResume(info);
-            };
+                return;
+            }
 
-            // Says so, because a click target with no pointer feedback is one nobody
-            // tries twice.
-            ToolTipService.SetToolTip(grid, "Open this conversation");
-        }
+            if (_historyVisible)
+                ToggleHistory();
+
+            Redraw(streaming: false, reveal: true);
+        };
+
+        // Says so, because a click target with no pointer feedback is one nobody tries twice.
+        ToolTipService.SetToolTip(grid, L("Open this conversation", "Unterhaltung öffnen"));
 
         return grid;
     }
@@ -219,7 +232,8 @@ public sealed partial class PillWindow
         Transcript.Items.Clear();
 
         AddRow(GlyphSpeaker,
-            $"Resuming \"{info.Title}\" ({messages.Count} messages).",
+            L($"Resuming \"{info.Title}\" ({messages.Count} messages).",
+              $"\"{info.Title}\" wird fortgesetzt ({messages.Count} Nachrichten)."),
             string.Empty, isAnnouncement: true);
 
         // The conversation goes to the conversation window; the console gets the log.
@@ -236,8 +250,9 @@ public sealed partial class PillWindow
             switch (message.Role)
             {
                 case "user":
-                    said.Add(new Turn(Said.User, message.Content));
-                    AddRow(GlyphPerson, Oneline(message.Content), "asked");
+                    string shown = VisiblePrompt(message.Content);
+                    said.Add(new Turn(Said.User, shown));
+                    AddRow(GlyphPerson, Oneline(shown), "asked");
                     break;
 
                 case "assistant":
@@ -255,11 +270,12 @@ public sealed partial class PillWindow
         // The machine has moved on since the conversation was recorded, and the model
         // must not assume otherwise.
         AddRow(GlyphWarning,
-            "Tool state was not restored: the shell session, UI snapshots and "
-            + "connections belong to now, not to then.",
+            L("Tool state was not restored: the shell session, UI snapshots and connections belong to now, not to then.",
+              "Werkzeugzustände wurden nicht wiederhergestellt: Shell-Sitzung, UI-Schnappschüsse und Verbindungen gelten nur für den aktuellen Zeitpunkt."),
             string.Empty);
 
-        ToggleHistory();
+        if (_historyVisible)
+            ToggleHistory();
         StatusText.Text = ShellvisVoice.Standby;
 
         // Opening a conversation from the history means wanting to read it, so the window
@@ -267,7 +283,7 @@ public sealed partial class PillWindow
         ShowConversation(said, reveal: true);
     }
 
-    private async void OnDelete(SessionInfo info)
+    private async void OnDelete(SessionInfo info, XamlRoot? dialogRoot = null)
     {
         if (_session is null)
             return;
@@ -276,15 +292,18 @@ public sealed partial class PillWindow
         // confirmation is worth the extra click.
         var dialog = new ContentDialog
         {
-            XamlRoot = (Content as FrameworkElement)?.XamlRoot,
-            Title = "Delete this conversation?",
-            Content = $"\"{info.Title}\"\n{info.MessageCount} messages from "
-                + $"{info.StartedAt:dd.MM.yyyy HH:mm}. This cannot be undone."
+            XamlRoot = dialogRoot ?? (Content as FrameworkElement)?.XamlRoot,
+            Title = L("Delete this conversation?", "Unterhaltung löschen?"),
+            Content = L($"\"{info.Title}\"\n{info.MessageCount} messages from ",
+                        $"\"{info.Title}\"\n{info.MessageCount} Nachrichten vom ")
+                + L($"{info.StartedAt:dd.MM.yyyy HH:mm}. This cannot be undone.",
+                    $"{info.StartedAt:dd.MM.yyyy HH:mm}. Das lässt sich nicht rückgängig machen.")
                 + (_session.IsCurrentSession(info.Id)
-                    ? "\n\nThis is the conversation you are in, so a new one will be started."
+                    ? L("\n\nThis is the conversation you are in, so a new one will be started.",
+                        "\n\nDies ist die aktuelle Unterhaltung. Eine neue wird begonnen.")
                     : string.Empty),
-            PrimaryButtonText = "Delete",
-            CloseButtonText = "Keep",
+            PrimaryButtonText = L("Delete", "Löschen"),
+            CloseButtonText = L("Keep", "Behalten"),
             DefaultButton = ContentDialogButton.Close,
         };
 
@@ -300,12 +319,14 @@ public sealed partial class PillWindow
             Transcript.Items.Clear();
             ClearConversation();
 
-            AddRow(GlyphSpeaker, "Shellvis has taken the stage again.",
+            AddRow(GlyphSpeaker, L("Shellvis has taken the stage again.", "Shellvis ist für eine neue Unterhaltung bereit."),
                 string.Empty, isAnnouncement: true);
         }
 
         string result = _session.DeleteSession(info.Id);
         RefreshSessionList();
+        if (_vorzimmer is not null)
+            _vorzimmer.ShowSessions(_session.ListSessions(_vorzimmer.HistoryQuery));
 
         if (result != "deleted.")
             AddRow(GlyphWarning, result, "history");
@@ -321,9 +342,10 @@ public sealed partial class PillWindow
         Transcript.Items.Clear();
         ClearConversation();
 
-        AddRow(GlyphSpeaker, "Shellvis has taken the stage again.", string.Empty, isAnnouncement: true);
+        AddRow(GlyphSpeaker, L("Shellvis has taken the stage again.", "Shellvis ist für eine neue Unterhaltung bereit."), string.Empty, isAnnouncement: true);
 
-        ToggleHistory();
+        if (_historyVisible)
+            ToggleHistory();
         StatusText.Text = ShellvisVoice.Standby;
     }
 

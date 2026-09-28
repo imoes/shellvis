@@ -1,6 +1,6 @@
 ﻿# Shellvis
 
-[![version](https://img.shields.io/badge/version-0.11.0-blue)](https://github.com/imoes/shellvis/releases)
+[![version](https://img.shields.io/badge/version-0.20.0-blue)](https://github.com/imoes/shellvis/releases)
 [![licence](https://img.shields.io/badge/licence-AGPL--3.0-green)](LICENSE)
 [![changelog](https://img.shields.io/badge/changelog-CHANGELOG.md-lightgrey)](CHANGELOG.md)
 [![build](https://github.com/imoes/shellvis/actions/workflows/build.yml/badge.svg)](https://github.com/imoes/shellvis/actions/workflows/build.yml)
@@ -46,12 +46,21 @@ running instances through COM: read the document that is open, export to PDF, li
 loaded. Outlook for mail, calendar, contacts and tasks — and Thunderbird through a native
 messaging bridge for the same mail operations.
 
-**Keeps your desk.** *Das Vorzimmer*, behind a button beside the answer, is one screen in
+**Keeps your desk.** The workbench opens from the former Vorzimmer button. It has Today,
+conversation, documents, activity and history views, all on the floating bar's agent
+session and approval gate. Today is one screen in
 the order a briefing is given: the day's appointments with times and what is next, then the
 mail that needs a reply and the mail worth knowing — each read and judged once by the model,
 with a sentence saying why — then the overdue tasks by name, and the rest as a number. A
 badge marks what has grown since you last looked, never the total. A click opens the item
 in Outlook. Nothing is sent from there, and nothing can be: there is no send tool.
+
+**Works with the document in front of you.** Attach a DOCX, XLSX or PPTX from the bar or
+workbench, or choose an open Word, Excel or PowerPoint document. A named chip shows the
+source for the next question and whether its excerpt was shortened; you can remove it
+before asking. Four starters prepare a meeting brief, a mail reply draft, a document
+summary or tasks from notes. They fill the prompt without running it. Mail replies remain
+drafts for you to send in Outlook.
 
 **Browses.** Chrome DevTools Protocol directly, no Node.js and no driver process. Pages come
 back as a reference tree rather than an HTML dump; clicks are dispatched as trusted input

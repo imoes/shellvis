@@ -35,18 +35,18 @@ public sealed partial class PillWindow
         AddConnectorItems(menu);
 
         menu.Items.Add(new MenuFlyoutSeparator());
-        Header(menu, "The assistant");
+        Header(menu, L("The assistant", "Assistent"));
 
-        Add(menu, "   Model and endpoint...", () => _ = ConfigureProviderAsync(_session?.Provider.Id));
+        Add(menu, L("   Model and endpoint...", "   Modell und Endpunkt…"), () => _ = ConfigureProviderAsync(_session?.Provider.Id));
 
         AddScheduleItems(menu);
 
-        Add(menu, "   Sticky notes on the desktop", () => AskSelf("was klebt gerade auf dem Desktop?"));
+        Add(menu, L("   Sticky notes on the desktop", "   Haftnotizen auf dem Desktop"), () => AskSelf(L("what sticky notes are on the desktop?", "was klebt gerade auf dem Desktop?")));
 
         // Named here as well as sitting on a button. The button is a glyph, and a glyph
         // tells nobody what the page is; this line does, and it is where somebody looks
         // when they want to know what this thing actually does on their behalf.
-        Add(menu, "   Das Vorzimmer: how this assistant keeps a desk", ShowVorzimmer);
+        Add(menu, L("   Workbench", "   Arbeitsfenster"), ShowVorzimmer);
 
         // The remembering period lives here rather than on the page.
         //
@@ -54,15 +54,15 @@ public sealed partial class PillWindow
         // reports what is on the desk, and a control that changes behaviour sitting among
         // figures that report it makes the reader wonder which of the numbers they can also
         // drag. Settings are where settings go.
-        Add(menu, "   Remembering period...", () => _ = ConfigureRememberingAsync());
+        Add(menu, L("   Remembering period...", "   Erinnerungszeitraum…"), () => _ = ConfigureRememberingAsync());
 
         menu.Items.Add(new MenuFlyoutSeparator());
-        Header(menu, "Where things live");
+        Header(menu, L("Where things live", "Speicherorte"));
 
         // The two places, opened rather than described. A path in a sentence is something the
         // reader has to copy out; a menu item is something they can press.
-        Add(menu, "   Open Task Scheduler", () => Open("taskschd.msc"));
-        Add(menu, "   Open the Shellvis folder", () => Open(ShellvisPaths.Home));
+        Add(menu, L("   Open Task Scheduler", "   Aufgabenplanung öffnen"), () => Open("taskschd.msc"));
+        Add(menu, L("   Open the Shellvis folder", "   Shellvis-Ordner öffnen"), () => Open(ShellvisPaths.Home));
 
         menu.ShowAt(SettingsButton);
     }
@@ -84,7 +84,7 @@ public sealed partial class PillWindow
         // menu. They were not missing; nothing said what they were. Somebody looking for
         // "connectors" reads two product names and moves on. A disabled first item costs one
         // line and turns a list of things into a labelled group.
-        Header(menu, "Connectors");
+        Header(menu, L("Connectors", "Konnektoren"));
 
         // Read from disk when there is no session yet, rather than saying "still starting".
         //
@@ -98,7 +98,7 @@ public sealed partial class PillWindow
         {
             menu.Items.Add(new MenuFlyoutItem
             {
-                Text = "   none installed",
+                Text = L("   none installed", "   keine installiert"),
                 IsEnabled = false,
             });
 
@@ -110,7 +110,9 @@ public sealed partial class PillWindow
             string label = needs.Title is { Length: > 0 } title ? title : needs.Name;
 
             Add(menu,
-                needs.Ready ? $"   {label} — configured" : $"   {label} — not configured...",
+                needs.Ready
+                    ? L($"   {label} — configured", $"   {label} — eingerichtet")
+                    : L($"   {label} — not configured...", $"   {label} — nicht eingerichtet…"),
                 () => _ = ConfigureConnectorReportAsync(needs.Name));
         }
     }
@@ -150,9 +152,9 @@ public sealed partial class PillWindow
 
         Add(menu,
             jobs.Count == 0
-                ? "   Scheduled jobs — none yet"
-                : $"   Scheduled jobs — {jobs.Count}",
-            () => AskSelf("welche Jobs sind eingerichtet?"));
+                ? L("   Scheduled jobs — none yet", "   Geplante Aufgaben — noch keine")
+                : L($"   Scheduled jobs — {jobs.Count}", $"   Geplante Aufgaben — {jobs.Count}"),
+            () => AskSelf(L("which jobs are scheduled?", "welche Jobs sind eingerichtet?")));
     }
 
     /// <summary>

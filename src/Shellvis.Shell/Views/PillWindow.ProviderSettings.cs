@@ -63,27 +63,31 @@ public sealed partial class PillWindow
         SettingsField[] fields =
         [
             new("id", "Id", "work-gateway", existing?.Id ?? string.Empty, Enabled: adding),
-            new("name", "Name", existing?.DisplayName ?? "shown in the picker", saved?.Name ?? string.Empty),
-            new("url", "Endpoint", existing?.BaseUrl ?? "host/path -- https and /v1 are added", saved?.BaseUrl ?? string.Empty),
-            new("model", "Default model",
-                existing?.DefaultModel is { Length: > 0 } inherited ? inherited : "used when none is picked",
+            new("name", "Name", existing?.DisplayName ?? L("shown in the picker", "Anzeige in der Modellauswahl"), saved?.Name ?? string.Empty),
+            new("url", "Endpoint", existing?.BaseUrl ?? L("host/path -- https and /v1 are added", "Host/Pfad – https und /v1 werden ergänzt"), saved?.BaseUrl ?? string.Empty),
+            new("model", L("Default model", "Standardmodell"),
+                existing?.DefaultModel is { Length: > 0 } inherited ? inherited : L("used when none is picked", "Wird ohne Modellauswahl verwendet"),
                 saved?.DefaultModel ?? string.Empty),
-            new("env", "Key from variable", existing?.ApiKeyEnvVar ?? "optional, e.g. OPENAI_API_KEY", saved?.ApiKeyEnvVar ?? string.Empty),
-            new("key", "API key", stored ? "stored; blank keeps it" : "optional, encrypted for this account", Secret: true),
+            new("env", L("Key from variable", "Schlüssel aus Variable"), existing?.ApiKeyEnvVar ?? L("optional, e.g. OPENAI_API_KEY", "optional, z. B. OPENAI_API_KEY"), saved?.ApiKeyEnvVar ?? string.Empty),
+            new("key", "API key", stored ? L("stored; blank keeps it", "gespeichert; leer lassen behält ihn") : L("optional, encrypted for this account", "optional, für dieses Konto verschlüsselt"), Secret: true),
         ];
+
+        string use = L("Use this", "Verwenden");
+        string listModels = L("List models", "Modelle anzeigen");
+        string cancel = L("Cancel", "Abbrechen");
 
         SettingsResult answer = await SettingsWindow.ShowAsync(
             WinRT.Interop.WindowNative.GetWindowHandle(this),
-            adding ? "Add a provider" : existing?.DisplayName ?? "Provider",
+            adding ? L("Add a provider", "Anbieter hinzufügen") : existing?.DisplayName ?? L("Provider", "Anbieter"),
 
             // Said in the form rather than only in a comment: someone typing a key into a box
             // is owed a straight answer about where it goes.
-            "The variable wins when set. A key typed here is encrypted to this Windows "
-                + "account and never written to config.yaml. A blank box keeps what is there.",
+            L("The variable wins when set. A key typed here is encrypted to this Windows account and never written to config.yaml. A blank box keeps what is there.",
+              "Eine gesetzte Umgebungsvariable hat Vorrang. Ein hier eingegebener Schlüssel wird für dieses Windows-Konto verschlüsselt und nicht in config.yaml gespeichert. Ein leeres Feld behält den vorhandenen Wert."),
             fields,
-            ["Use this", "List models", "Cancel"]);
+            [use, listModels, cancel]);
 
-        if (answer.Button is null or "Cancel")
+        if (answer.Button is null || answer.Button == cancel)
             return;
 
         string Value(string key) => answer.Values.TryGetValue(key, out string? v) ? v : string.Empty;
@@ -115,7 +119,7 @@ public sealed partial class PillWindow
 
         // "List models" saves first and then asks the endpoint what it serves, because
         // asking is only possible once the endpoint and key are in place.
-        if (answer.Button == "List models"
+        if (answer.Button == listModels
             && Agent.AgentSession.AvailableProviders()
                 .FirstOrDefault(p => p.Id.Equals(chosenId, StringComparison.OrdinalIgnoreCase))
                 is { } configured)

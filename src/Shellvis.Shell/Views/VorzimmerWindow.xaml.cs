@@ -48,7 +48,6 @@ public sealed partial class VorzimmerWindow : Window
     private bool _dragging;
     private bool _loaded;
     private bool _placed;
-    private bool _trimmed;
     private nint _pillHandle;
 
     /// <summary>
@@ -68,19 +67,15 @@ public sealed partial class VorzimmerWindow : Window
 
         _shaper = new WindowShaper(Win32Interop.GetWindowFromWindowId(AppWindow.Id));
 
-        ExtendsContentIntoTitleBar = true;
+        ExtendsContentIntoTitleBar = false;
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {
-            presenter.SetBorderAndTitleBar(hasBorder: false, hasTitleBar: false);
+            presenter.SetBorderAndTitleBar(hasBorder: true, hasTitleBar: true);
 
-            // Not resizable, for the reason the answer window measured: the resize border
-            // IS the frame, and the frame paints a rectangular band around the rounded
-            // surface. The page is responsive and scrolls inside itself, and it opens at a
-            // size that fits the work area, so what is lost is edge-dragging rather than
-            // legibility.
-            presenter.IsResizable = false;
-            presenter.IsMaximizable = false;
+            // A standard frame keeps resizing and keyboard window management available.
+            presenter.IsResizable = true;
+            presenter.IsMaximizable = true;
             presenter.IsMinimizable = true;
 
             // A document, not a command bar: it must be possible to put this behind the
@@ -88,40 +83,29 @@ public sealed partial class VorzimmerWindow : Window
             presenter.IsAlwaysOnTop = false;
         }
 
-        _shaper.TrySoftenEdges();
-
-        RootHost.SizeChanged += (_, _) => ClipToSurface();
-        Surface.SizeChanged += (_, _) => ClipToSurface();
-
-        CloseButton.Click += (_, _) => Hide();
-
-        MinimiseButton.Click += (_, _) =>
-        {
-            if (AppWindow.Presenter is OverlappedPresenter minimisable)
-                minimisable.Minimize();
-        };
-
-        // The header only. Dragging the surface is right for the answer window, whose
-        // content is a text block; here the content is a web view that takes the pointer
-        // itself, so a drag started inside the page would never reach this handler and the
-        // one place a drag DOES work should be the one place it looks like it would.
-        MakeDraggable(Header);
-
-        // The two places this window names itself: the taskbar entry and the strip above
-        // the page. The XAML carries German as a default so the designer shows something
-        // real; this is what is actually seen.
         Title = _text.VorzimmerWindowTitle;
-        HeaderText.Text = _text.VorzimmerWindowTitle;
+        AppWindow.Closing += (_, args) =>
+        {
+            if (_destroying)
+                return;
+            args.Cancel = true;
+            Hide();
+        };
+        InitializeWorkbench();
     }
 
-    private const double SurfaceRadius = 8;
+    private bool _destroying;
+    private bool _visible;
 
-    private void ClipToSurface()
+    public bool IsVisible => _visible
+        && (AppWindow.Presenter is not OverlappedPresenter presenter
+            || presenter.State != OverlappedPresenterState.Minimized);
+
+    public void Destroy()
     {
-        if (Surface.ActualWidth < 1 || Surface.ActualHeight < 1)
-            return;
-
-        _shaper.ClipWindowRounded(SurfaceRadius);
+        _destroying = true;
+        Close();
+        _shaper.Dispose();
     }
 
     /// <summary>Put the window in front, loading the page the first time.</summary>
@@ -130,20 +114,11 @@ public sealed partial class VorzimmerWindow : Window
         Place(pillHandle);
 
         AppWindow.Show();
+        _visible = true;
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
             presenter.Restore();
 
-        // The frame comes off on the first reveal rather than in the constructor: changing
-        // the style of a window that has never been shown leaves AppWindow.Show doing
-        // nothing at all, which looks exactly like the button having been ignored.
-        if (!_trimmed)
-        {
-            _trimmed = true;
-            _shaper.TrimFrame(keepResizeBorder: false);
-        }
-
-        ClipToSurface();
         _shaper.BringToFront();
 
         // Not awaited, and not async void either: the window is already up and the page
@@ -153,7 +128,11 @@ public sealed partial class VorzimmerWindow : Window
     }
 
     /// <summary>Hide without destroying, so the page is loaded once per session.</summary>
-    public void Hide() => AppWindow.Hide();
+    public void Hide()
+    {
+        _visible = false;
+        AppWindow.Hide();
+    }
 
     /// <summary>
     /// Bring up the runtime and hand it the page.
@@ -193,6 +172,13 @@ public sealed partial class VorzimmerWindow : Window
         settings.IsStatusBarEnabled = false;
         settings.AreDefaultContextMenusEnabled = true;
         settings.IsZoomControlEnabled = true;
+
+        // The embedded page loads its fonts through this local virtual host. No font
+        // request leaves the machine, and the mapping also works offline.
+        View.CoreWebView2.SetVirtualHostNameToFolderMapping(
+            "shellvis.local",
+            Path.Combine(AppContext.BaseDirectory, "Assets", "Fonts"),
+            Microsoft.Web.WebView2.Core.CoreWebView2HostResourceAccessKind.Allow);
 
         // Nothing here navigates and nothing here opens a window -- the page has no links
         // at all. Both are refused anyway: this view exists to draw one document that ships
@@ -809,10 +795,21 @@ public sealed partial class VorzimmerWindow : Window
         // 1366x768 laptop still gets a whole window.
         int width = Math.Min((int)Math.Round(1180 * scale), (int)(area.WorkArea.Width * 0.94));
         int height = Math.Min((int)Math.Round(920 * scale), (int)(area.WorkArea.Height * 0.94));
+        int top = area.WorkArea.Y + ((area.WorkArea.Height - height) / 2);
+
+        // The pill stays above normal windows. Keep the composer above a pill docked near
+        // the bottom of the screen so it cannot cover the workbench's input row.
+        if (Windows.Win32.PInvoke.GetWindowRect(new Windows.Win32.Foundation.HWND(pillHandle), out Windows.Win32.Foundation.RECT pill)
+            && pill.top > area.WorkArea.Y + 520
+            && pill.top < area.WorkArea.Y + area.WorkArea.Height)
+        {
+            height = Math.Min(height, pill.top - area.WorkArea.Y - 12);
+            top = pill.top - height - 12;
+        }
 
         AppWindow.MoveAndResize(new RectInt32(
             area.WorkArea.X + ((area.WorkArea.Width - width) / 2),
-            area.WorkArea.Y + ((area.WorkArea.Height - height) / 2),
+            top,
             width,
             height));
     }

@@ -128,7 +128,7 @@ public sealed partial class PillWindow : IConnectorConfigurator
                 fields.Add(new SettingsField(
                     variable.Name,
                     label,
-                    Value: "set by an environment variable, which wins",
+                    Value: L("set by an environment variable, which wins", "durch eine vorrangige Umgebungsvariable gesetzt"),
                     Enabled: false));
 
                 continue;
@@ -140,7 +140,7 @@ public sealed partial class PillWindow : IConnectorConfigurator
                 ? new SettingsField(
                     variable.Name,
                     label,
-                    Placeholder: stored ? "stored; blank keeps it" : "encrypted for this account",
+                    Placeholder: stored ? L("stored; blank keeps it", "gespeichert; leer lassen behält ihn") : L("encrypted for this account", "für dieses Konto verschlüsselt"),
                     Secret: true)
                 : new SettingsField(
                     variable.Name,
@@ -152,17 +152,18 @@ public sealed partial class PillWindow : IConnectorConfigurator
                     Value: SecretStore.Get(variable.Name) ?? string.Empty));
         }
 
+        string save = L("Save", "Speichern");
         SettingsResult answer = await SettingsWindow.ShowAsync(
             WinRT.Interop.WindowNative.GetWindowHandle(this),
             needs.Title is { Length: > 0 } title ? title : needs.Name,
             needs.Ready
-                ? "This connector already works. A value typed here replaces the stored one, "
-                    + "and is encrypted to this Windows account -- never written to config.yaml."
-                : needs.Detail + " Values are encrypted to this Windows account.",
+                ? L("This connector already works. A value typed here replaces the stored one, and is encrypted to this Windows account -- never written to config.yaml.",
+                    "Dieser Konnektor funktioniert bereits. Ein neuer Wert ersetzt den gespeicherten und wird für dieses Windows-Konto verschlüsselt, nie in config.yaml geschrieben.")
+                : needs.Detail + L(" Values are encrypted to this Windows account.", " Werte werden für dieses Windows-Konto verschlüsselt."),
             fields,
-            ["Save", "Cancel"]);
+            [save, L("Cancel", "Abbrechen")]);
 
-        if (answer.Button != "Save")
+        if (answer.Button != save)
             return $"'{needs.Name}' was left as it was.";
 
         var written = new List<string>();

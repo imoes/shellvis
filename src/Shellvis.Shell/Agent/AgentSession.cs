@@ -102,6 +102,9 @@ internal sealed partial class AgentSession : IDisposable
     /// <summary>The mailbox client the tools use, shared with the window's watcher.</summary>
     public Shellvis.Core.Office.OutlookClient? Outlook { get; private init; }
 
+    /// <summary>The same interactive Office client used by the registered tools.</summary>
+    public OfficeComClient? Office { get; private init; }
+
     /// <summary>
     /// The remembered desk, shared with the window's indexing pass.
     ///
@@ -232,7 +235,8 @@ internal sealed partial class AgentSession : IDisposable
         // unconditionally: unlike Home Assistant there is nothing to configure, and
         // office_open_documents answering "nothing is open" is a useful answer rather
         // than a failed capability.
-        registry.RegisterFrom(new OfficeComTools(new OfficeComClient(comApartment)));
+        var office = new OfficeComClient(comApartment);
+        registry.RegisterFrom(new OfficeComTools(office));
 
         // Home Assistant is offered only when it can actually be reached. Advertising
         // ha_* tools without a token would mean the model plans around a capability
@@ -397,6 +401,7 @@ internal sealed partial class AgentSession : IDisposable
             _unattended = unattended,
             _connectors = connectors,
             Outlook = outlook,
+            Office = office,
             Desk = desk,
             DeskWindow = deskWindow,
         };

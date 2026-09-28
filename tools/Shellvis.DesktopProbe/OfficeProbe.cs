@@ -1,4 +1,5 @@
 using Shellvis.Core.Tools;
+using Shellvis.Core.Office;
 
 namespace Shellvis.DesktopProbe;
 
@@ -58,6 +59,9 @@ internal static class OfficeProbe
         string wordPath = Path.Combine(folder, "report.docx");
         failures += Check("word_create", office.CreateWord(wordPath, documentMarkdown, "Shellvis report"));
         failures += CheckFile(wordPath, minimumBytes: 3000);
+        DocumentContext wordContext = DocumentContextReader.Read(wordPath);
+        failures += Expect(wordContext.Text, "Office documents without Office installed",
+            "closed Word documents should be readable as prompt context");
 
         // ---------------------------------------------------------------- Excel
         const string tableMarkdown = """
@@ -90,6 +94,10 @@ internal static class OfficeProbe
         // The point of typing values: a number stored as text would come back with no
         // change, while a real number round-trips through Excel's formatting.
         failures += Expect(read, "Desktop", "the header row should be readable");
+        failures += Expect(DocumentContextReader.Read(excelPath).Text, "Desktop",
+            "closed Excel workbooks should be readable as prompt context");
+        failures += Expect(DocumentContextReader.Read(excelPath).Text, "Milestones",
+            "all worksheets should be represented in prompt context");
 
         // ------------------------------------------------------------ PowerPoint
         const string deckMarkdown = """
@@ -117,6 +125,18 @@ internal static class OfficeProbe
         failures += Check("powerpoint_read", deck);
         failures += Expect(deck, "3 slide(s)", "all three slides should be present");
         failures += Expect(deck, "Safety", "the third slide title should round-trip");
+        failures += Expect(DocumentContextReader.Read(deckPath).Text, "Safety",
+            "closed PowerPoint decks should be readable as prompt context");
+
+        string longWordPath = Path.Combine(folder, "long-report.docx");
+        failures += Check("word_create_long", office.CreateWord(longWordPath,
+            "# Long report\n\n" + new string('a', DocumentContextReader.MaxChars + 1000)));
+        DocumentContext shortened = DocumentContextReader.Read(longWordPath);
+        if (!shortened.Truncated || shortened.Text.Length != DocumentContextReader.MaxChars)
+        {
+            Console.WriteLine("  FAIL context limit        long document was not visibly bounded");
+            failures++;
+        }
 
         Console.WriteLine(failures == 0
             ? "\nVERIFIED: all three formats written and read back."

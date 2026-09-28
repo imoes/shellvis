@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Automation;
 
 using Shellvis.Core.Config;
 using Shellvis.Core.Ui;
@@ -27,6 +28,8 @@ namespace Shellvis.Shell.Views;
 /// </summary>
 public sealed partial class PillWindow
 {
+    private string L(string english, string german) =>
+        Words.LanguageTag == "de" ? german : english;
     /// <summary>Every user-visible string, in the language this session speaks.</summary>
     /// <remarks>
     /// Static so the partial classes that make up this window can all reach it without
@@ -62,17 +65,29 @@ public sealed partial class PillWindow
     private void ApplyLanguage()
     {
         PromptBox.PlaceholderText = Words.AskPlaceholder;
+        HistorySearch.PlaceholderText = L("Search past conversations", "Frühere Unterhaltungen suchen");
+        NewSessionButton.Content = L("Start a new conversation", "Neue Unterhaltung beginnen");
 
         Tip(VorzimmerButton, Words.VorzimmerButtonTip);
+        AutomationProperties.SetName(VorzimmerButton, L("Open workbench", "Arbeitsfenster öffnen"));
         Tip(AnswerButton, Words.AnswerButtonTip);
+        AutomationProperties.SetName(AnswerButton, Words.AnswerButtonTip);
         Tip(ConsoleToggleButton, Words.ConsoleShowTip);
+        AutomationProperties.SetName(ConsoleToggleButton, Words.ConsoleShowTip);
         Tip(HistoryButton, Words.HistoryTip);
+        AutomationProperties.SetName(HistoryButton, Words.HistoryTip);
         Tip(SettingsButton, Words.SettingsTip);
+        AutomationProperties.SetName(SettingsButton, Words.SettingsTip);
         Tip(MicButton, Words.DictateTip);
+        AutomationProperties.SetName(MicButton, Words.DictateTip);
         Tip(ExpandButton, Words.ExpandTip);
+        AutomationProperties.SetName(ExpandButton, Words.ExpandTip);
         Tip(AttachButton, Words.AttachTip);
+        AutomationProperties.SetName(AttachButton, L("Choose Office document", "Office-Dokument auswählen"));
         Tip(ModeButton, Words.ModeTip);
+        AutomationProperties.SetName(ModeButton, Words.ModeTip);
         Tip(CloseButton, Words.CloseTip);
+        AutomationProperties.SetName(CloseButton, Words.CloseTip);
     }
 
     /// <summary>

@@ -143,6 +143,8 @@ public sealed partial class PillWindow : Window
         NewSessionButton.Click += (_, _) => OnNewSession();
         HistorySearch.TextChanged += (_, _) => RefreshSessionList();
         MicButton.Click += (_, _) => ToggleDictation();
+        AttachButton.Click += (_, _) => _ = PickDocumentAsync();
+        ContextBadge.Click += (_, _) => SetDocumentContext(null);
         ModeButton.Click += (_, _) => ShowModeMenu();
         ModelButton.Click += (_, _) => ShowModelMenu();
 
@@ -414,46 +416,9 @@ public sealed partial class PillWindow : Window
             return;
 
         e.Handled = true;
-
         string prompt = PromptBox.Text.Trim();
         PromptBox.Text = string.Empty;
-
-        // Two places, two forms, and that is the rule now: the conversation window gets
-        // what was said, the console gets a log line saying that it was said. Rendering the
-        // prompt as prose in the console was half of what made the separation inconsistent.
-        RecordPrompt(prompt);
-        AddRow(GlyphPerson, Oneline(prompt), "asked");
-
-        if (!_consoleOpen)
-            ToggleConsole();
-
-        // A prompt typed during warm-up waits for it rather than being dropped: the
-        // pill is usable the instant it appears, so this is a normal case.
-        if (_session is null && _sessionTask is not null)
-        {
-            StatusText.Text = "Shellvis is still tuning up.";
-            try
-            {
-                _session = await _sessionTask;
-            }
-            catch (Exception)
-            {
-                // AnnounceWhenReadyAsync has already reported it in the transcript.
-            }
-        }
-
-        if (_session is null)
-        {
-            AddRow(GlyphWarning, "no model session available", "failed");
-            return;
-        }
-
-        StatusText.Text = ShellvisVoice.Working;
-
-        // async void is correct for an event handler, and the session already funnels
-        // every failure into a Failure event rather than throwing, so nothing can
-        // escape onto the UI thread unobserved.
-        await _session.RunTurnAsync(prompt, Render);
+        await SubmitPromptAsync(prompt);
     }
 
     /// <summary>
@@ -816,6 +781,7 @@ public sealed partial class PillWindow : Window
         // The answer window is a second top-level window and does not close with this one.
         // Left open, it keeps the process alive with no way left to reach it.
         Safe(CloseAnswerWindow);
+        Safe(() => _vorzimmer?.Destroy());
 
         // And the alert, for the same reason. It is a tool window with no taskbar button, so
         // one left behind would hold the process open with nothing on screen to close it.
@@ -1006,6 +972,7 @@ public sealed partial class PillWindow : Window
         bool isPending = false,
         bool isWarning = false)
     {
+        RememberActivity($"{trailing}: {text}");
         var row = new Grid { Margin = new Thickness(0, 1, 0, 1) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(20) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

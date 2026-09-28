@@ -110,16 +110,29 @@ internal static class PageProbe
 
         string stripped = Regex.Replace(html, LinkPattern, string.Empty, RegexOptions.IgnoreCase);
 
-        Check("after the strip no http reference survives",
-            !stripped.Contains("http:", StringComparison.OrdinalIgnoreCase)
-                && !stripped.Contains("https:", StringComparison.OrdinalIgnoreCase),
-            Surviving(stripped));
+        string withoutLocalFonts = Regex.Replace(stripped,
+            @"https://shellvis\.local/[A-Za-z0-9.-]+\.ttf", string.Empty,
+            RegexOptions.IgnoreCase);
+        Check("only the local font host is referenced",
+            !withoutLocalFonts.Contains("http:", StringComparison.OrdinalIgnoreCase)
+                && !withoutLocalFonts.Contains("https:", StringComparison.OrdinalIgnoreCase),
+            Surviving(withoutLocalFonts));
+
+        Check("the local font host maps to the packaged directory",
+            File.ReadAllText(view).Contains("SetVirtualHostNameToFolderMapping", StringComparison.Ordinal)
+                && File.ReadAllText(project).Contains(@"Assets\Fonts\*.*", StringComparison.Ordinal));
+        foreach (string font in new[]
+        {
+            "PlexSans-Regular.ttf", "PlexMono-Regular.ttf", "ZillaSlab-Regular.ttf",
+        })
+            Check($"font {font} ships", File.Exists(Path.Combine(root,
+                "src", "Shellvis.Shell", "Assets", "Fonts", font)));
 
         Check("and the page still declares fallback faces for every role",
             stripped.Contains("Georgia", StringComparison.Ordinal)
                 && stripped.Contains("Segoe UI", StringComparison.Ordinal)
                 && stripped.Contains("Consolas", StringComparison.Ordinal),
-            "with the webfonts gone these are what actually renders");
+            "the page still has local fallback fonts");
 
         // --------------------------------------------------- the rules SHAPE it
         //
@@ -666,8 +679,8 @@ internal static class PageProbe
             "this is the one the window sets from the application's theme");
 
         Console.WriteLine(failures == 0
-            ? "\nVERIFIED: the page is in the build as a fragment, strips every external\n"
-              + "reference before it renders, still names a fallback face for each role,\n"
+            ? "\nVERIFIED: the page is in the build as a fragment, strips external links,\n"
+              + "loads fonts from a local virtual host and names fallback faces,\n"
               + "is shaped by the rules instead of reciting them, and designs both themes.\n"
               + "\nNOT covered here: whether it LOOKS right, which needs eyes."
             : $"\n{failures} check(s) failed.");

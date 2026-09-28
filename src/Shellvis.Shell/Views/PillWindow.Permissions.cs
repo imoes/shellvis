@@ -20,6 +20,14 @@ public sealed partial class PillWindow
     private static readonly PermissionMode[] Modes =
         [PermissionMode.Ask, PermissionMode.AutoRead, PermissionMode.Yolo];
 
+    private string ModeDescription(PermissionMode mode) => mode switch
+    {
+        PermissionMode.Ask => L("Ask before every action", "Vor jeder Aktion fragen"),
+        PermissionMode.AutoRead => L("Read silently; ask before changes", "Lesen ohne Rückfrage; vor Änderungen fragen"),
+        PermissionMode.Yolo => L("Run without asking, except protected actions", "Ohne Rückfrage ausführen, außer geschützten Aktionen"),
+        _ => PermissionPolicy.Describe(mode),
+    };
+
     private void ShowModeMenu()
     {
         if (_session is null)
@@ -42,7 +50,7 @@ public sealed partial class PillWindow
             var item = new RadioMenuFlyoutItem
             {
                 GroupName = "PermissionMode",
-                Text = $"{PermissionPolicy.Label(mode)}  -  {PermissionPolicy.Describe(mode)}",
+                Text = $"{PermissionPolicy.Label(mode)}  -  {ModeDescription(mode)}",
                 IsChecked = mode == current,
                 Tag = mode,
             };
@@ -82,7 +90,7 @@ public sealed partial class PillWindow
         PermissionMode mode = _session?.Permissions.Mode ?? PermissionMode.AutoRead;
 
         ModeButton.Content = PermissionPolicy.Label(mode);
-        ModeButton.SetValue(ToolTipService.ToolTipProperty, PermissionPolicy.Describe(mode));
+        ModeButton.SetValue(ToolTipService.ToolTipProperty, ModeDescription(mode));
 
         Brush accent = mode == PermissionMode.Yolo
             // A Window has no theme of its own; the theme lives on the content root.

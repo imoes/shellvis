@@ -194,10 +194,75 @@ public sealed class OfficeComClient(ComApartment apartment)
             }
         }, cancellationToken);
 
-    private static string ReadWord(dynamic app)
-    {
-        dynamic document = app.ActiveDocument;
+    /// <summary>Read a specific open document, including unsaved changes in a background tab.</summary>
+    public Task<string> ReadSelectedAsync(
+        OpenDocument selected, CancellationToken cancellationToken = default) =>
+        _apartment.InvokeAsync<string>(() =>
+        {
+            (string progId, string application) = Resolve(selected.Application);
+            dynamic? app = Com.TryGetActive(progId);
+            if (app is null)
+                throw new InvalidOperationException($"{application} is no longer running.");
 
+            try
+            {
+                dynamic collection = application switch
+                {
+                    "Word" => app.Documents,
+                    "Excel" => app.Workbooks,
+                    _ => app.Presentations,
+                };
+
+                try
+                {
+                    for (int i = 1; i <= (int)collection.Count; i++)
+                    {
+                        dynamic item = collection[i];
+                        bool handedToReader = false;
+                        try
+                        {
+                            if (!string.Equals((string)item.Name, selected.Name,
+                                    StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            if (selected.Path is { Length: > 0 } path
+                                && !string.Equals((string)item.FullName, path,
+                                    StringComparison.OrdinalIgnoreCase))
+                                continue;
+
+                            // Each reader releases its document in a finally block.
+                            handedToReader = true;
+                            return application switch
+                            {
+                                "Word" => ReadWordDocument(item),
+                                "Excel" => ReadExcelBook(item),
+                                _ => ReadPowerPointPresentation(item),
+                            };
+                        }
+                        finally
+                        {
+                            if (!handedToReader)
+                                Com.Release(item);
+                        }
+                    }
+                }
+                finally
+                {
+                    Com.Release(collection);
+                }
+
+                throw new InvalidOperationException("The selected document is no longer open.");
+            }
+            finally
+            {
+                Com.Release(app);
+            }
+        }, cancellationToken);
+
+    private static string ReadWord(dynamic app) => ReadWordDocument(app.ActiveDocument);
+
+    private static string ReadWordDocument(dynamic document)
+    {
         try
         {
             dynamic content = document.Content;
@@ -237,10 +302,10 @@ public sealed class OfficeComClient(ComApartment apartment)
         }
     }
 
-    private static string ReadExcel(dynamic app)
-    {
-        dynamic book = app.ActiveWorkbook;
+    private static string ReadExcel(dynamic app) => ReadExcelBook(app.ActiveWorkbook);
 
+    private static string ReadExcelBook(dynamic book)
+    {
         try
         {
             dynamic sheet = book.ActiveSheet;
@@ -295,6 +360,8 @@ public sealed class OfficeComClient(ComApartment apartment)
 
                     if (rows > rowLimit)
                         sb.Append("... ").Append(rows - rowLimit).AppendLine(" more row(s).");
+                    if (columns > columnLimit)
+                        sb.Append("... ").Append(columns - columnLimit).AppendLine(" more column(s).");
 
                     return sb.ToString();
                 }
@@ -315,10 +382,10 @@ public sealed class OfficeComClient(ComApartment apartment)
         }
     }
 
-    private static string ReadPowerPoint(dynamic app)
-    {
-        dynamic presentation = app.ActivePresentation;
+    private static string ReadPowerPoint(dynamic app) => ReadPowerPointPresentation(app.ActivePresentation);
 
+    private static string ReadPowerPointPresentation(dynamic presentation)
+    {
         try
         {
             dynamic slides = presentation.Slides;

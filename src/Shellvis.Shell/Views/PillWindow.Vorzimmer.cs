@@ -64,9 +64,36 @@ public sealed partial class PillWindow
             _vorzimmer.SearchRequested += words => _ = SearchTheDeskAsync(words);
             _vorzimmer.ExpandRequested += (id, again) => _ = ExpandAsync(id, again);
             _vorzimmer.JoinRequested += id => _ = JoinAsync(id);
+            _vorzimmer.PromptRequested += prompt => _ = SubmitPromptAsync(prompt);
+            _vorzimmer.PickDocumentRequested += () => _ = PickDocumentAsync();
+            _vorzimmer.RefreshDocumentsRequested += () => _ = RefreshDocumentsAsync();
+            _vorzimmer.OpenDocumentRequested += document => _ = SelectOpenDocumentAsync(document);
+            _vorzimmer.ClearContextRequested += () => SetDocumentContext(null);
+            _vorzimmer.HistoryRequested += query =>
+                _vorzimmer.ShowSessions(_session?.ListSessions(string.IsNullOrWhiteSpace(query) ? null : query) ?? []);
+            _vorzimmer.ResumeRequested += id =>
+            {
+                Agent.AgentSession.SessionRow? row = _session?.ListSessions(null)
+                    .FirstOrDefault(candidate => candidate.Info.Id == id);
+                if (row is not null)
+                    OnResume(row.Info);
+            };
+            _vorzimmer.DeleteRequested += id =>
+            {
+                Agent.AgentSession.SessionRow? row = _session?.ListSessions(null)
+                    .FirstOrDefault(candidate => candidate.Info.Id == id);
+                if (row is not null)
+                    OnDelete(row.Info, _vorzimmer.RootXamlRoot);
+            };
+            _vorzimmer.NewSessionRequested += OnNewSession;
+            foreach (string line in _activityHistory)
+                _vorzimmer.AppendActivity(line);
+            _vorzimmer.SetContext(_documentContext);
         }
 
         _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        _vorzimmer.ShowConversation(_conversation.ToMarkdown(), streaming: false);
+        _answerWindow?.Hide();
 
         // The stored baseline is read on the FIRST open of this session only. Later opens
         // keep the one in memory, so a window closed and reopened within a session does not
@@ -1631,24 +1658,24 @@ public sealed partial class PillWindow
     {
         int now = _session?.DeskWindow?.Days ?? 30;
 
+        string save = L("Save", "Speichern");
         SettingsResult answer = await SettingsWindow.ShowAsync(
             WinRT.Interop.WindowNative.GetWindowHandle(this),
-            "Remembering period",
-            "Shellvis keeps a quarter of a year of what it has walked past: mail, tickets, "
-                + "tasks, and what it worked out about them. This is how much of that it "
-                + "brings to bear when you say 'lately' -- it does not change what is kept.",
+            L("Remembering period", "Erinnerungszeitraum"),
+            L("Shellvis keeps a quarter of a year of what it has walked past: mail, tickets, tasks, and what it worked out about them. This is how much of that it brings to bear when you say 'lately' -- it does not change what is kept.",
+              "Shellvis bewahrt E-Mails, Tickets, Aufgaben und seine Notizen dazu ein Vierteljahr auf. Hier wählst du, wie viel davon bei Fragen nach der letzten Zeit berücksichtigt wird. Die Aufbewahrungsdauer ändert sich nicht."),
             [
                 new SettingsField(
                     Key: "days",
-                    Label: "Zeitraum",
+                    Label: L("Period", "Zeitraum"),
                     Value: now.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     Min: DeskWindow.Least,
                     Max: DeskWindow.Most,
                     Describe: days => new DeskWindow(days).Describe(Words)),
             ],
-            ["Save", "Cancel"]).ConfigureAwait(true);
+            [save, L("Cancel", "Abbrechen")]).ConfigureAwait(true);
 
-        if (answer.Button != "Save")
+        if (answer.Button != save)
             return;
 
         if (answer.Values.TryGetValue("days", out string? said)

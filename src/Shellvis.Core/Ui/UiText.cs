@@ -425,8 +425,8 @@ public sealed class UiText
         NameToday = "appointments today",
         NameOverdue = "overdue",
 
-        VorzimmerWindowTitle = "The Front Office",
-        VorzimmerButtonTip = "The front office: how this assistant keeps a desk",
+        VorzimmerWindowTitle = "Shellvis Workbench",
+        VorzimmerButtonTip = "Open the Shellvis workbench",
         AnswerButtonTip = "Bring the answer back",
         ConsoleShowTip = "Show console",
         ConsoleHideTip = "Hide console",
@@ -568,8 +568,8 @@ public sealed class UiText
         NameToday = "Termine heute",
         NameOverdue = "überfällig",
 
-        VorzimmerWindowTitle = "Das Vorzimmer",
-        VorzimmerButtonTip = "Das Vorzimmer: wie dieser Assistent einen Schreibtisch führt",
+        VorzimmerWindowTitle = "Shellvis-Arbeitsfenster",
+        VorzimmerButtonTip = "Shellvis-Arbeitsfenster öffnen",
         AnswerButtonTip = "Die Antwort zurückholen",
         ConsoleShowTip = "Konsole zeigen",
         ConsoleHideTip = "Konsole verbergen",

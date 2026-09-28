@@ -360,6 +360,80 @@ internal sealed partial class AgentSession
     private static readonly Shellvis.Core.Tools.ToolRegistry EmptyRegistry = new();
 
     /// <summary>
+    /// Which tracker answered for each project prefix, so the second ticket from the same
+    /// project is not asked about on the wrong host first.
+    /// </summary>
+    private readonly Dictionary<string, string> _ticketSystem = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A ticket as it stands now: its fields and its newest comments, read from whichever
+    /// tracker knows the key. Null when neither does, or neither is configured.
+    /// </summary>
+    /// <remarks>
+    /// <b>For the sorting pass, and read without the model.</b> A notification mail is a
+    /// template around one sentence, and the sentence is already in the ticket -- together
+    /// with everything that happened after the mail was sent. The watch was already
+    /// fetching the ticket for its alert decision and then throwing what it read away; the
+    /// report was "ich habe in der Konsole gesehen, dass die Jira-Kommentare abgerufen
+    /// werden -- ich wuerde gerne immer eine Zusammenfassung der Tickets haben". So the
+    /// pass reads the ticket itself, through the same connector tools the model uses, and
+    /// hands it to the one call that judges the mail. Two HTTP requests, no model call.
+    ///
+    /// <b>Both trackers, in the order that has worked before.</b> Jira and the service desk
+    /// are separate products on separate hosts, and the key does not say which one it
+    /// belongs to. The first to answer for a project prefix is remembered, so IMIT-133940
+    /// costs the wrong host once per session and not once per ticket.
+    ///
+    /// Only the two read tools, invoked directly: they are read-only by declaration, and a
+    /// pass that runs while nobody is looking has no business near a tool that writes.
+    /// </remarks>
+    internal async Task<string?> ReadTicketAsync(string key, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+            return null;
+
+        string clean = key.Trim().ToUpperInvariant();
+        string prefix = clean.Split('-')[0];
+
+        string[] order = _ticketSystem.TryGetValue(prefix, out string? known)
+            ? [known]
+            : ["jira", "servicedesk"];
+
+        System.Text.Json.JsonElement args = System.Text.Json.JsonSerializer.SerializeToElement(new { key = clean });
+
+        foreach (string system in order)
+        {
+            if (_registry.Find(system + "_issue") is null)
+                continue;
+
+            string issue = await _registry
+                .InvokeAsync(system + "_issue", args, cancellationToken)
+                .ConfigureAwait(false);
+
+            // A key the host does not know, or a host that refused the credential. Either way
+            // this tracker is not the one; the next is tried, and a ticket nobody answers for
+            // is judged from its mail as before.
+            if (issue.TrimStart().StartsWith("error", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            _ticketSystem[prefix] = system;
+
+            if (_registry.Find(system + "_comments") is null)
+                return issue;
+
+            string comments = await _registry
+                .InvokeAsync(system + "_comments", args, cancellationToken)
+                .ConfigureAwait(false);
+
+            return comments.TrimStart().StartsWith("error", StringComparison.OrdinalIgnoreCase)
+                ? issue
+                : issue + "\n\n" + comments;
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// The operating rules for a look nobody asked for.
     ///
     /// Deliberately short. Unlike a scheduled job, the caller's own prompt carries the whole

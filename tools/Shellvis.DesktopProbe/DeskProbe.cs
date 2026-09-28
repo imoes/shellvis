@@ -618,6 +618,40 @@ internal static class DeskProbe
                     && aboutRead[meeting[0].Id].Contains("Kernel-Update", StringComparison.Ordinal),
                 "one shape for every imagined document, so one place can get it wrong");
 
+            // A notification is judged from its ticket. The pass reads the ticket and puts
+            // it beside the mail; the question has to carry it, flattened, and say what to
+            // do with it -- and the batch budget has to count it, because five comments
+            // and the fields of a ticket are a few thousand characters each.
+            var ticketText = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [batch[0].Id] = "[KTLNXTM-12](https://jira.example/browse/KTLNXTM-12)  FTP Server | Update  status: In Arbeit\n\n"
+                    + "2026-09-16 10:32  Kruschwitz, Max: Neben FTP/SFTP muss auch CentOS 7 aktualisiert werden.",
+            };
+
+            string withTicket = DeskTriage.Ask(batch, tickets: ticketText);
+
+            Check("a notification carries its ticket as it stands now, on one line",
+                withTicket.Contains("ticket now: > [KTLNXTM-12]", StringComparison.Ordinal)
+                    && withTicket.Contains("CentOS 7 aktualisiert", StringComparison.Ordinal)
+                    && !withTicket.Contains("Update  status: In Arbeit\n", StringComparison.Ordinal),
+                "a line break inside it would break the numbered list apart");
+
+            Check("and the question says to summarise the ticket, not the notification",
+                withTicket.Contains("SUMMARISE THE TICKET, not the notification", StringComparison.Ordinal),
+                "the mail says a comment was added; the ticket says what it was");
+
+            Check("a message with no ticket carries none",
+                withTicket.Split('\n').Count(l => l.StartsWith("   ticket now: > ", StringComparison.Ordinal)) == 1);
+
+            var bigTicket = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [batch[0].Id] = new string('x', DeskTriage.PerBatchChars + 1),
+            };
+
+            Check("the ticket text counts against the batch budget",
+                DeskTriage.Fit(batch, new Dictionary<string, Shellvis.Core.Office.MailFacing>(StringComparer.Ordinal), bigTicket) == 1,
+                "forty thousand characters of ticket leave no room for a second message");
+
             // The long form: the whole thread as four blocks, written once when a row is
             // opened. The dates in the history block are what make it a history.
             var conversation = new[]

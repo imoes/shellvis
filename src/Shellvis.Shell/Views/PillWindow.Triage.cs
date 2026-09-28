@@ -183,13 +183,64 @@ public sealed partial class PillWindow
                 }
             }
 
+            // The ticket each notification is about, read from the tracker as it stands now.
+            //
+            // A Jira mail is a template around one sentence; the sentence is in the ticket,
+            // with everything that happened after the mail went out. Judged from the mail,
+            // three notifications in a row came back as "Jira-Kommentar zu KTLNXTM-12" and
+            // nothing about what the comment said. Judged from the ticket, the tray says
+            // what the ticket is, where it stands and what its newest comment asks for.
+            //
+            // Once per key, however many mails in the batch are about it -- five comments on
+            // one ticket are one ticket -- and only the read tools, directly, without the
+            // model. A key no tracker answers for is judged from its mail, as before.
+            var tickets = new Dictionary<string, string>(StringComparer.Ordinal);
+            var readKeys = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (DeskObject one in batch)
+            {
+                if (one.TicketKey is not { Length: > 0 } key)
+                    continue;
+
+                if (!readKeys.TryGetValue(key, out string? ticket))
+                {
+                    try
+                    {
+                        ticket = await _session.ReadTicketAsync(key).ConfigureAwait(true);
+                    }
+                    catch (Exception ex)
+                    {
+                        AddRow(GlyphWarning, $"could not read {key} from the tracker: {ex.Message}", "desk", isWarning: true);
+                        ticket = null;
+                    }
+
+                    readKeys[key] = ticket;
+                }
+
+                if (ticket is { Length: > 0 })
+                    tickets[one.Id] = ticket;
+            }
+
+            int ticketsRead = readKeys.Values.Count(t => t is { Length: > 0 });
+
+            if (readKeys.Count > 0)
+            {
+                AddRow(
+                    ticketsRead == readKeys.Count ? GlyphTool : GlyphWarning,
+                    ticketsRead == readKeys.Count
+                        ? $"read {ticketsRead} ticket(s) from the tracker, so their mail is summarised from the ticket"
+                        : $"read {ticketsRead} of {readKeys.Count} ticket(s) from the tracker; the rest are summarised from their mail",
+                    "desk",
+                    isWarning: ticketsRead != readKeys.Count);
+            }
+
             // How many of them fit in one question, now that none of them is truncated.
             //
             // A batch of ten short notifications and a batch of ten long threads are not the
             // same question: the second can be a hundred thousand characters, which at this
             // endpoint's speed is twenty minutes of prompt processing and a stream abandoned
             // as stalled long before it. So the count gives way and the text does not.
-            int fits = DeskTriage.Fit(batch, facing);
+            int fits = DeskTriage.Fit(batch, facing, tickets);
 
             if (fits < batch.Count)
             {
@@ -251,7 +302,7 @@ public sealed partial class PillWindow
             var answer = new System.Text.StringBuilder();
 
             await _session.AskAsideAsync(
-                DeskTriage.Ask(batch, facing, owner, earlier, conversation),
+                DeskTriage.Ask(batch, facing, owner, earlier, conversation, tickets),
                 agentEvent =>
                 {
                     // Nothing is rendered. This is not a conversation and its answer is a

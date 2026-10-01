@@ -365,13 +365,12 @@
                             Width="26"
                             Height="22"
                             Padding="0"
-                            IsEnabled="False"
                             FontFamily="Segoe Fluent Icons"
                             FontSize="11"
                             Background="Transparent"
                             BorderThickness="0"
                             Content="&#xE8BD;"
-                            ToolTipService.ToolTip="Show the answer" />
+                            ToolTipService.ToolTip="Conversations" />
 
                     <Button x:Name="CollapseButton"
                             Grid.Column="5"

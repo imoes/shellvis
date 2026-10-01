@@ -44,10 +44,25 @@ public sealed partial class PillWindow
     }
 
     /// <summary>Add what the user just asked to the conversation.</summary>
+    /// <remarks>
+    /// <b>The conversation comes forward the moment the question is asked</b>, not when the
+    /// first word of the answer arrives. It used to wait for that word, and on this
+    /// estate's endpoint the first word can be a minute away -- so for a minute nothing
+    /// seemed to happen but the console sliding open, which was reported as "no conversation
+    /// window opens when I ask a question". The question itself is on the page straight away,
+    /// with the answer arriving under it.
+    ///
+    /// When the workbench is open the conversation lives there, so it is the workbench that
+    /// comes forward -- here, once, rather than on every streamed word, which would pull
+    /// focus back each time somebody clicked away while the answer was being written.
+    /// </remarks>
     private void RecordPrompt(string prompt)
     {
         _conversation.Add(Said.User, prompt);
-        Redraw(streaming: false, reveal: false);
+        Redraw(streaming: false, reveal: true);
+
+        if (_vorzimmer?.IsVisible == true)
+            _vorzimmer.Reveal(WinRT.Interop.WindowNative.GetWindowHandle(this));
     }
 
     /// <summary>The answer as it streams in.</summary>
@@ -155,7 +170,6 @@ public sealed partial class PillWindow
     private void ClearConversation()
     {
         _conversation.Clear();
-        AnswerButton.IsEnabled = false;
         _answerWindow?.Hide();
         _vorzimmer?.ShowConversation(string.Empty, streaming: false);
     }
@@ -179,7 +193,6 @@ public sealed partial class PillWindow
             if (reveal)
                 _vorzimmer.ShowSection("conversation");
             _answerWindow?.Hide();
-            AnswerButton.IsEnabled = true;
             return;
         }
 
@@ -195,12 +208,12 @@ public sealed partial class PillWindow
 
         if (reveal)
             window.Reveal();
-
-        AnswerButton.IsEnabled = true;
     }
 
     /// <summary>
-    /// Bring the answer back, from the console header.
+    /// Bring the conversation window back -- for a scheduled run's alert, whose report is
+    /// written there. The speech bubble in the console header used to call this too; it
+    /// opens the list of conversations now, see <c>OnShowConversations</c>.
     ///
     /// The whole reason this exists: the answer moved into a window of its own and nothing
     /// could reopen it. Closing it made the document unreachable until the next reply, and

@@ -427,7 +427,7 @@ public sealed class UiText
 
         VorzimmerWindowTitle = "Shellvis Workbench",
         VorzimmerButtonTip = "Open the Shellvis workbench",
-        AnswerButtonTip = "Bring the answer back",
+        AnswerButtonTip = "Conversations",
         ConsoleShowTip = "Show console",
         ConsoleHideTip = "Hide console",
         MinimiseTip = "Minimise to the taskbar",
@@ -570,7 +570,7 @@ public sealed class UiText
 
         VorzimmerWindowTitle = "Shellvis-Arbeitsfenster",
         VorzimmerButtonTip = "Shellvis-Arbeitsfenster öffnen",
-        AnswerButtonTip = "Die Antwort zurückholen",
+        AnswerButtonTip = "Unterhaltungen",
         ConsoleShowTip = "Konsole zeigen",
         ConsoleHideTip = "Konsole verbergen",
         MinimiseTip = "In die Taskleiste legen",

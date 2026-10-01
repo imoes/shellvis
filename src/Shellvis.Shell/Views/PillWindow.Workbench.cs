@@ -45,6 +45,27 @@ public sealed partial class PillWindow
         _vorzimmer?.AppendActivity(line);
     }
 
+    /// <summary>
+    /// The speech bubble: the list of conversations, in the window that has one.
+    /// </summary>
+    /// <remarks>
+    /// It used to bring the current answer back, and that was reported as the button showing
+    /// "the last conversation instead of the window for choosing one". The workbench's
+    /// History view IS that window -- the list on one tab, the chosen conversation on the
+    /// next -- so the bubble opens it there. The current conversation is in the list too and
+    /// opens with one click, so nothing the button used to reach has become harder to reach.
+    /// </remarks>
+    private void OnShowConversations()
+    {
+        ShowVorzimmer();
+
+        if (_vorzimmer is null)
+            return;
+
+        _vorzimmer.ShowSessions(_session?.ListSessions(_vorzimmer.HistoryQuery) ?? []);
+        _vorzimmer.ShowSection("history");
+    }
+
     private async Task SubmitPromptAsync(string prompt)
     {
         if (string.IsNullOrWhiteSpace(prompt))
@@ -61,8 +82,12 @@ public sealed partial class PillWindow
 
         RecordPrompt(visible);
         AddRow(GlyphPerson, Oneline(visible), "asked");
-        if (!_consoleOpen)
-            ToggleConsole();
+
+        // The console is NOT opened here any more. It was, on every question, so asking
+        // anything slid the log open -- and with the conversation now coming forward the
+        // moment the question is asked, the log opening as well was the noise that was
+        // reported: "die Konsole wird immer automatisch aufgeklappt". The log is still
+        // written; it opens when somebody opens it.
 
         if (_session is null && _sessionTask is not null)
         {

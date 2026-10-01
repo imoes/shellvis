@@ -131,7 +131,7 @@ public sealed partial class PillWindow : Window
         };
 
         CloseButton.Click += (_, _) => Close();
-        AnswerButton.Click += (_, _) => OnShowAnswer();
+        AnswerButton.Click += (_, _) => OnShowConversations();
         VorzimmerButton.Click += (_, _) => ShowVorzimmer();
         ExpandButton.Click += (_, _) => Undock();
 
@@ -430,7 +430,6 @@ public sealed partial class PillWindow : Window
         switch (evt)
         {
             case AgentEvent.AssistantDelta e:
-                RevealConsoleIfDocked();
                 AppendDelta(e.Text);
                 break;
 
@@ -454,10 +453,11 @@ public sealed partial class PillWindow : Window
                 break;
 
             case AgentEvent.ToolStarted e:
-                // Docked, this is what makes output "pop up": a small bar on the taskbar
-                // that ran a command with no visible trace would be worse than the
-                // opacity this console exists to remove.
-                RevealConsoleIfDocked();
+                // The console is not opened for this any more, docked or not. It was, so
+                // that a small bar on the taskbar running a command left a visible trace --
+                // and the conversation now comes forward the moment a question is asked,
+                // so the trace is on screen already. Opening the log on top of it on every
+                // tool call was reported as the console always sliding open by itself.
                 StartToolCard(e.Tool, e.Preview);
                 break;
 

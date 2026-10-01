@@ -322,19 +322,6 @@ public sealed partial class PillWindow
     }
 
     /// <summary>
-    /// While docked, console output opens the panel by itself.
-    ///
-    /// The request was that output "pops up". A docked bar with a hidden console would
-    /// otherwise run commands with no visible trace, which is the opacity this whole
-    /// console exists to remove -- and worse when the window is deliberately small.
-    /// </summary>
-    private void RevealConsoleIfDocked()
-    {
-        if (_docked && !_consoleOpen)
-            ToggleConsole();
-    }
-
-    /// <summary>
     /// A dialog is about to appear, or has just gone. Make room and say so.
     /// </summary>
     /// <remarks>

@@ -1,5 +1,6 @@
 using Microsoft.Win32;
 
+using Shellvis.Core.Desk;
 using Shellvis.Core.Desktop;
 using Shellvis.Core.Office;
 
@@ -155,6 +156,63 @@ internal static class IntegrationProbe
             }
         }
 
+        // ------------------------------------------------------------------ coming back
+
+        var noon = new DateTime(2026, 10, 17, 13, 0, 0);
+        DeskSnapshot Desk(int unread, DateTime? next) => new(unread, 0, 0, 0, 0, 1, next, 0, unread, noon);
+
+        DeskSnapshot morning = Desk(10, null);
+        DeskSnapshot after = Desk(14, noon.AddMinutes(45));
+        var three = new DeskTally(3, 0, 0, 0);
+
+        Check("a short absence says nothing",
+            Shellvis.Core.Desk.ReturnBriefing.Compose(TimeSpan.FromMinutes(10), morning, after, three, true, noon) is null);
+
+        string? back = Shellvis.Core.Desk.ReturnBriefing.Compose(TimeSpan.FromMinutes(75), morning, after, three, true, noon);
+        Check("a long one names replies, arrivals and the next appointment",
+            back is not null
+            && back.Contains("3 Mails brauchen eine Antwort", StringComparison.Ordinal)
+            && back.Contains("4 neu", StringComparison.Ordinal)
+            && back.Contains("13:45", StringComparison.Ordinal),
+            back ?? "null");
+
+        Check("nothing to say is silence, not a greeting",
+            Shellvis.Core.Desk.ReturnBriefing.Compose(TimeSpan.FromHours(2), morning, Desk(10, noon.AddHours(5)), DeskTally.Nothing, true, noon) is null);
+
+        string? one = Shellvis.Core.Desk.ReturnBriefing.Compose(TimeSpan.FromHours(1), null, Desk(3, null), new DeskTally(1, 0, 0, 0), false, noon);
+        Check("one reply is singular, and an unknown before counts no arrivals",
+            one == "Welcome back: 1 mail needs a reply.", one ?? "null");
+
+        // ------------------------------------------------------------------ attention
+
+        var attention = new AttentionLog();
+        DateTime t = DateTime.Now;
+
+        attention.Note("OUTLOOK", "Posteingang - Outlook", t.AddHours(-9));
+        attention.Note("OUTLOOK", "AW: Drucker 2. OG - Nachricht (HTML)", t.AddMinutes(-20));
+        attention.Note("OUTLOOK", "AW: Drucker 2. OG - Nachricht (HTML)", t.AddMinutes(-19));
+        attention.Note("explorer", "Downloads", t.AddMinutes(-12));
+        attention.Note("WINWORD", "Angebot_4711.docx - Word", t.AddMinutes(-12).AddSeconds(1));
+        attention.Note("msedge", "Jira IMIT-4711 - Edge", t.AddMinutes(-5));
+
+        IReadOnlyList<GlanceSpan> spans = attention.Since(t.AddHours(-10), t);
+        Check("a glance older than eight hours is dropped", spans.All(s => !s.Glance.Title.StartsWith("Posteingang", StringComparison.Ordinal)));
+        Check("the same title twice in a row is one glance", spans.Count(s => s.Glance.Title.StartsWith("AW: Drucker", StringComparison.Ordinal)) == 1);
+
+        IReadOnlyList<GlanceSpan> last15 = attention.Since(t.AddMinutes(-15), t);
+        Check("the window in front when the span begins is included",
+            last15.Count > 0 && last15[0].Glance.Title.StartsWith("AW: Drucker", StringComparison.Ordinal),
+            last15.Count > 0 ? last15[0].Glance.Title : "empty");
+
+        string recent = new Shellvis.Core.Tools.AttentionTools(attention).Recent(30);
+        Check("the tool names the opened mail by its subject",
+            recent.Contains("AW: Drucker 2. OG", StringComparison.Ordinal) && recent.Contains("8 min", StringComparison.Ordinal), recent.Split('\n').Length + " lines");
+        Check("a window passed through for a second is left out",
+            !recent.Contains("Downloads", StringComparison.Ordinal));
+
+        Check("an empty log says how far back it reaches",
+            new Shellvis.Core.Tools.AttentionTools(new AttentionLog()).Recent(10).Contains("eight hours", StringComparison.Ordinal));
+
         // ------------------------------------------------------------------ the shell's side
 
         string? repo = FindRepositoryRoot();
@@ -213,5 +271,32 @@ internal static class IntegrationProbe
             here = here.Parent;
 
         return here?.FullName;
+    }
+}
+
+/// <summary>
+/// What Ctrl+Alt+Q would take from the program in front, after a pause to switch to it.
+/// Live and not gated: it needs a person's desktop with something selected on it.
+/// </summary>
+internal static class SelectionPeek
+{
+    public static int Run(int seconds)
+    {
+        Console.WriteLine($"selection: switch to a program and select something; reading in {seconds}s");
+        Thread.Sleep(TimeSpan.FromSeconds(seconds));
+
+        nint foreground = WindowInspector.Foreground()?.Handle ?? 0;
+        SelectionCapture? capture = SelectionReader.Read(foreground);
+
+        if (capture is null)
+        {
+            Console.WriteLine("  nothing: the program in front offers no text pattern.");
+            return 1;
+        }
+
+        Console.WriteLine($"  from {capture.Window.ProcessName}: {capture.Window.Title}");
+        Console.WriteLine($"  {(capture.Selected ? "selection" : "whole document")}, {capture.Text.Length} characters{(capture.Truncated ? ", clipped" : "")}");
+        Console.WriteLine("  " + capture.Text[..Math.Min(300, capture.Text.Length)].ReplaceLineEndings(" / "));
+        return 0;
     }
 }

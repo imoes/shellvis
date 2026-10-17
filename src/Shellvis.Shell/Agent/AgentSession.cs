@@ -299,6 +299,9 @@ internal sealed partial class AgentSession : IDisposable
         var memory = new MemoryStore();
         registry.RegisterFrom(new MemoryTools(memory));
 
+        // What was in front of the user, fed by the bar's foreground hook.
+        registry.RegisterFrom(new AttentionTools(Core.Desktop.AttentionLog.Shared));
+
         registry.RegisterFrom(new NoteTools(notes));
 
         // The remembered desk: every mail, ticket and task walked past in the last three

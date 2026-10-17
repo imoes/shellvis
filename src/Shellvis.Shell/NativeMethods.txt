@@ -77,3 +77,8 @@ APPBARDATA
 WM_ACTIVATE
 WM_WINDOWPOSCHANGED
 AllowSetForegroundWindow
+WTSRegisterSessionNotification
+WTSUnRegisterSessionNotification
+WM_WTSSESSION_CHANGE
+SetWinEventHook
+UnhookWinEvent

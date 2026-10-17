@@ -595,6 +595,8 @@ public sealed partial class PillWindow : Window
         RegisterHotkey();
         RegisterTopmostYield();
         RegisterMailboxWatch();
+        RegisterSessionWatch();
+        RegisterAttentionWatch();
 
         // Warmed here rather than on the first key press. The model takes about a second and a
         // half to load, and paying that at the moment someone holds the space bar means the
@@ -624,6 +626,8 @@ public sealed partial class PillWindow : Window
                 PromptBox.Focus(FocusState.Programmatic);
             else if (id == HotkeyListener.DictateId)
                 ToggleDictation();
+            else if (id == HotkeyListener.AskId)
+                AskAboutForeground();
         };
 
         const uint vkSpace = 0x20;
@@ -677,6 +681,18 @@ public sealed partial class PillWindow : Window
                     + "taken by another application and the space bar could not be claimed.",
             },
             dictate || hold ? "voice" : "unavailable");
+
+        // Ask about the selection in any program. Its own registration, for the same reason
+        // as dictation: a taken Ctrl+Alt+Q must not cost the other two.
+        const uint vkQ = 0x51;
+        bool ask = _hotkey.TryRegister(HotkeyListener.AskId, ctrlAlt, vkQ);
+
+        AddRow(
+            ask ? GlyphTool : GlyphWarning,
+            ask
+                ? "Ctrl+Alt+Q asks about the selection in whatever program is in front."
+                : "Ctrl+Alt+Q is taken by another application; asking about a selection needs the workbench.",
+            ask ? "hotkey" : "unavailable");
 
         RegisterTrayIcon();
     }
@@ -775,6 +791,8 @@ public sealed partial class PillWindow : Window
 
         Safe(() => _dictation?.Dispose());
         Safe(() => _hotkey?.Dispose());
+        Safe(() => _sessionWatch?.Dispose());
+        Safe(() => _attentionWatch?.Dispose());
         Safe(() => _spaceHook?.Dispose());
         Safe(() => _session?.Dispose());
 

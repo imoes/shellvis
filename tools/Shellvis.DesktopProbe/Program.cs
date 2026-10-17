@@ -64,6 +64,7 @@ internal static class Program
 
                 // Explorer's menu and the shellvis: scheme, against a scratch registry key.
                 "integration" => IntegrationProbe.Run(),
+                "selection" => SelectionPeek.Run(args.Length > 1 && int.TryParse(args[1], out int wait) ? wait : 3),
                 "taskbar" => TaskbarProbe.Run(),
                 "notify" => NotifyProbe.Run(),
                 "schedule" => ScheduleProbe.Run(),

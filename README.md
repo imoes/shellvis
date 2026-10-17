@@ -191,6 +191,10 @@ links in its answers also open from a browser or a note. Both are per user, need
 administrator, and are removed on uninstall. On Windows 11 the entries sit under "Show more
 options".
 
+**What was in front of you.** Shellvis notes which window was in front and for how long, so
+"the mail I just had open" can be answered through the `attention_recent` tool. Window titles
+only, kept in memory for eight hours, never written to disk.
+
 Eighty-seven of them on a machine with no Home Assistant, no privileged service and no
 Thunderbird. Home Assistant appears only when a token is configured, and the broker tools
 only when the service is actually listening. A tool that is offered is a promise; one that fails on first
@@ -439,6 +443,8 @@ process is a privilege-escalation service with a friendly name.
 |---|---|
 | **Ctrl+Alt+Space** | bring the bar to the front and focus the input |
 | **Ctrl+Alt+D** | start and stop dictation (a toggle, works from anywhere) |
+| **Ctrl+Alt+Q** | ask about the selection in whatever program is in front. With nothing selected, the focused document's text is taken. It lands on the workbench as the next question's context |
+| Unlocking after 30 minutes or more | one line on what needs a reply, what arrived and the next appointment, when there is something to say |
 | **Hold Space** | push-to-talk while Shellvis has focus: hold to listen, release to transcribe. A tap still types a space — what tells them apart is holding it past 400 ms |
 | Tray icon | left click shows, right click opens the menu |
 | Chevron on the bar | open and close the console |

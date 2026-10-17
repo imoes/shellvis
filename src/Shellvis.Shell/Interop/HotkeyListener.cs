@@ -30,6 +30,9 @@ internal sealed class HotkeyListener : IDisposable
     /// <summary>The hotkey that starts and stops dictation.</summary>
     public const int DictateId = 0xC0DF;
 
+    /// <summary>The hotkey that asks about the selection in the program in front.</summary>
+    public const int AskId = 0xC0E0;
+
     /// <summary>Subclass identity, so the right subclass is removed on teardown.</summary>
     private static readonly nuint SubclassId = 0xC0DE;
 

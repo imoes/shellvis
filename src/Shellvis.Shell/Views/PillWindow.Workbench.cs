@@ -27,7 +27,7 @@ public sealed partial class PillWindow
     private string DocumentError(Exception ex) => ex switch
     {
         FileNotFoundException => L("The selected document is no longer available.", "Das ausgewählte Dokument ist nicht mehr verfügbar."),
-        NotSupportedException => L("Choose a DOCX, XLSX or PPTX file.", "Wähle eine DOCX-, XLSX- oder PPTX-Datei."),
+        NotSupportedException => L("Choose a DOCX, XLSX, PPTX or text file.", "Wähle eine DOCX-, XLSX-, PPTX- oder Textdatei."),
         InvalidDataException when ex.Message.Contains("larger", StringComparison.OrdinalIgnoreCase) =>
             L("The document is larger than 50 MB.", "Das Dokument ist größer als 50 MB."),
         InvalidDataException => L("The document contains no readable text.", "Das Dokument enthält keinen lesbaren Text."),
@@ -133,6 +133,8 @@ public sealed partial class PillWindow
             picker.FileTypeFilter.Add(".docx");
             picker.FileTypeFilter.Add(".xlsx");
             picker.FileTypeFilter.Add(".pptx");
+            foreach (string extension in DocumentContextReader.TextExtensions)
+                picker.FileTypeFilter.Add(extension);
             WinRT.Interop.InitializeWithWindow.Initialize(
                 picker,
                 WinRT.Interop.WindowNative.GetWindowHandle(

@@ -103,6 +103,9 @@ auth:
   headerName: X-Api-Key  # for scheme: header
 ```
 
+`scheme: bearer` with a `userVar` sends `Bearer <user> <secret>`, the form Checkmk's
+automation users log in with. Without a `userVar` it is an ordinary bearer token.
+
 Every field here holds a **name**, never a value. The secret is resolved as an environment
 variable first and from the DPAPI secret store second — so exporting it for a whole shell
 keeps working, and a stored value never silently overrides a variable somebody can see.
@@ -163,8 +166,37 @@ is what lets a manifest declare a structured field:
   default: '{"key":"IMIT"}'
 ```
 
-Everything is a string in the schema the model sees. A REST call sends text either way, and
-a declared type would be one more thing that can disagree with the API.
+A body value is a string unless the parameter says otherwise. Some APIs validate their body
+against a schema and refuse `"false"` where they want `false`; Checkmk is one. For those,
+declare the type:
+
+```yaml
+- name: force_foreign_changes
+  in: body
+  type: boolean          # string (default) | boolean | integer | list
+  default: "false"
+- name: sites
+  in: body
+  type: list             # comma-separated text, sent as an array of strings
+```
+
+A boolean or an integer is offered to the model with that type. A list is offered as text,
+because every model writes "a, b" reliably and JSON arrays less so. A value that does not fit
+its type is sent as text, and the server says why it refused it.
+
+### Guarded writes
+
+```yaml
+- name: thing_activate
+  method: POST
+  path: /api/activate
+  etagFrom: /api/pending
+```
+
+`etagFrom` reads that path with `GET` just before the call and sends its `ETag` as
+`If-Match`. Use it for an API with optimistic locking: the write then applies to exactly the
+state that was read, and the server refuses it if somebody changed something in between. A
+server that sends no `ETag` gets no write; the tool says so instead.
 
 ### Results
 

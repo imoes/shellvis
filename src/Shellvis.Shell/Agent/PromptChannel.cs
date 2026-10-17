@@ -8,7 +8,25 @@ namespace Shellvis.Shell.Agent;
 /// <summary>What a caller asked a running Shellvis to do.</summary>
 /// <param name="Job">The scheduled job to run, or null.</param>
 /// <param name="Prompt">A prompt to ask as an ordinary turn, or null.</param>
-public sealed record Errand(string? Job, string? Prompt);
+/// <param name="File">A file chosen in Explorer, or null.</param>
+/// <param name="Link">A <c>shellvis:</c> address that was opened from outside, or null.</param>
+/// <param name="Sort">For a file: work out what it belongs to, rather than wait for a question.</param>
+public sealed record Errand(
+    string? Job,
+    string? Prompt,
+    string? File = null,
+    string? Link = null,
+    bool Sort = false)
+{
+    /// <summary>
+    /// Whether a person just clicked something to start this.
+    ///
+    /// The difference decides whether a window may come forward. A prompt from a timer must
+    /// not take the screen; a file somebody right-clicked, or a link they followed, is the
+    /// screen asking for Shellvis, and answering quietly would look like nothing happened.
+    /// </summary>
+    public bool FromAClick => File is { Length: > 0 } || Link is { Length: > 0 };
+}
 
 /// <summary>
 /// Handing work to the Shellvis that is already running.
@@ -66,12 +84,17 @@ internal static class PromptChannel
 
             using var writer = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
 
+            // This process was started by the click, so it holds the right to bring a window
+            // forward, and the running instance does not. Handing that right over is what
+            // lets the workbench come to the front instead of flashing in the taskbar.
+            if (errand.FromAClick)
+                Windows.Win32.PInvoke.AllowSetForegroundWindow(unchecked((uint)-1));
+
             // One line, one errand. A length-prefixed protocol would be more rigorous and is
-            // not worth it: the only two forms are a job name and a prompt, and a newline is
-            // enough to separate a verb from the rest of the line.
-            writer.WriteLine(errand.Job is { Length: > 0 } job
-                ? "job " + job.ReplaceLineEndings(" ")
-                : "prompt " + (errand.Prompt ?? string.Empty).ReplaceLineEndings(" "));
+            // not worth it: each form is a verb and one value, and a newline is enough to
+            // separate a verb from the rest of the line. A path holds no newline, and a link
+            // is flattened like a prompt.
+            writer.WriteLine(Format(errand));
 
             return true;
         }
@@ -119,18 +142,39 @@ internal static class PromptChannel
         }
     }
 
-    private static Errand? Parse(string? line)
+    /// <summary>The one line an errand travels as.</summary>
+    internal static string Format(Errand errand) => errand switch
+    {
+        { Job: { Length: > 0 } job } => "job " + job.ReplaceLineEndings(" "),
+        { Link: { Length: > 0 } link } => "open " + link.ReplaceLineEndings(string.Empty),
+        { File: { Length: > 0 } file, Sort: true } => "sort " + file,
+        { File: { Length: > 0 } file } => "ask " + file,
+        _ => "prompt " + (errand.Prompt ?? string.Empty).ReplaceLineEndings(" "),
+    };
+
+    internal static Errand? Parse(string? line)
     {
         if (string.IsNullOrWhiteSpace(line))
             return null;
 
         string text = line.Trim();
 
+        static string After(string text, int length) => text[length..].Trim();
+
         if (text.StartsWith("job ", StringComparison.OrdinalIgnoreCase))
-            return new Errand(text[4..].Trim(), null);
+            return new Errand(After(text, 4), null);
 
         if (text.StartsWith("prompt ", StringComparison.OrdinalIgnoreCase))
-            return new Errand(null, text[7..].Trim());
+            return new Errand(null, After(text, 7));
+
+        if (text.StartsWith("open ", StringComparison.OrdinalIgnoreCase))
+            return new Errand(null, null, Link: After(text, 5));
+
+        if (text.StartsWith("ask ", StringComparison.OrdinalIgnoreCase))
+            return new Errand(null, null, File: After(text, 4));
+
+        if (text.StartsWith("sort ", StringComparison.OrdinalIgnoreCase))
+            return new Errand(null, null, File: After(text, 5), Sort: true);
 
         return null;
     }

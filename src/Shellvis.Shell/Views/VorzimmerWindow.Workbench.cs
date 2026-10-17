@@ -94,8 +94,8 @@ public sealed partial class VorzimmerWindow
     }
 
     private void ResetDocumentHint() => DocumentsHint.Text = German
-        ? "Wähle ein offenes Office-Dokument oder eine DOCX-, XLSX- oder PPTX-Datei. Der Inhalt wird erst mit deiner nächsten Frage verwendet."
-        : "Choose an open Office document or a DOCX, XLSX or PPTX file. Its contents are used only with your next question.";
+        ? "Wähle ein offenes Office-Dokument oder eine DOCX-, XLSX-, PPTX- oder Textdatei. Der Inhalt wird erst mit deiner nächsten Frage verwendet."
+        : "Choose an open Office document or a DOCX, XLSX, PPTX or text file. Its contents are used only with your next question.";
 
     public void ShowSection(string section)
     {
@@ -120,6 +120,9 @@ public sealed partial class VorzimmerWindow
         ShowSection("conversation");
         PromptRequested?.Invoke(prompt);
     }
+
+    /// <summary>Put the cursor in the question box, keeping whatever is typed there.</summary>
+    public void FocusPrompt() => Prepare(WorkbenchPrompt.Text);
 
     private void Prepare(string prompt)
     {

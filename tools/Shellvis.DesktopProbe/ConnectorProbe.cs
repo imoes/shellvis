@@ -45,6 +45,7 @@ internal static class ConnectorProbe
             failures += Shaping();
             failures += Shipped();
             failures += await WireAsync().ConfigureAwait(false);
+            failures += await CheckmkWireAsync().ConfigureAwait(false);
         }
         finally
         {
@@ -676,6 +677,116 @@ internal static class ConnectorProbe
 
     // ---------------------------------------------------------------- helpers
 
+    /// <summary>
+    /// Checkmk on the wire: its login form, the ETag guard on activation, and a body whose
+    /// boolean is a boolean. A real Checkmk refuses each of the three when it is wrong.
+    /// </summary>
+    private static async Task<int> CheckmkWireAsync()
+    {
+        Console.WriteLine("-- Checkmk on the wire --");
+        int failures = 0;
+
+        string? shipped = FindShippedConnectors();
+        string? manifest = shipped is null ? null : Path.Combine(shipped, "checkmk", "connector.yaml");
+
+        if (manifest is null || !File.Exists(manifest))
+        {
+            Console.WriteLine("   (the shipped Checkmk manifest was not found; skipped)");
+            Console.WriteLine();
+            return 0;
+        }
+
+        using var server = new StubJira();
+        server.Start();
+
+        Environment.SetEnvironmentVariable("CHECKMK_URL", server.BaseUrl + "/probesite");
+        Environment.SetEnvironmentVariable("CHECKMK_USER", "automation");
+        Environment.SetEnvironmentVariable("CHECKMK_SECRET", "probe-secret");
+
+        try
+        {
+            var registry = new ToolRegistry();
+            ConnectorStatus status = new ConnectorLoader(registry).Load(manifest);
+
+            failures += Check("the Checkmk connector loads", status.Ready, status.Detail);
+
+            if (!status.Ready)
+            {
+                Console.WriteLine();
+                return failures;
+            }
+
+            string pending = await Invoke(registry, "checkmk_pending_changes", new { });
+
+            failures += Check("the API root is added to the site address",
+                server.LastPath == "/probesite/check_mk/api/1.0/domain-types/activation_run/collections/pending_changes",
+                server.LastPath);
+
+            failures += Check("the login is Checkmk's bearer form, user then secret",
+                server.LastAuthorization == "Bearer automation probe-secret",
+                server.LastAuthorization);
+
+            failures += Check("a pending change is listed with who made it",
+                pending.Contains("cmkadmin", StringComparison.Ordinal) && pending.Contains("web01", StringComparison.Ordinal),
+                pending);
+
+            string activated = await Invoke(registry, "checkmk_activate_changes", new { sites = "probesite, second" });
+
+            failures += Check("activation is sent to the invoke action",
+                server.LastPath?.EndsWith("/activate-changes/invoke", StringComparison.Ordinal) == true,
+                server.LastPath);
+
+            failures += Check("activation carries the ETag of the pending changes",
+                server.LastIfMatch == "\"probe-etag-1\"",
+                server.LastIfMatch);
+
+            using (JsonDocument body = JsonDocument.Parse(server.LastBody ?? "{}"))
+            {
+                JsonElement root = body.RootElement;
+
+                failures += Check("redirect goes out as a boolean, not as text",
+                    root.TryGetProperty("redirect", out JsonElement redirect) && redirect.ValueKind == JsonValueKind.False,
+                    server.LastBody);
+
+                failures += Check("foreign changes stay off unless asked for",
+                    root.TryGetProperty("force_foreign_changes", out JsonElement foreign) && foreign.ValueKind == JsonValueKind.False,
+                    server.LastBody);
+
+                failures += Check("the sites go out as a list",
+                    root.TryGetProperty("sites", out JsonElement sites)
+                    && sites.ValueKind == JsonValueKind.Array
+                    && sites.GetArrayLength() == 2
+                    && sites[1].GetString() == "second",
+                    server.LastBody);
+            }
+
+            failures += Check("the answer names the activation",
+                activated.Contains("probe-activation", StringComparison.Ordinal),
+                activated);
+
+            failures += Check("activation is a write that needs approval",
+                registry.Find("checkmk_activate_changes")?.SideEffect == SideEffect.Mutating);
+
+            server.OmitEtag = true;
+            string unguarded = await Invoke(registry, "checkmk_activate_changes", new { });
+            server.OmitEtag = false;
+
+            failures += Check("without an ETag the activation is not sent",
+                unguarded.StartsWith("error:", StringComparison.Ordinal)
+                && server.LastPath?.EndsWith("/pending_changes", StringComparison.Ordinal) == true,
+                unguarded);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CHECKMK_URL", null);
+            Environment.SetEnvironmentVariable("CHECKMK_USER", null);
+            Environment.SetEnvironmentVariable("CHECKMK_SECRET", null);
+        }
+
+        Console.WriteLine();
+        return failures;
+    }
+
     private static async Task<string> Invoke(ToolRegistry registry, string tool, object arguments)
     {
         using JsonDocument document = JsonDocument.Parse(JsonSerializer.Serialize(arguments));
@@ -785,6 +896,10 @@ internal sealed class StubJira : IDisposable
 
     public string? LastExperimental { get; private set; }
 
+    public string? LastIfMatch { get; private set; }
+
+    public bool OmitEtag { get; set; }
+
     public HttpStatusCode? NextStatus { get; set; }
 
     public string? NextBody { get; set; }
@@ -827,6 +942,7 @@ internal sealed class StubJira : IDisposable
         LastQuery = context.Request.Url?.Query;
         LastAuthorization = context.Request.Headers["Authorization"];
         LastExperimental = context.Request.Headers["X-ExperimentalApi"];
+        LastIfMatch = context.Request.Headers["If-Match"];
 
         if (context.Request.HttpMethod != "GET")
         {
@@ -853,6 +969,21 @@ internal sealed class StubJira : IDisposable
         }
 
         string path = LastPath ?? string.Empty;
+
+        if (path.EndsWith("/pending_changes", StringComparison.Ordinal))
+        {
+            if (!OmitEtag)
+                context.Response.Headers["ETag"] = "\"probe-etag-1\"";
+
+            await WriteAsync(context, PendingChanges).ConfigureAwait(false);
+            return;
+        }
+
+        if (path.EndsWith("/activate-changes/invoke", StringComparison.Ordinal))
+        {
+            await WriteAsync(context, Activation).ConfigureAwait(false);
+            return;
+        }
 
         string json =
             path.EndsWith("/search", StringComparison.Ordinal) ? Search
@@ -887,6 +1018,16 @@ internal sealed class StubJira : IDisposable
          "priority":{"name":"Normal"},"issuetype":{"name":"Serviceanfrage"},
          "reporter":{"displayName":"Someone"},"assignee":{"displayName":"Probe User"},
          "created":"2026-08-01","duedate":"2026-09-01","description":"a description"}}
+        """;
+
+    private const string PendingChanges = """
+        {"value":[
+          {"id":"c1","user_id":"cmkadmin","action_name":"create-host","text":"Created new host web01.","time":"2026-10-17T08:12:00"}
+        ]}
+        """;
+
+    private const string Activation = """
+        {"id":"probe-activation","title":"Activation status: In progress.","extensions":{"is_running":true,"sites":["probesite"]}}
         """;
 
     private const string Queues = """

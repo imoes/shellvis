@@ -61,6 +61,9 @@ internal static class Program
                 // reaching the network. Both failures are silent, which is why they are
                 // here rather than left to somebody pressing the button.
                 "page" => PageProbe.Run(),
+
+                // Explorer's menu and the shellvis: scheme, against a scratch registry key.
+                "integration" => IntegrationProbe.Run(),
                 "taskbar" => TaskbarProbe.Run(),
                 "notify" => NotifyProbe.Run(),
                 "schedule" => ScheduleProbe.Run(),

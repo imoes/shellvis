@@ -126,6 +126,24 @@ public sealed class HttpConnector : IDisposable
                 break;
             }
 
+            case AuthScheme.Bearer when auth.UserVar is { Length: > 0 }:
+            {
+                // Checkmk's form: "Bearer <automation user> <secret>". A bearer token with a
+                // user in front is not standard, which is why it is only built when the
+                // manifest names a user variable; a plain bearer stays exactly as it was.
+                string user = Resolve(auth.UserVar) ?? string.Empty;
+
+                if (user.Length == 0)
+                {
+                    reason = $"{manifest.Name}: this login needs a user; set {auth.UserVar}.";
+                    http.Dispose();
+                    return null;
+                }
+
+                http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Bearer {user} {secret}");
+                break;
+            }
+
             case AuthScheme.Bearer:
                 http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secret);
                 break;
@@ -183,7 +201,7 @@ public sealed class HttpConnector : IDisposable
                     break;
 
                 case ParameterPlace.Body:
-                    Place(body, parameter.Send ?? parameter.Name, value);
+                    Place(body, parameter.Send ?? parameter.Name, value, parameter.Type);
                     break;
 
                 default:
@@ -217,6 +235,27 @@ public sealed class HttpConnector : IDisposable
 
         foreach ((string name, string value) in tool.Headers)
             request.Headers.TryAddWithoutValidation(name, Expand(value));
+
+        if (tool.EtagFrom is { Length: > 0 } etagPath)
+        {
+            using HttpResponseMessage state = await _http
+                .GetAsync(etagPath.TrimStart('/'), cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!state.IsSuccessStatusCode)
+            {
+                string stateText = await state.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                return Failure(state, stateText);
+            }
+
+            if (state.Headers.ETag is not { } etag)
+            {
+                return $"error: {_manifest.Name} did not say which state {etagPath} is in "
+                    + "(no ETag), so the guarded call was not sent.";
+            }
+
+            request.Headers.IfMatch.Add(etag);
+        }
 
         using HttpResponseMessage response = await _http
             .SendAsync(request, cancellationToken)
@@ -373,8 +412,9 @@ public sealed class HttpConnector : IDisposable
     }
 
     /// <summary>Put a value into the body, honouring a dotted target such as fields.summary.</summary>
-    private static void Place(JsonObject body, string path, string value)
+    private static void Place(JsonObject body, string path, string value, string? type = null)
     {
+        JsonNode? typed = Typed(value, type);
         string[] steps = path.Split('.', StringSplitOptions.RemoveEmptyEntries);
         JsonObject current = body;
 
@@ -396,6 +436,12 @@ public sealed class HttpConnector : IDisposable
         // objects -- without the manifest needing a type system.
         string last = steps[^1];
 
+        if (typed is not null)
+        {
+            current[last] = typed;
+            return;
+        }
+
         if (value.StartsWith('{') || value.StartsWith('['))
         {
             try
@@ -411,6 +457,52 @@ public sealed class HttpConnector : IDisposable
         }
 
         current[last] = value;
+    }
+
+    /// <summary>
+    /// A body value of a declared type, or null for an ordinary string.
+    ///
+    /// A value that does not fit its type stays a string, and the server says why it
+    /// refused it: guessing "yes" into true would send a decision nobody made.
+    /// </summary>
+    private static JsonNode? Typed(string value, string? type)
+    {
+        switch (type?.ToLowerInvariant())
+        {
+            case "boolean" when bool.TryParse(value.Trim(), out bool flag):
+                return JsonValue.Create(flag);
+
+            case "integer" when long.TryParse(value.Trim(), out long number):
+                return JsonValue.Create(number);
+
+            case "list":
+            {
+                string trimmed = value.Trim();
+
+                if (trimmed.StartsWith('['))
+                {
+                    try
+                    {
+                        if (JsonNode.Parse(trimmed) is JsonArray given)
+                            return given;
+                    }
+                    catch (JsonException)
+                    {
+                        // Not JSON; read it as the comma-separated form below.
+                    }
+                }
+
+                var items = new JsonArray();
+
+                foreach (string item in trimmed.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    items.Add(item);
+
+                return items;
+            }
+
+            default:
+                return null;
+        }
     }
 
     /// <summary>Environment variable first, then the secret store.</summary>

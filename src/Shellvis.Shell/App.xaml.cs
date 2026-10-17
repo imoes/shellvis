@@ -42,6 +42,17 @@ public partial class App : Application
                 return;
             }
 
+            // A click with no Shellvis running starts Shellvis. A right-clicked file or a
+            // followed link wants the workbench, and a headless run that answers into the
+            // store and exits would look, to the person who clicked, like nothing at all.
+            if (errand.FromAClick)
+            {
+                Pill = new PillWindow();
+                Pill.Activate();
+                Pill.TakeErrand(errand);
+                return;
+            }
+
             CarryOutAloneAndExit(errand);
             return;
         }

@@ -470,7 +470,14 @@ internal sealed class ConnectorFunction(HttpConnector connector, ConnectorTool t
 
             properties[parameter.Name] = new Dictionary<string, object>(StringComparer.Ordinal)
             {
-                ["type"] = "string",
+                // Only the two types JSON Schema shares with the manifest are passed on. A
+                // list is offered as text, comma-separated, which every model writes reliably.
+                ["type"] = parameter.Type?.ToLowerInvariant() switch
+                {
+                    "boolean" => "boolean",
+                    "integer" => "integer",
+                    _ => "string",
+                },
                 ["description"] = parameter.Description ?? parameter.Name,
             };
 

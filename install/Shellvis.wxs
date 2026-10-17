@@ -486,6 +486,17 @@
                        Type="string"
                        Value="&quot;[INSTALLFOLDER]Shellvis.Shell.exe&quot;"
                        KeyPath="yes" />
+
+        <!--
+          The Explorer menu entries and the shellvis: scheme. The application writes them
+          itself on first start, in the user's language, so a build that was never installed
+          has them too; the installer only takes them away again, because an uninstall that
+          leaves "Ask Shellvis" on every file pointing at a deleted executable is a mess
+          somebody has to clean out of the registry by hand.
+        -->
+        <RemoveRegistryKey Root="HKCU" Key="Software\Classes\shellvis" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKCU" Key="Software\Classes\*\shell\Shellvis.Ask" Action="removeOnUninstall" />
+        <RemoveRegistryKey Root="HKCU" Key="Software\Classes\*\shell\Shellvis.Sort" Action="removeOnUninstall" />
       </Component>
     </ComponentGroup>
 

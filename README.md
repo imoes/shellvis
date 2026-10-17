@@ -181,8 +181,15 @@ Azure also needs `voice.azureRegion`, because its speech endpoint is per-region.
 holding a `connector.yaml` that declares a REST API — endpoints, arguments, and how an
 answer should read. Drop it in `%USERPROFILE%\.shellvis\connectors` and its tools are there
 on the next start. Credentials are named, never held; only a `GET` can run without asking;
-and no package can shadow a built-in tool. Three ship with Shellvis: a self-hosted Jira,
-its service desk, and Confluence. **[How to build one →](docs/connectors.md)**
+and no package can shadow a built-in tool. Four ship with Shellvis: a self-hosted Jira,
+its service desk, Confluence, and Checkmk, which can also activate pending changes.
+**[How to build one →](docs/connectors.md)**
+
+**Explorer and links.** On first start Shellvis adds "Ask Shellvis" and "File with
+Shellvis" to the context menu of every file, and registers the `shellvis:` scheme so the mail
+links in its answers also open from a browser or a note. Both are per user, need no
+administrator, and are removed on uninstall. On Windows 11 the entries sit under "Show more
+options".
 
 Eighty-seven of them on a machine with no Home Assistant, no privileged service and no
 Thunderbird. Home Assistant appears only when a token is configured, and the broker tools

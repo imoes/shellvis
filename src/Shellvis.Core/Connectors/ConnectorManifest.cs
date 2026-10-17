@@ -101,6 +101,17 @@ public sealed class ConnectorParameter
     /// Dotted for a body field: <c>fields.summary</c>.
     /// </summary>
     public string? Send { get; set; }
+
+    /// <summary>
+    /// What a body value is: string (the default), boolean, integer or list.
+    ///
+    /// <b>Why a type at all.</b> Every value arrives as text, and Jira never minded: its body
+    /// fields are strings or JSON objects. Checkmk validates its body against a schema and
+    /// refuses <c>"redirect": "false"</c> outright, because a string is not a boolean. A
+    /// list is comma-separated text, sent as an array of strings, so the model can name two
+    /// sites without writing JSON.
+    /// </summary>
+    public string? Type { get; set; }
 }
 
 /// <summary>
@@ -175,6 +186,16 @@ public sealed class ConnectorTool
 
     /// <summary>Extra headers for this call alone. <c>${VAR}</c> is expanded.</summary>
     public Dictionary<string, string> Headers { get; set; } = [];
+
+    /// <summary>
+    /// A path read with GET just before this call, whose ETag goes out as If-Match.
+    ///
+    /// <b>Why.</b> Some writes are guarded by optimistic locking: Checkmk activates pending
+    /// changes only when told which state of them it is activating. A fixed "*" would skip
+    /// the guard on servers that allow it and fail on the ones that do not; reading the
+    /// current ETag works on both, and is what the guard is for.
+    /// </summary>
+    public string? EtagFrom { get; set; }
 
     public ConnectorResult? Result { get; set; }
 }
@@ -303,6 +324,16 @@ public sealed class ConnectorManifest
                 return $"tool '{tool.Name}' uses method '{tool.Method}', which is not one of "
                     + string.Join(", ", KnownMethods) + ".";
             }
+
+            foreach (ConnectorParameter parameter in tool.Params)
+            {
+                if (parameter.Type is { Length: > 0 } type
+                    && !KnownTypes.Contains(type, StringComparer.OrdinalIgnoreCase))
+                {
+                    return $"parameter '{parameter.Name}' of '{tool.Name}' has type '{type}', "
+                        + "which is not one of " + string.Join(", ", KnownTypes) + ".";
+                }
+            }
         }
 
         return null;
@@ -314,4 +345,6 @@ public sealed class ConnectorManifest
         && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.');
 
     private static readonly string[] KnownMethods = ["GET", "POST", "PUT", "PATCH", "DELETE"];
+
+    private static readonly string[] KnownTypes = ["string", "boolean", "integer", "list"];
 }

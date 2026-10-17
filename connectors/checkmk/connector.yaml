@@ -1,0 +1,151 @@
+# Checkmk, as tools.
+#
+# Written for the Checkmk REST API (version 2.2 and later), reached through an automation
+# user. Nothing here is personal to one installation. Set it up like this:
+#
+#   setx CHECKMK_URL  https://monitoring.example.com/mysite
+#   setx CHECKMK_USER automation
+#   ... and store the automation secret under the name "CHECKMK_SECRET" in the Shellvis
+#       secret store, or set a CHECKMK_SECRET environment variable.
+#
+# CHECKMK_URL is the address of the SITE, the part before /check_mk/. The API root is
+# added here, so the same value works in a browser.
+#
+# Why "activate changes" is a tool of its own: in Checkmk nothing that was changed in the
+# setup takes effect until it is activated. A host added, a rule edited, a service
+# rediscovered -- all of it waits in "pending changes" until someone activates it. A
+# connector that can change things but not activate them leaves every change half done.
+
+name: checkmk
+kind: http
+title: Checkmk
+description: >
+  Read what Checkmk is alarming about, see which setup changes are pending, and activate
+  them so they take effect.
+
+baseUrl: ${CHECKMK_URL}/check_mk/api/1.0
+
+auth:
+  scheme: bearer
+  userVar: CHECKMK_USER
+  secret: CHECKMK_SECRET
+
+tools:
+  # ---------------------------------------------------------------- reading
+
+  - name: checkmk_pending_changes
+    method: GET
+    path: /domain-types/activation_run/collections/pending_changes
+    effect: read
+    description: >
+      The setup changes that are made but NOT yet active: who changed what, and when. Call
+      this before checkmk_activate_changes and tell the user what will be activated --
+      activation applies everybody's pending changes on the chosen sites, not only the
+      user's own.
+    result:
+      items: value
+      line: "{time}  {user_id}  {action_name}: {text|200}"
+      empty: >
+        no changes are pending. Everything in the setup is already active; there is
+        nothing to activate.
+
+  - name: checkmk_activation_status
+    method: GET
+    path: /objects/activation_run/{activation_id}
+    effect: read
+    preview: activation_id
+    description: >
+      Whether an activation started by checkmk_activate_changes has finished, by its id.
+    params:
+      - name: activation_id
+        in: path
+        required: true
+        description: The id checkmk_activate_changes returned.
+    result:
+      line: |
+        activation {id}: {title}
+        still running: {extensions.is_running}
+        sites: {extensions.sites}
+
+  - name: checkmk_service_problems
+    method: GET
+    path: /domain-types/service/collections/all
+    effect: read
+    description: >
+      The services that are not OK right now, across all hosts. State 1 is WARN, 2 is CRIT,
+      3 is UNKNOWN. "acknowledged: 1" means somebody has already taken it on. Lead with the
+      unacknowledged CRIT ones.
+    params:
+      - name: query
+        in: query
+        default: '{"op":"!=","left":"state","right":"0"}'
+        description: >
+          A Livestatus filter as JSON. The default lists everything not OK. For one host:
+          {"op":"and","expr":[{"op":"=","left":"host_name","right":"web01"},{"op":"!=","left":"state","right":"0"}]}
+      - { name: column_host, in: query, send: columns, fixed: true, default: host_name }
+      - { name: column_service, in: query, send: columns, fixed: true, default: description }
+      - { name: column_state, in: query, send: columns, fixed: true, default: state }
+      - { name: column_output, in: query, send: columns, fixed: true, default: plugin_output }
+      - { name: column_ack, in: query, send: columns, fixed: true, default: acknowledged }
+    result:
+      items: value
+      line: "{extensions.host_name} / {extensions.description}  state {extensions.state}  acknowledged: {extensions.acknowledged}  {extensions.plugin_output|200}"
+      empty: every service is OK. Nothing is alarming.
+
+  - name: checkmk_host_problems
+    method: GET
+    path: /domain-types/host/collections/all
+    effect: read
+    description: >
+      The hosts that are not UP right now. State 1 is DOWN, 2 is UNREACHABLE.
+    params:
+      - name: query
+        in: query
+        default: '{"op":"!=","left":"state","right":"0"}'
+        description: A Livestatus filter as JSON. The default lists every host that is not UP.
+      - { name: column_name, in: query, send: columns, fixed: true, default: name }
+      - { name: column_state, in: query, send: columns, fixed: true, default: state }
+      - { name: column_output, in: query, send: columns, fixed: true, default: plugin_output }
+      - { name: column_ack, in: query, send: columns, fixed: true, default: acknowledged }
+    result:
+      items: value
+      line: "{extensions.name}  state {extensions.state}  acknowledged: {extensions.acknowledged}  {extensions.plugin_output|200}"
+      empty: every host is UP.
+
+  # ---------------------------------------------------------------- changing
+
+  - name: checkmk_activate_changes
+    method: POST
+    path: /domain-types/activation_run/actions/activate-changes/invoke
+    effect: write
+    preview: sites
+    # Guarded by the ETag of the pending changes, read just before the call: Checkmk then
+    # activates exactly the state that was looked at, and refuses if someone changed
+    # something in between.
+    etagFrom: /domain-types/activation_run/collections/pending_changes
+    description: >
+      Activate the pending setup changes, so they take effect in the monitoring. Without
+      sites, every site with pending changes is activated. Returns an activation id; the
+      activation runs on, and checkmk_activation_status says when it is done. Changes made
+      by OTHER users are only activated with force_foreign_changes, and only when the user
+      has said so.
+    params:
+      - name: sites
+        in: body
+        type: list
+        description: Site ids to activate, comma-separated. Leave out for all sites.
+      - name: force_foreign_changes
+        in: body
+        type: boolean
+        default: "false"
+        description: >
+          Also activate changes made by other users. false unless the user asked for it.
+      - name: redirect
+        in: body
+        type: boolean
+        fixed: true
+        default: "false"
+    result:
+      line: |
+        activation {id}: {title}
+        still running: {extensions.is_running}

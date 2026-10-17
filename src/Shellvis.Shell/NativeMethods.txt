@@ -76,3 +76,4 @@ SHAppBarMessage
 APPBARDATA
 WM_ACTIVATE
 WM_WINDOWPOSCHANGED
+AllowSetForegroundWindow

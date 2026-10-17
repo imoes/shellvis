@@ -41,6 +41,19 @@ internal static class ScheduledRun
         if (Value(JobArgument) is { Length: > 0 } job)
             return new Errand(job, null);
 
+        // Explorer and the shellvis: scheme. Registered by ShellIntegration, so the switch
+        // names live there and both ends use the same constants.
+        if (Value(Core.Desktop.ShellIntegration.OpenArgument) is { Length: > 0 } link)
+            return new Errand(null, null, Link: link);
+
+        if (Value(Core.Desktop.ShellIntegration.FileArgument) is { Length: > 0 } file)
+        {
+            bool sort = Environment.GetCommandLineArgs().Any(
+                a => a.Equals(Core.Desktop.ShellIntegration.SortArgument, StringComparison.OrdinalIgnoreCase));
+
+            return new Errand(null, null, File: file, Sort: sort);
+        }
+
         return Value(PromptArgument) is { Length: > 0 } prompt
             ? new Errand(null, prompt)
             : null;
